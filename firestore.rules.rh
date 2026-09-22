@@ -1,0 +1,38 @@
+// ============================================================================
+// REGRAS DO MÓDULO DE RH (Rei do Gado) — cole este bloco dentro do seu
+// firestore.rules já existente, dentro de `service cloud.firestore { match
+// /databases/{database}/documents { ... AQUI ... } }`, junto com as regras
+// que você já tem para o projeto motoboy-ddefa. NÃO apague nada que já existe.
+//
+// Como aplicar:
+//  1. Abra https://console.firebase.google.com/project/motoboy-ddefa/firestore/rules
+//  2. Cole o conteúdo abaixo dentro do bloco `match /databases/{database}/documents { }`
+//     do arquivo de regras atual (não substitua o arquivo inteiro).
+//  3. Clique em "Publicar".
+//
+// O que isso faz: só usuários logados que tenham um documento em
+// rh_admins/{uid} conseguem ler ou escrever nas coleções rh_*. Nenhuma outra
+// coleção do projeto é afetada.
+// ============================================================================
+
+function isRhAdmin() {
+  return request.auth != null
+    && exists(/databases/$(database)/documents/rh_admins/$(request.auth.uid));
+}
+
+match /rh_admins/{uid} {
+  // cada usuário logado só pode ler o PRÓPRIO documento (para o app saber se é admin);
+  // criar/editar administradores é feito manualmente no console do Firebase.
+  allow get: if request.auth != null && request.auth.uid == uid;
+  allow list, create, update, delete: if false;
+}
+
+match /rh_employees/{doc} { allow read, write: if isRhAdmin(); }
+match /rh_entries/{doc} { allow read, write: if isRhAdmin(); }
+match /rh_months/{doc} { allow read, write: if isRhAdmin(); }
+match /rh_leaves/{doc} { allow read, write: if isRhAdmin(); }
+match /rh_payslips/{doc} { allow read, write: if isRhAdmin(); }
+match /rh_payslip_imgs/{doc} { allow read, write: if isRhAdmin(); }
+match /rh_sundays/{doc} { allow read, write: if isRhAdmin(); }
+match /rh_config/{doc} { allow read, write: if isRhAdmin(); }
+match /rh_log/{doc} { allow read, write: if isRhAdmin(); }

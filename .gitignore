@@ -1,0 +1,6 @@
+node_modules/
+dados-iniciais*.json
+backup-rh-*.json
+*.log
+.DS_Store
+.firebase/
