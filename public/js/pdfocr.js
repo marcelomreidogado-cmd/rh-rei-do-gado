@@ -43,7 +43,7 @@ function crop(canvas, bbox) {
   return c.toDataURL('image/jpeg', 0.82);
 }
 
-async function pagesOf(file, onProgress) {
+async function pagesOf(file, onProgress, minWidth = 1500) {
   const buf = await file.arrayBuffer();
   if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') {
     need('pdfjsLib');
@@ -64,7 +64,7 @@ async function pagesOf(file, onProgress) {
   }
   const bmp = await createImageBitmap(new Blob([buf], { type: file.type }));
   const c = document.createElement('canvas');
-  const k = bmp.width < 1500 ? 1500 / bmp.width : 1;
+  const k = bmp.width < minWidth ? minWidth / bmp.width : 1;
   c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
   const ctx = c.getContext('2d', { willReadFrequently: true }); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(bmp, 0, 0, c.width, c.height);
   return [c];
@@ -87,3 +87,18 @@ export async function readPayslips(files, onProgress) {
 }
 
 export async function terminate() { if (worker) { await worker.terminate(); worker = null; } }
+
+/** OCR simples (texto por linha) de PDFs/imagens — usado no relatorio de ferias da contabilidade. */
+export async function readText(files, onProgress) {
+  const w = await getWorker(onProgress);
+  let text = '';
+  for (const f of files) {
+    const pages = await pagesOf(f, onProgress, 2000); // relatorio costuma chegar como foto/print pequeno: amplia antes do OCR
+    for (let i = 0; i < pages.length; i++) {
+      onProgress?.({ stage: 'ocr', file: f.name, page: i + 1, pages: pages.length, progress: 0 });
+      const { data } = await w.recognize(pages[i]); // sem apagar linhas: a limpeza come as barras das datas
+      text += (data.text || '') + '\n';
+    }
+  }
+  return text;
+}

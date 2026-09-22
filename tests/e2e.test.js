@@ -7,7 +7,7 @@ import path from 'node:path';
 import { chromium } from 'playwright-core';
 import { startServer } from './e2e/server.js';
 
-const SEED = process.env.SEED_JSON, PDFS = process.env.PAYSLIP_DIR;
+const SEED = process.env.SEED_JSON, PDFS = process.env.PAYSLIP_DIR, FERIAS_IMG = process.env.FERIAS_IMG;
 const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome', process.env.CHROME_BIN].find((p) => p && fs.existsSync(p));
 const skip = !SEED || !fs.existsSync(SEED) || !CHROME;
 
@@ -232,6 +232,53 @@ test('E2E: importa os contracheques reais (OCR no navegador), confere e envia po
   await page.click('tr[data-emp="bruno-jose"] [data-act=view]'); await page.waitForSelector('.slipimg');
   assert.ok((await page.locator('.slipimg').evaluate((i) => i.naturalWidth)) > 500);
   await page.screenshot({ path: process.env.SHOT_DIR ? path.join(process.env.SHOT_DIR, 'contracheque.png') : undefined });
+});
+
+test('E2E: ferias — alertas, ajuste do periodo, registro e escala de domingo', { skip, timeout: 90000 }, async () => {
+  await page.clock.setFixedTime(new Date('2026-09-22T12:00:00'));
+  await page.click('#nav a[data-v=ferias]'); await page.waitForSelector('table.grid.fer');
+  const vand = 'tr[data-emp="vanderlei-zocateli"]';
+  // sem ajuste, o sistema conta desde a admissao (01/12/2022): periodo de 2023 com prazo estourado
+  assert.equal(await page.getAttribute(vand, 'data-nivel'), 'dobro');
+  assert.ok(+(await page.textContent('#ferbadge')) >= 1);
+  // ajusta para o periodo em aberto do relatorio da contabilidade (vcto 30/11/2025)
+  await page.click(`${vand} [data-act=adj]`); await page.click('.modal .chip:has-text("30/11/2025")');
+  await page.click('.modal-foot button:has-text("Salvar")');
+  await page.waitForFunction((s) => document.querySelector(s)?.dataset.nivel === 'urgente', vand);
+  assert.match(await txt(vand), /29\/10\/2026/);
+  // registra 30 dias a partir de 05/10/2026
+  await page.click(`${vand} [data-act=reg]`); await page.fill('#r_ini', '2026-10-05'); await page.fill('#r_dias', '30');
+  assert.match(await txt('#r_info'), /03\/11\/2026.*04\/11\/2026/);
+  await page.click('.modal-foot button:has-text("Salvar")');
+  await page.waitForFunction((s) => document.querySelector(s)?.dataset.nivel === 'aquisicao', vand);
+  assert.match(await txt('section.store'), /VANDERLEI[\s\S]*05\/10\/2026[\s\S]*03\/11\/2026/);
+  // escala de outubro: aparece como ferias e nao pode ser escalado
+  await page.click('#nav a[data-v=escala]'); await page.click('.mchip[data-m="2026-10"]'); await page.waitForSelector('.sundays');
+  await page.click('.sunday:nth-child(2) [data-act=edit][data-s=correas]');
+  assert.match(await page.locator('.modal label', { hasText: 'VANDERLEI' }).innerText(), /férias/);
+  await page.click('.modal [data-close]');
+  // historico e exclusao
+  await page.click('#nav a[data-v=ferias]'); await page.waitForSelector(vand);
+  await page.click(`${vand} [data-act=hist]`); await page.click('.modal [data-del]'); await page.click('.modal-foot button:has-text("Excluir")');
+  await page.waitForFunction((s) => document.querySelector(s)?.dataset.nivel === 'urgente', vand);
+});
+
+test('E2E: importa o relatorio de ferias da contabilidade (OCR no navegador)', { skip: skip || !FERIAS_IMG || !fs.existsSync(FERIAS_IMG), timeout: 300000 }, async () => {
+  await page.setInputFiles('#ff', FERIAS_IMG);
+  await page.waitForSelector('#rv', { timeout: 240000 });
+  const n = await page.locator('#rv tbody tr').count();
+  const semFunc = await page.locator('#rv tbody tr.bad').count();
+  console.log(`  relatorio: ${n} linhas, ${semFunc} sem funcionario`);
+  assert.ok(n >= 8 && semFunc === 0);
+  const paulo = page.locator('#rv tbody tr').filter({ has: page.locator('td:first-child', { hasText: 'PAULO' }) });
+  assert.equal(await paulo.locator('[data-f=emp]').inputValue(), 'paulo-giovani');
+  assert.equal(await paulo.locator('[data-f=venc]').inputValue(), '2026-05-31');
+  const lidos = await page.$$eval('#rv tbody tr', (trs) => trs.map((t) => `${t.querySelector('[data-f=emp]').value}=${t.querySelector('[data-f=venc]').value}`));
+  console.log('  ' + lidos.join(' '));
+  await page.click('.modal-foot button:has-text("Aplicar")');
+  await page.waitForFunction(() => document.querySelector('tr[data-emp="paulo-giovani"]')?.innerText.includes('31/05/2026'));
+  assert.match(await txt('tr[data-emp="paulo-giovani"]'), /29\/04\/2027[\s\S]*Pode tirar/);
+  assert.match(await txt('tr[data-emp="gustavo-henrique"]'), /31\/01\/2026[\s\S]*30\/12\/2026/);
 });
 
 test('E2E: encerra e nao houve erros de JavaScript', { skip, timeout: 30000 }, async () => {

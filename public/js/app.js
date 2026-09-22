@@ -8,10 +8,11 @@ import * as Folha from './views/folha.js';
 import * as Contra from './views/contracheques.js';
 import * as Escala from './views/escala.js';
 import * as Func from './views/funcionarios.js';
+import * as Ferias from './views/ferias.js';
 import * as Ajustes from './views/ajustes.js';
 
 const DEMO = new URLSearchParams(location.search).has('demo') && ['localhost', '127.0.0.1'].includes(location.hostname);
-const VIEWS = [['folha', 'Folha de pagamento', true], ['contracheques', 'Contracheques', true], ['escala', 'Escala de domingo', true], ['funcionarios', 'Funcionários', false], ['config', 'Configurações', false], ['historico', 'Histórico', false]];
+const VIEWS = [['folha', 'Folha de pagamento', true], ['contracheques', 'Contracheques', true], ['escala', 'Escala de domingo', true], ['ferias', 'Férias', false], ['funcionarios', 'Funcionários', false], ['config', 'Configurações', false], ['historico', 'Histórico', false]];
 const IDLE_MS = 30 * 60 * 1000;
 
 let auth, view = 'folha', month = null, year = null, idleTimer = null;
@@ -109,7 +110,7 @@ function showLogin(msg = '') {
 
 function showShell() {
   app().innerHTML = `<header class="top"><div class="brand"><span class="logo">RH</span><div><b>Folha de Pagamento</b><small>Rei do Gado</small></div></div>
-    <nav id="nav">${VIEWS.map(([k, l]) => `<a href="#${k}" data-v="${k}">${l}</a>`).join('')}</nav>
+    <nav id="nav">${VIEWS.map(([k, l]) => `<a href="#${k}" data-v="${k}">${l}${k === 'ferias' ? '<span class="navbadge" id="ferbadge" hidden></span>' : ''}</a>`).join('')}</nav>
     <div class="user"><span>${esc(S.user.id)}</span><button class="btn sm" id="logout">Sair</button></div></header>
     <div id="monthbar" class="monthbar"></div><main id="main"></main><footer class="foot">v${APP_VERSION} · dados protegidos por login · ${DEMO ? 'MODO DEMONSTRAÇÃO (memória)' : 'Firebase'}</footer>`;
   $('#logout').onclick = () => auth.signOut();
@@ -134,6 +135,7 @@ function monthBar() {
 }
 
 async function route() {
+  Ferias.updateBadge();
   $$('#nav a').forEach((a) => a.classList.toggle('on', a.dataset.v === view));
   year = C.parseMonth(month).y;
   monthBar();
@@ -145,6 +147,7 @@ async function route() {
     if (view === 'folha') Folha.render(main, month);
     else if (view === 'contracheques') await Contra.render(main, month);
     else if (view === 'escala') await Escala.render(main, month);
+    else if (view === 'ferias') Ferias.render(main);
     else if (view === 'funcionarios') Func.render(main);
     else if (view === 'config') Ajustes.renderConfig(main);
     else if (view === 'historico') await Ajustes.renderLog(main);

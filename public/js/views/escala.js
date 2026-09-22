@@ -14,6 +14,7 @@ export function awayReason(empId, iso) {
     if ((!l.start || l.start <= iso) && (!l.end || l.end >= iso)) return C.LEAVE_LABEL[l.type].toLowerCase();
   }
   const emp = D.emp(empId);
+  if (C.emFerias(emp, iso)) return 'férias';
   if (emp && (emp.ativo === false || (emp.entrada || emp.admissao) > iso)) return 'fora do quadro';
   return '';
 }

@@ -200,6 +200,26 @@ export async function saveEmployee(e) {
   await log('funcionario', `${doc.nome} (${i >= 0 ? 'alterado' : 'novo'})`);
   return full;
 }
+// ---------- ferias (ficam dentro do cadastro do funcionario: rh_employees) ----------
+export async function setFeriasVenc(empId, venc, origem = 'manual') {
+  const e = emp(empId); if (!e) throw new Error('Funcionário não encontrado.');
+  await saveEmployee({ ...e, feriasVenc: venc, feriasVencOrigem: origem, feriasVencEm: nowIso() });
+  await log('ferias_vencimento', `${e.nome}: período em aberto vence ${C.fmtDMY(venc)} (${origem})`);
+}
+export async function addFerias(empId, reg) {
+  const e = emp(empId); if (!e) throw new Error('Funcionário não encontrado.');
+  const r = { id: `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, criadoEm: nowIso(), criadoPor: S.user?.id || '', ...reg };
+  await saveEmployee({ ...e, ferias: [...(e.ferias || []), r] });
+  await log('ferias', `${e.nome}: ${r.inicio ? C.fmtDMY(r.inicio) + ' a ' + C.fmtDMY(C.fimFerias(r)) : 'período quitado'} (${r.dias} dias${r.abono ? ' + abono 10' : ''}) — período venc. ${C.fmtDMY(r.venc)}`);
+  return r;
+}
+export async function removeFerias(empId, regId) {
+  const e = emp(empId); if (!e) return;
+  const r = (e.ferias || []).find((x) => x.id === regId);
+  await saveEmployee({ ...e, ferias: (e.ferias || []).filter((x) => x.id !== regId) });
+  if (r) await log('ferias_removida', `${e.nome}: ${r.inicio ? C.fmtDMY(r.inicio) : 'quitação'} (${r.dias} dias)`);
+}
+
 export function slugify(nome) {
   const t = C.normName(nome).split(' ').filter((x) => x && !['DA', 'DE', 'DO', 'DAS', 'DOS', 'E'].includes(x));
   let base = t.slice(0, 2).join('-').toLowerCase() || 'func';

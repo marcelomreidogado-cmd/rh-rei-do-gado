@@ -282,3 +282,101 @@ export function suggestSchedule({ sundays, employees, required, unavailable = ()
   }
   return { assignments, shortages };
 }
+
+// ---------- ferias (CLT) ----------
+// Periodo aquisitivo: 12 meses a partir da admissao. "Vencimento" = ultimo dia do aquisitivo.
+// Periodo concessivo: 12 meses depois do vencimento. "Conceder ate" (igual ao relatorio da contabilidade)
+// = fim do concessivo - 32 dias: ultimo dia para INICIAR 30 dias de ferias sem cair em dobro.
+export const addYearsIso = (iso, n) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y + n, m - 1, d));
+  if (dt.getUTCMonth() !== m - 1) dt.setUTCDate(0); // 29/02 -> 28/02
+  return dt.toISOString().slice(0, 10);
+};
+/** Vencimento do 1o periodo aquisitivo a partir da admissao. */
+export const primeiroVencFerias = (admissao) => (admissao ? isoAddDays(addYearsIso(admissao, 1), -1) : null);
+export const concederAte = (venc) => isoAddDays(addYearsIso(venc, 1), -32);
+export const limiteConcessivo = (venc) => addYearsIso(venc, 1);
+export const inicioAquisitivo = (venc) => isoAddDays(addYearsIso(venc, -1), 1);
+export const FERIAS_DIAS = 30, FERIAS_ABONO = 10;
+
+/** Dias ja usados (gozo + abono) de um periodo, pelos registros de ferias do funcionario. */
+export function feriasUsadas(registros, venc) {
+  return (registros || []).filter((r) => r.venc === venc).reduce((s, r) => s + Math.max(0, Math.floor(num(r.dias))) + (r.abono ? FERIAS_ABONO : 0), 0);
+}
+/** Vencimento do periodo mais antigo ainda em aberto. */
+export function vencAberto(emp) {
+  let v = emp.feriasVenc || primeiroVencFerias(emp.admissao || emp.entrada);
+  if (!v) return null;
+  for (let i = 0; i < 60 && feriasUsadas(emp.ferias, v) >= FERIAS_DIAS; i++) v = addYearsIso(v, 1);
+  return v;
+}
+/** Fim das ferias (inclui o dia inicial). */
+export const fimFerias = (r) => isoAddDays(r.inicio, Math.max(1, Math.floor(num(r.dias))) - 1);
+
+/**
+ * Situacao das ferias de um funcionario numa data (hoje).
+ * nivel: dobro (prazo estourado) | urgente (menos de 60 dias para o prazo) | vencida (pode tirar) | aquisicao | sem_dados
+ */
+export function feriasStatus(emp, hoje) {
+  const venc = vencAberto(emp);
+  if (!venc) return { nivel: 'sem_dados', texto: 'Sem data de admissão' };
+  const ate = concederAte(venc), lim = limiteConcessivo(venc), ini = inicioAquisitivo(venc);
+  const usados = feriasUsadas(emp.ferias, venc), saldo = FERIAS_DIAS - usados;
+  let vencidos = 0;
+  for (let v = venc; v < hoje && vencidos < 20; v = addYearsIso(v, 1)) vencidos++;
+  const avos = hoje <= ini ? 0 : Math.min(12, Math.floor(monthsBetween(ini, isoAddDays(hoje, 1))));
+  const diasPrazo = isoDiffDays(hoje, ate);
+  let nivel, texto;
+  if (hoje > ate) { nivel = 'dobro'; texto = hoje > lim ? 'Prazo estourado — férias em dobro' : `Passou do prazo para iniciar (${fmtDMY(ate)}) — risco de pagar em dobro`; }
+  else if (hoje > venc && diasPrazo <= 60) { nivel = 'urgente'; texto = `Marcar férias até ${fmtDMY(ate)} (${diasPrazo} dias)`; }
+  else if (hoje > venc) { nivel = 'vencida'; texto = `Pode tirar férias — prazo para iniciar até ${fmtDMY(ate)}`; }
+  else { nivel = 'aquisicao'; texto = `Em aquisição: ${avos}/12 avos — vence em ${fmtDMY(venc)}`; }
+  if (vencidos > 1) texto += ` · ${vencidos} períodos vencidos`;
+  return { nivel, texto, venc, concederAte: ate, limite: lim, inicioAquisitivo: ini, usados, saldo, vencidos, avos, diasPrazo };
+}
+function monthsBetween(a, b) { // meses completos de a ate b
+  const [y1, m1, d1] = a.split('-').map(Number), [y2, m2, d2] = b.split('-').map(Number);
+  return (y2 - y1) * 12 + (m2 - m1) - (d2 < d1 ? 1 : 0);
+}
+/** Ferias registradas que cobrem a data iso (para escala de domingo etc.). */
+export const emFerias = (emp, iso) => (emp?.ferias || []).some((r) => r.inicio && r.inicio <= iso && fimFerias(r) >= iso);
+
+/**
+ * Leitura do relatorio "Previsao de Vencimento de Ferias" da contabilidade (texto do OCR).
+ * Devolve [{nome, venc, concederAte}] — datas corrigidas usando a relacao venc <-> conceder ate.
+ */
+export function parseRelatorioFerias(text, { hoje = new Date().toISOString().slice(0, 10) } = {}) {
+  const out = [];
+  const toIso = (s) => {
+    if ((s.match(/\d/g) || []).length < 5) return null;
+    const d = s.replace(/O/g, '0').replace(/S/g, '5').replace(/[Il|]/g, '1').replace(/\D/g, '');
+    if (d.length !== 8) return null;
+    const iso = `${d.slice(4)}-${d.slice(2, 4)}-${d.slice(0, 2)}`;
+    const t = new Date(iso + 'T00:00:00Z');
+    return Number.isNaN(+t) || t.toISOString().slice(0, 10) !== iso ? null : iso;
+  };
+  const perto = (iso) => { if (!iso) return false; const d = isoDiffDays(hoje, iso); return d >= -800 && d <= 400; }; // vencimento em aberto: ate ~2 anos atras e no maximo ~1 ano a frente
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = raw.replace(/[—–]/g, ' ');
+    const D8 = '([\\dOSIl|][\\dOSIl|/]{5,9}[\\dOSIl|])'; // OCR troca 0->O, 5->S, 1->I/l
+    const m = line.match(new RegExp(`^\\s*\\S{3,8}\\s+([A-ZÀ-Ú][A-ZÀ-Ú' ]{5,}?)\\s+[-\\s]*${D8}\\s+${D8}\\s+${D8}`));
+    if (!m) continue;
+    const nome = m[1].trim().replace(/\s+/g, ' ');
+    if (/^(EMPRESA|DEPARTAMENTO|CODIGO|CÓDIGO|PREVIS)/.test(nome)) continue;
+    const vRaw = toIso(m[3]), cRaw = toIso(m[4]);
+    const vDeC = cRaw ? addYearsIso(isoAddDays(cRaw, 32), -1) : null;
+    // o relatorio sempre tem "conceder ate" = vencimento + 1 ano - 32 dias; quando as duas leituras discordam,
+    // vale a que o OCR leu sem trocar letras por numeros e que cai numa data plausivel
+    const limpo = (t) => /^[\d/]+$/.test(t);
+    let venc = null;
+    if (vRaw && vDeC && vRaw === vDeC) venc = vRaw;
+    else {
+      const cands = [[vRaw, limpo(m[3])], [vDeC, limpo(m[4])]].filter(([v]) => perto(v));
+      venc = (cands.find(([, l]) => l) || cands[0] || [null])[0];
+    }
+    if (!venc) continue;
+    out.push({ nome, venc, concederAte: concederAte(venc) });
+  }
+  return out;
+}

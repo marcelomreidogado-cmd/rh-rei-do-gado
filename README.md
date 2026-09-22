@@ -28,6 +28,18 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   manipulação; o sistema sugere uma escala com rodízio (quem trabalhou menos
   domingos entra primeiro) respeitando afastamentos, e avisa quando falta
   gente para completar a quantidade configurada por loja.
+- **Férias**: para cada funcionário ativo mostra o período aquisitivo em
+  aberto, o vencimento, o prazo para iniciar as férias ("conceder até", igual
+  ao relatório da contabilidade) e o saldo de dias. Alerta quem está com prazo
+  estourado (férias em dobro) ou com menos de 60 dias para marcar — o número
+  aparece no menu. Registra férias (início, dias, abono de 10 dias, férias
+  divididas) com avisos da CLT (aviso com 30 dias, período mínimo de 5 dias,
+  um período de 14) e o funcionário fica indisponível na escala de domingo
+  durante as férias. O relatório "Previsão de Vencimento de Férias" da
+  contabilidade (PDF ou foto) pode ser importado: o sistema lê as datas (OCR
+  no navegador), mostra para conferir e atualiza o vencimento de cada um. Os
+  dados de férias ficam dentro do cadastro do funcionário (`rh_employees`),
+  então **não precisa mudar as regras do Firestore**.
 - **Funcionários**: cadastro com CPF e telefone (validados), loja, cargo,
   categoria (atendimento/manipulação) e situação.
 - **Histórico**: toda alteração (quem, quando, o quê) fica registrada.
@@ -39,7 +51,7 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
 
 ```
 public/            aplicativo (HTML/CSS/JS puro, sem build)
-  js/calc.js        regras de negócio (cálculos, datas, afastamentos) — testado
+  js/calc.js        regras de negócio (cálculos, datas, afastamentos, férias) — testado
   js/payslip.js      leitura/parser dos contracheques (OCR) — testado
   js/data.js         acesso a dados (Firestore) e regras de propagação
   js/store.js        adaptadores Firestore/memória e autenticação
@@ -74,6 +86,8 @@ Testes ponta-a-ponta (abrem um Chromium de verdade e navegam pelo sistema):
 SEED_JSON=dados-iniciais-REI-DO-GADO.json node --test tests/e2e.test.js
 # para testar também a leitura dos PDFs reais e o botão do WhatsApp:
 SEED_JSON=dados-iniciais-REI-DO-GADO.json PAYSLIP_DIR=pasta_com_os_pdfs node --test tests/e2e.test.js
+# e para testar a leitura do relatório de férias (foto/PDF da contabilidade):
+SEED_JSON=dados-iniciais-REI-DO-GADO.json FERIAS_IMG=relatorio-ferias.jpg node --test tests/e2e.test.js
 ```
 
 ## Publicação (GitHub → Firebase Hosting)
