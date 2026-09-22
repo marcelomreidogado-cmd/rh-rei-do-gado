@@ -4,3 +4,4 @@ backup-rh-*.json
 *.log
 .DS_Store
 .firebase/
+token-github.txt
