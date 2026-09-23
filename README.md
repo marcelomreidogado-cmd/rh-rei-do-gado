@@ -48,10 +48,16 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   (imposto); a escala de domingo usa a loja onde a pessoa trabalha de verdade
   ("Trabalha em", editável na aba Funcionários ou em Escala → Equipe por loja).
   Função administrativa/financeira fica fora da escala automaticamente.
-- **Escala de domingo**: a sugestão prioriza quem trabalha na loja e só chama
-  alguém de outra loja quando falta gente; edição por loja/domingo (botão
-  Editar ou clique no nome); imagem pronta para o WhatsApp e impressão em uma
-  folha.
+- **Escala de domingo**: todos trabalham no domingo, cada um com **1 folga
+  por mês**. "Sugerir folgas" distribui as folgas (colegas da mesma loja e
+  função em domingos diferentes) e, quando a folga deixa a loja abaixo do
+  mínimo configurado, mostra quem de outra loja (com sobra) cobre. Ajuste
+  manual por loja/domingo (Editar ou clique no nome); imagem pronta para o
+  WhatsApp e impressão em uma folha.
+- **Valores da folha** aparecem em reais (R$ 1.234,56), na tela e no e-mail.
+- **Usuários do sistema**: em Configurações → Usuários do sistema, um
+  administrador inclui (ID + senha) ou remove o acesso de outras pessoas.
+  Requer as regras atualizadas do `firestore.rules.rh` (bloco `rh_admins`).
 - **Funcionários**: cadastro com CPF e telefone (validados), loja, cargo,
   categoria (atendimento/manipulação) e situação.
 - **Histórico**: toda alteração (quem, quando, o quê) fica registrada.
@@ -145,6 +151,10 @@ O primeiro administrador (veja o próximo passo) precisa existir **antes** de
 alguém conseguir logar no site publicado.
 
 ## Criando o primeiro administrador (acesso ao sistema)
+
+> Depois do primeiro, os próximos usuários podem ser incluídos pelo próprio
+> sistema (Configurações → Usuários do sistema), desde que as regras do
+> Firestore estejam atualizadas com o bloco `rh_admins` do `firestore.rules.rh`.
 
 O sistema usa Firebase Auth (e-mail/senha) por trás de um ID simples: o ID
 que a pessoa digita vira o e-mail `<ID>@rh.reidogado.app` internamente.

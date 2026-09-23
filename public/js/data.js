@@ -275,6 +275,24 @@ export async function sundayHistory(mk) {
   return counts;
 }
 
+// ---------- usuarios do sistema (logins) ----------
+export async function listAdmins() { return (await S.store.list(COL.admins)).sort((a, b) => String(a.id).localeCompare(String(b.id))); }
+export async function addAdmin(auth, id, pass) {
+  const login = String(id).trim().toLowerCase();
+  if (!/^[a-z0-9._-]{3,30}$/.test(login)) throw new Error('ID deve ter 3 a 30 caracteres: letras, números, ponto, traço ou _ (sem espaço e sem acento).');
+  const uid = await auth.createUser(login, pass);
+  try { await S.store.set(COL.admins, uid, { id: login, uid, criadoEm: nowIso(), criadoPor: S.user?.id || '' }); }
+  catch (e) { throw new Error(e.code === 'permission-denied' ? 'O login foi criado, mas as regras do Firestore ainda não permitem liberar o acesso. Atualize as regras (README → “Regras do Firestore”) e clique em Incluir de novo com o mesmo ID.' : e.message); }
+  await log('usuario_incluido', login);
+  return uid;
+}
+export async function removeAdmin(uid) {
+  if (uid === S.user?.uid) throw new Error('Você não pode remover o seu próprio acesso.');
+  const a = await S.store.get(COL.admins, uid);
+  await S.store.del(COL.admins, uid);
+  await log('usuario_removido', a?.id || uid);
+}
+
 // ---------- configuracoes / backup ----------
 export async function saveConfig(patch) {
   S.config = { ...S.config, ...patch };

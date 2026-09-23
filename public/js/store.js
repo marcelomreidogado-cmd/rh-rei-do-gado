@@ -69,14 +69,29 @@ export function firebaseAuth(fb) {
     },
     signOut() { return auth.signOut(); },
     onChange(cb) { return auth.onAuthStateChanged((u) => cb(u ? { uid: u.uid, id: (u.email || '').split('@')[0] } : null)); },
+    /** Cria um login novo SEM derrubar a sessao atual (usa uma segunda instancia do app). Devolve o uid. */
+    async createUser(id, pass) {
+      const app2 = fb.apps.find((a) => a.name === 'cadastro') || fb.initializeApp(fb.app().options, 'cadastro');
+      const a2 = app2.auth();
+      try { await a2.setPersistence(fb.auth.Auth.Persistence.NONE); } catch (e) { /* segue */ }
+      try {
+        const r = await a2.createUserWithEmailAndPassword(idToEmail(id), pass);
+        const uid = r.user.uid; await a2.signOut(); return uid;
+      } catch (e) {
+        const m = { 'auth/email-already-in-use': 'Já existe um usuário com esse ID.', 'auth/weak-password': 'Senha fraca: use pelo menos 6 caracteres.', 'auth/invalid-email': 'ID inválido (use letras, números, ponto ou traço).', 'auth/operation-not-allowed': 'Login por e-mail/senha desativado no Firebase (Authentication → Sign-in method).' };
+        throw new Error(m[e.code] || 'Não foi possível criar o usuário (' + (e.code || e.message) + ').');
+      }
+    },
   };
 }
 
 export function memoryAuth() {
   let cb = () => {}, cur = null;
+  const users = { admin: { pass: 'admin', uid: 'demo-admin' } };
   return {
     async init() {},
-    async signIn(id, pass) { if (id === 'admin' && pass === 'admin') { cur = { uid: 'demo-admin', id: 'admin' }; cb(cur); return cur; } throw new Error('ID ou senha incorretos.'); },
+    async signIn(id, pass) { const u = users[String(id).trim().toLowerCase()]; if (u && u.pass === pass) { cur = { uid: u.uid, id: String(id).trim().toLowerCase() }; cb(cur); return cur; } throw new Error('ID ou senha incorretos.'); },
+    async createUser(id, pass) { const k = String(id).trim().toLowerCase(); if (users[k]) throw new Error('Já existe um usuário com esse ID.'); if (String(pass).length < 6) throw new Error('Senha fraca: use pelo menos 6 caracteres.'); users[k] = { pass, uid: 'demo-' + k }; return users[k].uid; },
     async signOut() { cur = null; cb(null); },
     onChange(f) { cb = f; setTimeout(() => f(cur), 0); },
   };

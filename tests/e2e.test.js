@@ -37,14 +37,14 @@ test('E2E: prepara navegador e faz login', { skip, timeout: 120000 }, async () =
 test('E2E: folha de setembro mostra os 13 funcionarios e passagem = dias x 11,80', { skip, timeout: 60000 }, async () => {
   assert.equal(await page.locator('tr[data-row]').count(), 13);
   assert.equal(await page.locator('section.store').count(), 3);
-  assert.equal(await txt(`${row('bruno-jose')} [data-cell=passagem]`), '295,00');
-  assert.equal(await txt(`${row('thais-carmo')} [data-cell=passagem]`), '200,60'); // 17 dias
-  assert.equal(await txt(`${row('carlos-rodrigo')} [data-cell=passagem]`), '106,20'); // 9 dias
+  assert.equal(await txt(`${row('bruno-jose')} [data-cell=passagem]`), 'R$ 295,00');
+  assert.equal(await txt(`${row('thais-carmo')} [data-cell=passagem]`), 'R$ 200,60'); // 17 dias
+  assert.equal(await txt(`${row('carlos-rodrigo')} [data-cell=passagem]`), 'R$ 106,20'); // 9 dias
   // dias -> passagem recalcula na hora
   await edit(`${row('bruno-jose')} [data-f=dias]`, '20');
-  assert.equal(await txt(`${row('bruno-jose')} [data-cell=passagem]`), '236,00');
+  assert.equal(await txt(`${row('bruno-jose')} [data-cell=passagem]`), 'R$ 236,00');
   await edit(`${row('bruno-jose')} [data-f=dias]`, '25');
-  assert.equal(await txt(`${row('bruno-jose')} [data-cell=passagem]`), '295,00');
+  assert.equal(await txt(`${row('bruno-jose')} [data-cell=passagem]`), 'R$ 295,00');
   // Carlos tem falta em 02/09 -> assiduidade perdida
   assert.match(await txt(`${row('carlos-rodrigo')} [data-cell=falta]`), /02\/09/);
   assert.equal(await val(`${row('carlos-rodrigo')} [data-f=assiduidade]`), '');
@@ -60,9 +60,9 @@ test('E2E: mes novo herda salario/premio/adiantamento/assiduidade e alteracao pr
   for (const c of ['salario', 'entrada', 'admissao', 'funcao', 'cod']) assert.equal(await page.locator(`th[data-col=${c}]`).count(), 0, c);
   assert.equal(await page.locator('table.grid thead th[data-col]').last().getAttribute('data-col'), 'obs');
   assert.equal(await page.locator('[data-f=descAdicNota]').count(), 0);
-  assert.equal(await val(`${bruno} [data-f=premio]`), '500,00');
-  assert.equal(await val(`${bruno} [data-f=adiantamento]`), '750,00');
-  assert.equal(await val(`${bruno} [data-f=assiduidade]`), '90,00');
+  assert.equal(await val(`${bruno} [data-f=premio]`), 'R$ 500,00');
+  assert.equal(await val(`${bruno} [data-f=adiantamento]`), 'R$ 750,00');
+  assert.equal(await val(`${bruno} [data-f=assiduidade]`), 'R$ 90,00');
   assert.equal(await val(`${bruno} [data-f=dias]`), '');
   assert.equal(await val(`${bruno} [data-f=consumo]`), '');
   assert.equal(await txt(`${bruno} [data-cell=passagem]`), '');
@@ -75,12 +75,12 @@ test('E2E: mes novo herda salario/premio/adiantamento/assiduidade e alteracao pr
   await edit(`${bruno} [data-f=obs]`, 'teste de observação');
   await edit(`${bruno} [data-f=consumo]`, '359,13');
   await page.click('.mchip[data-m="2026-10"]'); await page.waitForSelector(`${bruno} [data-f=premio]`);
-  assert.equal(await val(`${bruno} [data-f=premio]`), '600,00');
+  assert.equal(await val(`${bruno} [data-f=premio]`), 'R$ 600,00');
   assert.equal(await val(`${bruno} [data-f=obs]`), '');
   assert.equal(await val(`${bruno} [data-f=consumo]`), '');
   // mes ja fechado (agosto) nao e alterado
   await page.click('.mchip[data-m="2026-08"]'); await page.waitForSelector(`${bruno} [data-f=premio]`);
-  assert.equal(await val(`${bruno} [data-f=premio]`), '500,00');
+  assert.equal(await val(`${bruno} [data-f=premio]`), 'R$ 500,00');
   assert.equal(await page.locator(`${bruno} [data-f=premio]`).isDisabled(), true);
 });
 
@@ -182,7 +182,10 @@ test('E2E: escala de domingo sugere rodizio e respeita quantidades', { skip, tim
   await page.click('[data-act=copy]'); await page.waitForFunction(() => document.querySelector('#toast')?.textContent.includes('Escala copiada'));
   const t = await page.evaluate(() => navigator.clipboard.readText());
   console.log(JSON.stringify(t.slice(0,80)));
-  assert.ok(t.startsWith('ESCALA DE DOMINGO - OUTUBRO/2026') && t.includes('Domingo 04/10') && t.includes('Domingo 25/10'));
+  assert.ok(t.startsWith('FOLGAS DE DOMINGO - OUTUBRO/2026') && t.includes('Domingo 04/10') && t.includes('Domingo 25/10'));
+  // cada pessoa da escala tem exatamente 1 folga no mes
+  const folgas = await page.$$eval('section.store table tbody tr', (trs) => trs.map((tr) => tr.lastElementChild.innerText));
+  assert.ok(folgas.length > 5 && folgas.every((f) => f.startsWith('1') || f.includes('afastado')), JSON.stringify(folgas));
 });
 
 test('E2E: funcionarios (CPF/telefone) e configuracoes', { skip, timeout: 60000 }, async () => {
@@ -259,14 +262,26 @@ test('E2E: funcionario novo entra sozinho na folha e escala usa a loja onde trab
   const card = await page.locator('#escalaCard').innerText();
   assert.ok(!/Melissa/.test(card), card);
   const cells = await page.$$eval('#escalaCard tbody tr', (trs) => trs.map((tr) => [...tr.querySelectorAll('td')].map((t) => t.innerText)));
-  assert.ok(cells.every((r) => !/Bruno/.test(r[1])), 'Bruno nao vai para Bingen'); // coluna 1 = Bingen
-  assert.ok(cells.some((r) => /Bruno/.test(r[3])), 'Bruno escalado em Coronel');
+  assert.ok(cells.every((r) => !/Bruno/.test(r[1])), 'Bruno nao aparece em Bingen'); // coluna 1 = Bingen
+  assert.equal(cells.filter((r) => /Folga:[^\n]*Bruno/.test(r[3])).length, 1, 'Bruno folga 1 domingo no Coronel');
+  assert.ok(!(await page.locator('section.store').last().innerText()).includes('MELISSA'));
   // edicao manual pelo nome
   await page.locator('.sun-store .person').first().click(); await page.waitForSelector('.modal .checklist');
   await page.click('.modal [data-close]');
   // imagem para WhatsApp
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('[data-act=img]')]);
   assert.match(dl.suggestedFilename(), /escala-domingo-2026-11\.png/);
+});
+
+test('E2E: configuracoes — incluir e remover usuario do sistema', { skip, timeout: 60000 }, async () => {
+  await page.click('#nav a[data-v=config]'); await page.waitForSelector('#u_add');
+  await page.waitForSelector('#users table');
+  await page.fill('#u_id', 'Joana'); await page.fill('#u_pw', '123456'); await page.fill('#u_pw2', '123456');
+  await page.click('#u_add');
+  await page.waitForSelector('#users tr:has-text("joana")');
+  assert.match(await txt('#users'), /admin[\s\S]*você/);
+  await page.click('#users tr:has-text("joana") [data-rmu]'); await page.click('.modal-foot button:has-text("Remover")');
+  await page.waitForFunction(() => !document.querySelector('#users')?.innerText.includes('joana'));
 });
 
 test('E2E: ferias — alertas, ajuste do periodo, registro e escala de domingo', { skip, timeout: 90000 }, async () => {

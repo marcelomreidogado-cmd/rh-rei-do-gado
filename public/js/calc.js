@@ -43,6 +43,8 @@ export const brl = (n, dash = true) => {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
+/** Valor em dinheiro para mostrar: R$ 1.234,56 (vazio quando zero). */
+export const money = (n) => { const b = brl(n); return b ? `R$ ${b}` : ''; };
 export const passagem = (dias, vt = VT_DIARIO) => round2(Math.max(0, Math.floor(num(dias))) * num(vt));
 
 // ---------- datas / meses ----------
@@ -257,42 +259,72 @@ export function checkDay(assign, storeId, emps, required) {
 }
 
 /**
- * Sugere a escala: para cada domingo/loja/funcao escolhe PRIMEIRO quem trabalha naquela loja (workStore),
- * com menos domingos no ano (historico + mes) e, no empate, quem nao trabalhou no domingo anterior.
- * So se faltar gente da propria loja chama alguem de outra loja (nunca a mesma pessoa em duas lojas no dia).
- * unavailable(empId, isoDate) -> motivo/true quando nao pode. Retorna { assignments, shortages }.
+ * Escala de domingo — regra da empresa: TODO MUNDO trabalha todo domingo na sua loja, exceto 1 FOLGA por mes.
+ * 1) distribui a folga de cada funcionario num domingo diferente dos colegas da mesma loja/funcao (quando da);
+ * 2) se a folga deixa a loja abaixo do minimo (required = minimo por domingo), chama alguem de OUTRA loja
+ *    que esteja com sobra naquele domingo para cobrir.
+ * unavailable(empId, iso) -> motivo (ferias/atestado...) quando nao pode trabalhar.
+ * Retorna { assignments: {dia: {loja: [ids que trabalham]}}, folgas: {dia: [ids]}, covers: {dia: {id: lojaOrigem}}, shortages }.
  */
-export function suggestSchedule({ sundays, employees, required, unavailable = () => false, history = {}, keep = {} }) {
-  const counts = { ...history };
-  const assignments = {};
-  const shortages = [];
-  const staff = employees.filter(inEscala);
-  const catOf = (id) => employees.find((e) => e.id === id)?.categoria;
-  let prev = {};
+export function suggestSchedule({ sundays, employees, required, unavailable = () => false, offset = 0 }) {
+  const staff = employees.filter(inEscala).sort((a, b) => a.nome.localeCompare(b.nome));
+  const folgas = Object.fromEntries(sundays.map((d) => [d, []]));
+  const folgaDe = {};
+  // 1) folgas
+  // lojas com menos gente primeiro: as folgas delas precisam de cobertura, entao as lojas maiores evitam folgar nesses dias
+  const lojas = [...STORES].sort((a, b) => staff.filter((e) => workStore(e) === a.id).length - staff.filter((e) => workStore(e) === b.id).length);
+  const who = (id) => staff.find((x) => x.id === id);
+  for (const s of lojas) {
+    const team = staff.filter((e) => workStore(e) === s.id);
+    team.forEach((e, i) => {
+      const cands = sundays.map((d, k) => ({ d, k })).filter(({ d }) => !unavailable(e.id, d));
+      if (!cands.length) return; // afastado o mes todo
+      const score = ({ d, k }) => {
+        const f = folgas[d].map(who);
+        const same = f.filter((o) => workStore(o) === s.id && o.categoria === e.categoria).length; // colega da mesma loja e funcao
+        const sameCat = f.filter((o) => o.categoria === e.categoria).length; // mesma funcao em qualquer loja (tira quem poderia cobrir)
+        const store = f.filter((o) => workStore(o) === s.id).length;
+        const rot = (k - (i + offset) % sundays.length + sundays.length) % sundays.length; // gira a semana da folga a cada mes
+        return same * 10000 + sameCat * 1000 + store * 100 + f.length * 10 + rot;
+      };
+      const best = cands.sort((x, y) => score(x) - score(y))[0];
+      folgas[best.d].push(e.id); folgaDe[e.id] = best.d;
+    });
+  }
+  // 2) quem trabalha + cobertura
+  const assignments = {}, covers = {}, shortages = [], nCover = {};
   for (const d of sundays) {
-    const day = {}; const used = new Set();
-    for (const s of STORES) { day[s.id] = [...(keep[d]?.[s.id] || [])]; day[s.id].forEach((id) => used.add(id)); }
-    const order = (a, b) => (counts[a.id] || 0) - (counts[b.id] || 0) || ((prev[a.id] ? 1 : 0) - (prev[b.id] ? 1 : 0)) || a.nome.localeCompare(b.nome);
-    const need = (sid, cat) => ((required[sid] || {})[cat] || 0) - day[sid].filter((id) => catOf(id) === cat).length;
-    const free = (e, cat) => e.categoria === cat && !used.has(e.id) && !unavailable(e.id, d);
-    // 1) gente da propria loja
-    for (const s of STORES) for (const cat of ['atendimento', 'manipulacao']) {
-      const pool = staff.filter((e) => workStore(e) === s.id && free(e, cat)).sort(order);
-      for (let i = 0, n = need(s.id, cat); i < n && i < pool.length; i++) { day[s.id].push(pool[i].id); used.add(pool[i].id); }
-    }
-    // 2) cobertura de outra loja so onde ainda falta
-    for (const s of STORES) for (const cat of ['atendimento', 'manipulacao']) {
-      let n = need(s.id, cat);
-      if (n <= 0) continue;
-      const pool = staff.filter((e) => workStore(e) !== s.id && free(e, cat)).sort(order);
-      for (let i = 0; n > 0 && i < pool.length; i++, n--) { day[s.id].push(pool[i].id); used.add(pool[i].id); }
-      if (n > 0) shortages.push({ date: d, store: s.id, cat, falta: n });
+    const day = {}; covers[d] = {};
+    for (const s of STORES) day[s.id] = staff.filter((e) => workStore(e) === s.id && folgaDe[e.id] !== d && !unavailable(e.id, d)).map((e) => e.id);
+    const cat = (id) => staff.find((e) => e.id === id)?.categoria;
+    const count = (sid, c) => day[sid].filter((id) => cat(id) === c).length;
+    const min = (sid, c) => (required[sid] || {})[c] || 0;
+    for (const s of STORES) for (const c of ['atendimento', 'manipulacao']) {
+      let falta = min(s.id, c) - count(s.id, c);
+      while (falta > 0) {
+        // doador: outra loja com sobra na mesma funcao; quem cobriu menos vezes no mes
+        const pool = [];
+        for (const o of STORES) {
+          if (o.id === s.id || count(o.id, c) <= min(o.id, c)) continue;
+          for (const id of day[o.id]) if (cat(id) === c && !covers[d][id]) pool.push({ id, from: o.id, sobra: count(o.id, c) - min(o.id, c) });
+        }
+        if (!pool.length) break;
+        pool.sort((x, y) => (nCover[x.id] || 0) - (nCover[y.id] || 0) || y.sobra - x.sobra || x.id.localeCompare(y.id));
+        const p = pool[0];
+        day[p.from] = day[p.from].filter((id) => id !== p.id); day[s.id].push(p.id);
+        covers[d][p.id] = p.from; nCover[p.id] = (nCover[p.id] || 0) + 1; falta--;
+      }
+      if (falta > 0) shortages.push({ date: d, store: s.id, cat: c, falta });
     }
     assignments[d] = day;
-    for (const id of used) counts[id] = (counts[id] || 0) + 1;
-    prev = Object.fromEntries([...used].map((id) => [id, true]));
   }
-  return { assignments, shortages };
+  return { assignments, folgas, covers, shortages };
+}
+
+/** Quem folga no dia (derivado do que esta lancado): equipe da loja que nao esta escalada em lugar nenhum e nao esta afastada. */
+export function folgasDoDia(assign, storeId, employees, unavailable = () => false, d) {
+  const busy = new Set(Object.values(assign || {}).flat());
+  return employees.filter((e) => inEscala(e) && workStore(e) === storeId && !busy.has(e.id) && !unavailable(e.id, d)).map((e) => e.id);
 }
 
 // ---------- ferias (CLT) ----------

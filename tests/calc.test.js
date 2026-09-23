@@ -146,34 +146,6 @@ const EMPS = [
   { id: 'b1', nome: 'Fabi', loja: 'bingen', categoria: 'atendimento' }, { id: 'b2', nome: 'Gui', loja: 'bingen', categoria: 'manipulacao' },
   { id: 'c1', nome: 'Hugo', loja: 'correas', categoria: 'atendimento' },
 ];
-test('escala sugerida cumpre a quantidade por loja/categoria e distribui igualmente', () => {
-  const required = { coronel: { atendimento: 1, manipulacao: 1 }, bingen: { atendimento: 1, manipulacao: 1 }, correas: { atendimento: 1, manipulacao: 0 } };
-  const { assignments, shortages } = C.suggestSchedule({ sundays: C.sundaysOf('2026-09'), employees: EMPS, required });
-  const cnt = {};
-  for (const d of Object.values(assignments)) for (const ids of Object.values(d)) for (const id of ids) cnt[id] = (cnt[id] || 0) + 1;
-  assert.equal(shortages.length, 0);
-  for (const d of Object.keys(assignments)) {
-    assert.equal(C.checkDay(assignments[d], 'coronel', EMPS, required).every((x) => x.falta === 0), true);
-    assert.equal(assignments[d].coronel.length, 2);
-  }
-  // 4 domingos, 3 atendentes em coronel => cada um trabalha 1 ou 2 vezes (diferenca maxima 1)
-  const at = ['a1', 'a2', 'a3'].map((i) => cnt[i]);
-  assert.ok(Math.max(...at) - Math.min(...at) <= 1, JSON.stringify(cnt));
-  assert.equal(cnt.a1 + cnt.a2 + cnt.a3, 4);
-  assert.equal(cnt.m1 + cnt.m2, 4);
-  // nao repete a mesma pessoa em domingos consecutivos quando ha alternativa
-  const ds = Object.keys(assignments);
-  for (let i = 1; i < ds.length; i++) assert.notEqual(assignments[ds[i]].coronel.find((id) => id[0] === 'a'), assignments[ds[i - 1]].coronel.find((id) => id[0] === 'a'));
-});
-test('escala respeita afastados e aponta falta de gente', () => {
-  const required = { coronel: { atendimento: 1, manipulacao: 3 }, bingen: { atendimento: 1, manipulacao: 1 }, correas: { atendimento: 1, manipulacao: 0 } };
-  const unavailable = (id) => id === 'a1' || id === 'a2';
-  const { assignments, shortages } = C.suggestSchedule({ sundays: ['2026-09-06', '2026-09-13'], employees: EMPS, required, unavailable });
-  assert.ok(Object.values(assignments).every((d) => d.coronel.includes('a3') && !d.coronel.includes('a1')));
-  assert.equal(shortages.length, 2); // coronel precisa de 3 manipuladores e so ha 2 -> falta 1 em cada domingo
-  assert.ok(shortages.every((x) => x.store === 'coronel' && x.cat === 'manipulacao' && x.falta === 1));
-});
-
 // ---------- dados reais (so roda se SEED_JSON apontar para o arquivo gerado da planilha) ----------
 const SEED = process.env.SEED_JSON;
 test('dados iniciais da planilha: cadastro e lancamentos consistentes', { skip: !SEED || !fs.existsSync(SEED) }, () => {
@@ -224,23 +196,46 @@ test('afastamentos iniciais deixam assiduidade correta em agosto e setembro', { 
   assert.equal(C.leaveText(d.leaves, 'gustavo-felix', '2026-11', 'atestado'), '');
 });
 
-test('escala usa a loja onde trabalha, prioriza a propria loja e tira administrativo', () => {
+test('escala: todo mundo trabalha, cada um com 1 folga no mes, folgas espalhadas', () => {
+  const required = { coronel: { atendimento: 1, manipulacao: 1 }, bingen: { atendimento: 1, manipulacao: 1 }, correas: { atendimento: 1, manipulacao: 0 } };
+  const sundays = C.sundaysOf('2026-09');
+  const { assignments, folgas, shortages } = C.suggestSchedule({ sundays, employees: EMPS, required });
+  const trab = {}, folg = {};
+  for (const d of sundays) { for (const ids of Object.values(assignments[d])) for (const id of ids) trab[id] = (trab[id] || 0) + 1; for (const id of folgas[d]) folg[id] = (folg[id] || 0) + 1; }
+  for (const e of EMPS) { assert.equal(folg[e.id], 1, e.id); assert.equal(trab[e.id], sundays.length - 1, e.id); }
+  // os 3 atendentes do Coronel folgam em domingos diferentes
+  const dias = ['a1', 'a2', 'a3'].map((id) => sundays.find((d) => folgas[d].includes(id)));
+  assert.equal(new Set(dias).size, 3);
+  // Bingen tem 1 atendente e 1 manipulador: na folga deles alguem do Coronel (com sobra) cobre
+  const dFabi = sundays.find((d) => folgas[d].includes('b1'));
+  const cob = assignments[dFabi].bingen.filter((id) => id[0] === 'a');
+  assert.equal(cob.length, 1);
+  assert.ok(!assignments[dFabi].coronel.includes(cob[0]), 'quem cobre sai da propria loja naquele dia');
+  // Correas so tem o Hugo: na folga dele ninguem sobra? Coronel tem 3 atend (1 folga) -> sobra 1 -> cobre
+  const dHugo = sundays.find((d) => folgas[d].includes('c1'));
+  assert.equal(assignments[dHugo].correas.length, 1);
+  assert.ok(shortages.every((x) => x.store !== 'correas'));
+});
+
+test('escala: afastado nao trabalha e ninguem vai para duas lojas', () => {
+  const required = { coronel: { atendimento: 1, manipulacao: 1 }, bingen: { atendimento: 1, manipulacao: 1 }, correas: { atendimento: 0, manipulacao: 0 } };
+  const sundays = ['2026-09-06', '2026-09-13'];
+  const unavailable = (id, d) => id === 'a1' && d === '2026-09-06';
+  const { assignments, folgas } = C.suggestSchedule({ sundays, employees: EMPS, required, unavailable });
+  assert.ok(!Object.values(assignments['2026-09-06']).flat().includes('a1'));
+  assert.equal(folgas['2026-09-13'].includes('a1'), true); // folga no domingo em que esta disponivel
+  for (const d of sundays) { const all = Object.values(assignments[d]).flat(); assert.equal(all.length, new Set(all).size); }
+  assert.deepEqual(C.folgasDoDia(assignments['2026-09-13'], 'coronel', EMPS, () => false, '2026-09-13').sort(), folgas['2026-09-13'].filter((id) => ['a1', 'a2', 'a3', 'm1', 'm2'].includes(id)).sort());
+});
+
+test('escala usa a loja onde trabalha e tira administrativo', () => {
   const emps = [
-    { id: 'x1', nome: 'Xa', loja: 'bingen', lojaTrabalho: 'coronel', categoria: 'atendimento' }, // registrado em Bingen, trabalha no Coronel
+    { id: 'x1', nome: 'Xa', loja: 'bingen', lojaTrabalho: 'coronel', categoria: 'atendimento' },
     { id: 'x2', nome: 'Xb', loja: 'bingen', categoria: 'atendimento' },
-    { id: 'x3', nome: 'Xc', loja: 'coronel', categoria: 'atendimento', funcao: 'Assist Financeiro' }, // administrativo
-    { id: 'x4', nome: 'Xd', loja: 'correas', categoria: 'atendimento' },
+    { id: 'x3', nome: 'Xc', loja: 'coronel', categoria: 'atendimento', funcao: 'Assist Financeiro' },
   ];
   assert.equal(C.workStore(emps[0]), 'coronel'); assert.equal(C.workStore(emps[2]), C.ADM); assert.equal(C.inEscala(emps[2]), false);
-  const required = { coronel: { atendimento: 1, manipulacao: 0 }, bingen: { atendimento: 1, manipulacao: 0 }, correas: { atendimento: 0, manipulacao: 0 } };
-  const { assignments, shortages } = C.suggestSchedule({ sundays: ['2026-09-06', '2026-09-13'], employees: emps, required });
-  for (const d of Object.values(assignments)) { assert.deepEqual(d.coronel, ['x1']); assert.deepEqual(d.bingen, ['x2']); }
-  assert.equal(shortages.length, 0);
-  // falta gente na loja -> cobre com alguem de outra loja livre no dia (nunca em duas lojas)
-  const req2 = { coronel: { atendimento: 2, manipulacao: 0 }, bingen: { atendimento: 1, manipulacao: 0 }, correas: { atendimento: 0, manipulacao: 0 } };
-  const r2 = C.suggestSchedule({ sundays: ['2026-09-06'], employees: emps, required: req2 });
-  const day = r2.assignments['2026-09-06'];
-  assert.deepEqual(day.coronel.sort(), ['x1', 'x4']);
-  assert.deepEqual(day.bingen, ['x2']);
-  assert.ok(!day.coronel.includes('x3'));
+  const { assignments } = C.suggestSchedule({ sundays: ['2026-09-06', '2026-09-13'], employees: emps, required: {} });
+  const all = Object.values(assignments).flatMap((d) => [...d.coronel.map((id) => ['coronel', id]), ...d.bingen.map((id) => ['bingen', id])]);
+  assert.ok(all.every(([s, id]) => id !== 'x3' && (id !== 'x1' || s === 'coronel')));
 });

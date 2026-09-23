@@ -149,7 +149,7 @@ async function route() {
     else if (view === 'escala') await Escala.render(main, month);
     else if (view === 'ferias') Ferias.render(main);
     else if (view === 'funcionarios') Func.render(main);
-    else if (view === 'config') Ajustes.renderConfig(main);
+    else if (view === 'config') Ajustes.renderConfig(main, auth);
     else if (view === 'historico') await Ajustes.renderLog(main);
   } catch (e) { console.error(e); main.innerHTML = `<p class="lack">Erro ao abrir a tela: ${esc(e.message)}</p>`; }
 }

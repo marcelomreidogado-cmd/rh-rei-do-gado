@@ -21,11 +21,14 @@ function isRhAdmin() {
 }
 
 match /rh_admins/{uid} {
-  // cada usuário logado só pode ler o PRÓPRIO documento (para o app saber se é admin);
-  // criar/editar administradores é feito manualmente no console do Firebase.
-  allow get: if request.auth != null && request.auth.uid == uid;
-  allow list, create, update, delete: if false;
+  // cada um le o proprio registro (para o app saber se e admin);
+  // administradores listam, incluem e removem outros usuarios (aba Configuracoes)
+  allow get: if request.auth != null && (request.auth.uid == uid || isRhAdmin());
+  allow list, create: if isRhAdmin();
+  allow delete: if isRhAdmin() && request.auth.uid != uid;
+  allow update: if false;
 }
+
 
 match /rh_employees/{doc} { allow read, write: if isRhAdmin(); }
 match /rh_entries/{doc} { allow read, write: if isRhAdmin(); }

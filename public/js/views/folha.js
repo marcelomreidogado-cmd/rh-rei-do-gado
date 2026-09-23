@@ -32,11 +32,11 @@ function cellValue(col, { entry: e, emp }) {
     case 'obs': return e.obs || '';
     case 'falta': return v.faltas;
     case 'atestado': return v.atestado;
-    case 'assiduidade': return C.brl(v.assiduidade);
-    case 'passagem': return C.brl(v.passagem);
+    case 'assiduidade': return C.money(v.assiduidade);
+    case 'passagem': return C.money(v.passagem);
     case 'dias': return e.dias ? String(e.dias) : '';
-    case 'descAdic': return C.brl(e.descAdic);
-    default: return col.money ? C.brl(e[col.k]) : '';
+    case 'descAdic': return C.money(e.descAdic);
+    default: return col.money ? C.money(e[col.k]) : '';
   }
 }
 const isEmptyCol = (col, rows) => rows.every((r) => !cellValue(col, r));
@@ -150,12 +150,12 @@ function rowHtml(r, vcols, isClosed) {
       case 'atestado': return `<td><button class="leave-btn ${v.atestado ? 'has' : ''}" data-act="leave" data-kind="atestado" data-emp="${esc(emp.id)}" data-cell="atestado">${esc(v.atestado) || '＋'}</button></td>`;
       case 'assiduidade': {
         const lost = v.assiduidade === 0 && C.num(e.assiduidade) > 0 && !e.assiduidadeManual;
-        return `<td class="num"><input class="in money" inputmode="decimal" data-f="assiduidade" data-emp="${esc(emp.id)}" value="${C.brl(v.assiduidade)}" ${dis} title="${lost ? 'Perdida por falta/atestado no mês (base: ' + C.brl(e.assiduidade) + '). Digite um valor para ajustar só este mês.' : ''}">${lost ? '<span class="lost" title="Perdida por falta/atestado">↓</span>' : ''}</td>`;
+        return `<td class="num"><input class="in money" inputmode="decimal" data-f="assiduidade" data-emp="${esc(emp.id)}" value="${C.money(v.assiduidade)}" ${dis} title="${lost ? 'Perdida por falta/atestado no mês (base: ' + C.money(e.assiduidade) + '). Digite um valor para ajustar só este mês.' : ''}">${lost ? '<span class="lost" title="Perdida por falta/atestado">↓</span>' : ''}</td>`;
       }
-      case 'passagem': return `<td class="num" data-cell="passagem">${C.brl(v.passagem)}</td>`;
+      case 'passagem': return `<td class="num" data-cell="passagem">${C.money(v.passagem)}</td>`;
       case 'dias': return `<td class="num"><input class="in dias" inputmode="numeric" data-f="dias" data-emp="${esc(emp.id)}" value="${e.dias || ''}" ${dis}></td>`;
-      case 'descAdic': return `<td class="num"><input class="in money" inputmode="decimal" data-f="descAdic" data-emp="${esc(emp.id)}" value="${C.brl(e.descAdic)}" ${dis}></td>`;
-      default: return `<td class="num"><input class="in money" inputmode="decimal" data-f="${c.k}" data-emp="${esc(emp.id)}" value="${C.brl(e[c.k])}" ${dis}></td>`;
+      case 'descAdic': return `<td class="num"><input class="in money" inputmode="decimal" data-f="descAdic" data-emp="${esc(emp.id)}" value="${C.money(e.descAdic)}" ${dis}></td>`;
+      default: return `<td class="num"><input class="in money" inputmode="decimal" data-f="${c.k}" data-emp="${esc(emp.id)}" value="${C.money(e[c.k])}" ${dis}></td>`;
     }
   };
   return `<tr data-row="${esc(emp.id)}">${vcols.map(cell).join('')}<td class="act">${isClosed ? '' : `<button class="row-x" data-act="exclrow" data-emp="${esc(emp.id)}" title="Excluir esta linha do mês" aria-label="Excluir linha de ${esc(emp.nome)}">✕</button>`}</td></tr>`;
@@ -166,8 +166,8 @@ function patchRow(empId) {
   if (!tr) return;
   const e = D.entryFor(mk, empId);
   const v = C.rowView(e, S.leaves, mk, S.config.vt);
-  const p = $('[data-cell=passagem]', tr); if (p) p.textContent = C.brl(v.passagem);
-  const a = $('[data-f=assiduidade]', tr); if (a && document.activeElement !== a) a.value = C.brl(v.assiduidade);
+  const p = $('[data-cell=passagem]', tr); if (p) p.textContent = C.money(v.passagem);
+  const a = $('[data-f=assiduidade]', tr); if (a && document.activeElement !== a) a.value = C.money(v.assiduidade);
 }
 
 let wired = false;
@@ -183,7 +183,7 @@ function wire() {
       const months = await D.setEntryField(mk, empId, f, t.value);
       const e = D.entryFor(mk, empId);
       if (f === 'dias') t.value = e.dias || '';
-      else if (f !== 'descAdicNota' && f !== 'obs') t.value = C.brl(f === 'assiduidade' ? C.rowView(e, S.leaves, mk, S.config.vt).assiduidade : e[f]);
+      else if (f !== 'descAdicNota' && f !== 'obs') t.value = C.money(f === 'assiduidade' ? C.rowView(e, S.leaves, mk, S.config.vt).assiduidade : e[f]);
       patchRow(empId);
       if (months.length) toast(`${COLS.find((c) => c.k === f).label} de ${D.emp(empId).nome.split(' ')[0]} também atualizado em: ${months.map((m) => C.monthLabel(m)).join(', ')}.`, 'ok', 6000);
     } catch (e) { toast(e.message, 'err'); render(root, mk); }
