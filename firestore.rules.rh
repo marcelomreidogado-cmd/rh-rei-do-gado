@@ -15,27 +15,34 @@
 // coleção do projeto é afetada.
 // ============================================================================
 
-function isRhAdmin() {
+// Quem tem documento em rh_admins/{uid} entra no sistema. O campo "perfil" define o acesso:
+//   "total" (ou sem o campo) = tudo;  "escala_ferias" = só Escala de domingo e Férias.
+function isRhUser() {
   return request.auth != null
     && exists(/databases/$(database)/documents/rh_admins/$(request.auth.uid));
 }
-
-match /rh_admins/{uid} {
-  // cada um le o proprio registro (para o app saber se e admin);
-  // administradores listam, incluem e removem outros usuarios (aba Configuracoes)
-  allow get: if request.auth != null && (request.auth.uid == uid || isRhAdmin());
-  allow list, create: if isRhAdmin();
-  allow delete: if isRhAdmin() && request.auth.uid != uid;
-  allow update: if false;
+function isRhAdmin() {
+  return isRhUser()
+    && get(/databases/$(database)/documents/rh_admins/$(request.auth.uid)).data.get('perfil', 'total') == 'total';
 }
 
+match /rh_admins/{uid} {
+  allow get: if request.auth != null && (request.auth.uid == uid || isRhAdmin());
+  allow list, create: if isRhAdmin();
+  allow update, delete: if isRhAdmin() && request.auth.uid != uid;
+}
 
+// só acesso total (folha, salários, CPF, contracheques)
 match /rh_employees/{doc} { allow read, write: if isRhAdmin(); }
 match /rh_entries/{doc} { allow read, write: if isRhAdmin(); }
 match /rh_months/{doc} { allow read, write: if isRhAdmin(); }
-match /rh_leaves/{doc} { allow read, write: if isRhAdmin(); }
 match /rh_payslips/{doc} { allow read, write: if isRhAdmin(); }
 match /rh_payslip_imgs/{doc} { allow read, write: if isRhAdmin(); }
-match /rh_sundays/{doc} { allow read, write: if isRhAdmin(); }
-match /rh_config/{doc} { allow read, write: if isRhAdmin(); }
-match /rh_log/{doc} { allow read, write: if isRhAdmin(); }
+
+// Escala e Férias (os dois perfis)
+match /rh_equipe/{doc} { allow read: if isRhUser(); allow write: if isRhAdmin(); }
+match /rh_ferias/{doc} { allow read, write: if isRhUser(); }
+match /rh_sundays/{doc} { allow read, write: if isRhUser(); }
+match /rh_leaves/{doc} { allow read: if isRhUser(); allow write: if isRhAdmin(); }
+match /rh_config/{doc} { allow read: if isRhUser(); allow write: if isRhAdmin(); }
+match /rh_log/{doc} { allow create: if isRhUser(); allow read, update, delete: if isRhAdmin(); }

@@ -51,8 +51,7 @@ export async function render(el, month) {
   const shortOf = (d, sid) => C.checkDay(data.assignments[d], sid, S.employees, req).some((x) => x.falta);
 
   root.innerHTML = `<div class="toolbar"><strong>Escala de domingo — ${esc(C.monthLabel(mk))}</strong><span class="spacer"></span>
-    <button class="btn" data-act="team">👥 Equipe por loja</button>
-    <button class="btn" data-act="req">⚙ Mínimo por loja</button>
+    ${S.perfil === 'total' ? '<button class="btn" data-act="team">👥 Equipe por loja</button><button class="btn" data-act="req">⚙ Mínimo por loja</button>' : ''}
     <button class="btn" data-act="suggest">✨ Sugerir folgas</button><button class="btn" data-act="clear">Limpar</button>
     <button class="btn primary" data-act="img">📷 Imagem para WhatsApp</button><button class="btn" data-act="copy">📋 Copiar texto</button><button class="btn" data-act="print">🖨 Imprimir (1 folha)</button></div>
     <div class="req-line"><span class="muted">Todos trabalham no domingo, cada um com <b>1 folga no mês</b>. Mínimo por domingo:</span>${C.STORES.map((s) => `<span class="pill"><b>${esc(s.nome)}</b> ${req[s.id]?.atendimento ?? 0} atend. + ${req[s.id]?.manipulacao ?? 0} manip.</span>`).join('')}</div>

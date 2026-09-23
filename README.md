@@ -58,6 +58,11 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
 - **Usuários do sistema**: em Configurações → Usuários do sistema, um
   administrador inclui (ID + senha) ou remove o acesso de outras pessoas.
   Requer as regras atualizadas do `firestore.rules.rh` (bloco `rh_admins`).
+  Cada usuário tem um **acesso**: *Acesso total* ou *Só Escala e Férias*. O
+  segundo só vê as abas Escala de domingo e Férias e, pelas regras do banco,
+  não consegue ler folha, salários, CPF, telefones nem contracheques — ele lê
+  a coleção `rh_equipe` (cópia do cadastro sem dados sensíveis, mantida pelo
+  sistema) e `rh_ferias` (controle de férias).
 - **Funcionários**: cadastro com CPF e telefone (validados), loja, cargo,
   categoria (atendimento/manipulação) e situação.
 - **Histórico**: toda alteração (quem, quando, o quê) fica registrada.

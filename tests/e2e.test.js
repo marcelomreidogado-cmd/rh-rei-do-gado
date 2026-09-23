@@ -284,6 +284,31 @@ test('E2E: configuracoes — incluir e remover usuario do sistema', { skip, time
   await page.waitForFunction(() => !document.querySelector('#users')?.innerText.includes('joana'));
 });
 
+test('E2E: usuario so de Escala e Ferias ve apenas essas abas e nao carrega dados sensiveis', { skip, timeout: 90000 }, async () => {
+  await page.click('#nav a[data-v=config]'); await page.waitForSelector('#users table');
+  await page.fill('#u_id', 'escala1'); await page.fill('#u_pw', 'senha123'); await page.fill('#u_pw2', 'senha123');
+  await page.selectOption('#u_perfil', 'escala_ferias');
+  await page.click('#u_add'); await page.waitForSelector('#users tr:has-text("escala1")');
+  assert.equal(await page.locator('#users tr:has-text("escala1") [data-perfil]').inputValue(), 'escala_ferias');
+  await page.click('#logout'); await page.waitForSelector('#lf');
+  await page.fill('#lid', 'escala1'); await page.fill('#lpw', 'senha123'); await page.click('#lgo');
+  await page.waitForSelector('#nav');
+  const abas = await page.$$eval('#nav a', (as) => as.map((a) => a.dataset.v));
+  assert.deepEqual(abas, ['escala', 'ferias']);
+  await page.waitForSelector('.sundays');
+  assert.equal(await page.locator('[data-act=team]').count(), 0);
+  const sens = await page.evaluate(() => ({ cpf: window.__D.S.employees.some((e) => e.cpf || e.telefone || e.salarioBase), entries: window.__D.S.entries.size, n: window.__D.S.employees.length }));
+  assert.deepEqual(sens, { cpf: false, entries: 0, n: sens.n }); assert.ok(sens.n >= 13);
+  await page.click('.mchip[data-m="2026-12"]'); await page.click('[data-act=suggest]'); await page.waitForSelector('#escalaCard');
+  await page.click('#nav a[data-v=ferias]'); await page.waitForSelector('table.grid.fer');
+  // tentar abrir a folha pelo endereco nao funciona
+  await page.evaluate(() => { location.hash = '#folha/2026-09'; }); await page.waitForTimeout(300);
+  assert.equal(await page.locator('#nav a.on').getAttribute('data-v'), 'ferias');
+  await page.click('#logout'); await page.waitForSelector('#lf');
+  await page.fill('#lid', 'admin'); await page.fill('#lpw', 'admin'); await page.click('#lgo'); await page.waitForSelector('#nav');
+  assert.ok((await page.$$eval('#nav a', (as) => as.length)) >= 7);
+});
+
 test('E2E: ferias — alertas, ajuste do periodo, registro e escala de domingo', { skip, timeout: 90000 }, async () => {
   await page.clock.setFixedTime(new Date('2026-09-22T12:00:00'));
   await page.click('#nav a[data-v=ferias]'); await page.waitForSelector('table.grid.fer');

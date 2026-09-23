@@ -4,7 +4,16 @@ import * as C from './calc.js';
 export const COL = {
   emp: 'rh_employees', entries: 'rh_entries', months: 'rh_months', leaves: 'rh_leaves', payslips: 'rh_payslips',
   payslipImgs: 'rh_payslip_imgs', sundays: 'rh_sundays', config: 'rh_config', log: 'rh_log', admins: 'rh_admins',
+  // equipe = copia SEM dados sensiveis (sem CPF, telefone, salario) para quem so ve Escala/Ferias; ferias = controle de ferias
+  equipe: 'rh_equipe', ferias: 'rh_ferias',
 };
+
+// Perfis de acesso: 'total' (tudo) ou 'escala_ferias' (so as abas Escala de domingo e Ferias)
+export const PERFIS = { total: 'Acesso total', escala_ferias: 'Só Escala e Férias' };
+export const PERFIL_VIEWS = { escala_ferias: ['escala', 'ferias'] };
+const EQUIPE_FIELDS = ['nome', 'loja', 'lojaTrabalho', 'categoria', 'funcao', 'admissao', 'entrada', 'ativo', 'demissao'];
+const FERIAS_FIELDS = ['ferias', 'feriasVenc', 'feriasVencOrigem', 'feriasVencEm'];
+const pick = (o, keys) => Object.fromEntries(keys.map((k) => [k, o[k] ?? null]));
 
 export const DEFAULT_CONFIG = {
   vt: C.VT_DIARIO, dddPadrao: '24', required: C.DEFAULT_REQUIRED,
@@ -13,7 +22,7 @@ export const DEFAULT_CONFIG = {
 };
 
 export const S = {
-  store: null, user: null, employees: [], entries: new Map(), months: new Map(), leaves: [], config: { ...DEFAULT_CONFIG },
+  store: null, user: null, perfil: 'total', rulesV2: false, employees: [], entries: new Map(), months: new Map(), leaves: [], config: { ...DEFAULT_CONFIG },
   payslips: new Map(), sundays: new Map(),
 };
 
@@ -25,15 +34,42 @@ export async function log(action, detail = '') {
   try { await S.store.set(COL.log, `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, { ts: nowIso(), user: S.user?.id || '?', action, detail }); } catch (e) { /* log nao pode travar a operacao */ }
 }
 
+const tryList = async (col) => { try { return await S.store.list(col); } catch (e) { return null; } };
+const mergeFerias = (e, f) => (f ? { ...e, ...pick(f, FERIAS_FIELDS) } : e);
+
 export async function loadAll() {
-  const [emp, ent, mon, lea, cfg] = await Promise.all([
+  const setConfig = (cfg) => { S.config = { ...DEFAULT_CONFIG, ...(cfg || {}), required: { ...DEFAULT_CONFIG.required, ...((cfg && cfg.required) || {}) } }; };
+  if (S.perfil === 'escala_ferias') {
+    // so o necessario para Escala e Ferias: equipe (sem CPF/telefone/salario), afastamentos, configuracao e ferias
+    const [eq, lea, cfg, fer] = await Promise.all([S.store.list(COL.equipe), S.store.list(COL.leaves), S.store.get(COL.config, 'settings'), S.store.list(COL.ferias)]);
+    const fm = new Map(fer.map((f) => [f.id, f]));
+    S.employees = eq.map((e) => mergeFerias(e, fm.get(e.id))).sort((a, b) => a.nome.localeCompare(b.nome));
+    S.entries = new Map(); S.months = new Map(); S.leaves = lea; setConfig(cfg); S.rulesV2 = true;
+    return;
+  }
+  const [emp, ent, mon, lea, cfg, fer, eq] = await Promise.all([
     S.store.list(COL.emp), S.store.list(COL.entries), S.store.list(COL.months), S.store.list(COL.leaves), S.store.get(COL.config, 'settings'),
+    tryList(COL.ferias), tryList(COL.equipe),
   ]);
-  S.employees = emp.sort((a, b) => a.nome.localeCompare(b.nome));
+  S.rulesV2 = !!(fer && eq); // regras novas do Firestore aplicadas (colecoes rh_ferias/rh_equipe liberadas)
+  const fm = new Map((fer || []).map((f) => [f.id, f]));
+  S.employees = emp.map((e) => mergeFerias(e, fm.get(e.id))).sort((a, b) => a.nome.localeCompare(b.nome));
   S.entries = new Map(ent.map((e) => [e.id, e]));
   S.months = new Map(mon.map((m) => [m.id, m]));
   S.leaves = lea;
-  S.config = { ...DEFAULT_CONFIG, ...(cfg || {}), required: { ...DEFAULT_CONFIG.required, ...((cfg && cfg.required) || {}) } };
+  setConfig(cfg);
+  if (S.rulesV2) syncShared(emp, fm, new Map(eq.map((x) => [x.id, x]))).catch((e) => console.warn('sync equipe/ferias', e));
+}
+
+/** Mantem rh_equipe (copia sem dados sensiveis) e rh_ferias em dia, a partir do cadastro completo. */
+async function syncShared(emp, fm, em) {
+  const ops = [];
+  for (const e of emp) {
+    const want = pick(e, EQUIPE_FIELDS), have = em.get(e.id);
+    if (!have || EQUIPE_FIELDS.some((k) => (have[k] ?? null) !== want[k])) ops.push({ op: 'set', col: COL.equipe, id: e.id, data: want });
+    if (!fm.has(e.id) && FERIAS_FIELDS.some((k) => e[k] != null)) ops.push({ op: 'set', col: COL.ferias, id: e.id, data: pick(e, FERIAS_FIELDS) }); // migra ferias antigas
+  }
+  if (ops.length) await S.store.batch(ops);
 }
 
 // ---------- consultas ----------
@@ -192,7 +228,10 @@ export async function saveEmployee(e) {
   const id = e.id || slugify(e.nome);
   const doc = { ...e }; delete doc.id;
   doc.cpf = C.cpfDigits(doc.cpf);
-  await S.store.set(COL.emp, id, doc);
+  const saved = { ...doc };
+  if (S.rulesV2) for (const k of FERIAS_FIELDS) delete saved[k]; // ferias ficam em rh_ferias
+  await S.store.set(COL.emp, id, saved);
+  if (S.rulesV2) { try { await S.store.set(COL.equipe, id, pick(doc, EQUIPE_FIELDS)); } catch (err) { console.warn(err); } }
   const full = { id, ...doc };
   const i = S.employees.findIndex((x) => x.id === id);
   if (i >= 0) S.employees[i] = full; else S.employees.push(full);
@@ -200,23 +239,30 @@ export async function saveEmployee(e) {
   await log('funcionario', `${doc.nome} (${i >= 0 ? 'alterado' : 'novo'})`);
   return full;
 }
-// ---------- ferias (ficam dentro do cadastro do funcionario: rh_employees) ----------
-export async function setFeriasVenc(empId, venc, origem = 'manual') {
+// ---------- ferias (rh_ferias/{empId}; antes das regras novas ficavam dentro de rh_employees) ----------
+async function saveFerias(empId, patch) {
   const e = emp(empId); if (!e) throw new Error('Funcionário não encontrado.');
-  await saveEmployee({ ...e, feriasVenc: venc, feriasVencOrigem: origem, feriasVencEm: nowIso() });
+  const full = { ...e, ...patch };
+  if (!S.rulesV2) { await saveEmployee(full); return full; }
+  await S.store.set(COL.ferias, empId, pick(full, FERIAS_FIELDS));
+  const i = S.employees.findIndex((x) => x.id === empId); S.employees[i] = full;
+  return full;
+}
+export async function setFeriasVenc(empId, venc, origem = 'manual') {
+  const e = await saveFerias(empId, { feriasVenc: venc, feriasVencOrigem: origem, feriasVencEm: nowIso() });
   await log('ferias_vencimento', `${e.nome}: período em aberto vence ${C.fmtDMY(venc)} (${origem})`);
 }
 export async function addFerias(empId, reg) {
   const e = emp(empId); if (!e) throw new Error('Funcionário não encontrado.');
   const r = { id: `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, criadoEm: nowIso(), criadoPor: S.user?.id || '', ...reg };
-  await saveEmployee({ ...e, ferias: [...(e.ferias || []), r] });
+  await saveFerias(empId, { ferias: [...(e.ferias || []), r] });
   await log('ferias', `${e.nome}: ${r.inicio ? C.fmtDMY(r.inicio) + ' a ' + C.fmtDMY(C.fimFerias(r)) : 'período quitado'} (${r.dias} dias${r.abono ? ' + abono 10' : ''}) — período venc. ${C.fmtDMY(r.venc)}`);
   return r;
 }
 export async function removeFerias(empId, regId) {
   const e = emp(empId); if (!e) return;
   const r = (e.ferias || []).find((x) => x.id === regId);
-  await saveEmployee({ ...e, ferias: (e.ferias || []).filter((x) => x.id !== regId) });
+  await saveFerias(empId, { ferias: (e.ferias || []).filter((x) => x.id !== regId) });
   if (r) await log('ferias_removida', `${e.nome}: ${r.inicio ? C.fmtDMY(r.inicio) : 'quitação'} (${r.dias} dias)`);
 }
 
@@ -277,14 +323,22 @@ export async function sundayHistory(mk) {
 
 // ---------- usuarios do sistema (logins) ----------
 export async function listAdmins() { return (await S.store.list(COL.admins)).sort((a, b) => String(a.id).localeCompare(String(b.id))); }
-export async function addAdmin(auth, id, pass) {
+export async function addAdmin(auth, id, pass, perfil = 'total') {
+  if (!PERFIS[perfil]) throw new Error('Perfil inválido.');
+  if (perfil !== 'total' && !S.rulesV2) throw new Error('Para criar usuário só de Escala e Férias, atualize antes as regras do Firestore (veja o aviso nesta tela). Sem isso o banco não consegue limitar o acesso.');
   const login = String(id).trim().toLowerCase();
   if (!/^[a-z0-9._-]{3,30}$/.test(login)) throw new Error('ID deve ter 3 a 30 caracteres: letras, números, ponto, traço ou _ (sem espaço e sem acento).');
   const uid = await auth.createUser(login, pass);
-  try { await S.store.set(COL.admins, uid, { id: login, uid, criadoEm: nowIso(), criadoPor: S.user?.id || '' }); }
+  try { await S.store.set(COL.admins, uid, { id: login, uid, perfil, criadoEm: nowIso(), criadoPor: S.user?.id || '' }); }
   catch (e) { throw new Error(e.code === 'permission-denied' ? 'O login foi criado, mas as regras do Firestore ainda não permitem liberar o acesso. Atualize as regras (README → “Regras do Firestore”) e clique em Incluir de novo com o mesmo ID.' : e.message); }
-  await log('usuario_incluido', login);
+  await log('usuario_incluido', `${login} (${PERFIS[perfil]})`);
   return uid;
+}
+export async function setAdminPerfil(uid, perfil) {
+  if (uid === S.user?.uid) throw new Error('Você não pode mudar o seu próprio acesso.');
+  if (perfil !== 'total' && !S.rulesV2) throw new Error('Atualize antes as regras do Firestore.');
+  await S.store.set(COL.admins, uid, { perfil }, true);
+  await log('usuario_perfil', `${uid}: ${PERFIS[perfil]}`);
 }
 export async function removeAdmin(uid) {
   if (uid === S.user?.uid) throw new Error('Você não pode remover o seu próprio acesso.');

@@ -12,7 +12,8 @@ import * as Ferias from './views/ferias.js';
 import * as Ajustes from './views/ajustes.js';
 
 const DEMO = new URLSearchParams(location.search).has('demo') && ['localhost', '127.0.0.1'].includes(location.hostname);
-const VIEWS = [['folha', 'Folha de pagamento', true], ['contracheques', 'Contracheques', true], ['escala', 'Escala de domingo', true], ['ferias', 'Férias', false], ['funcionarios', 'Funcionários', false], ['config', 'Configurações', false], ['historico', 'Histórico', false]];
+const ALL_VIEWS = [['folha', 'Folha de pagamento', true], ['contracheques', 'Contracheques', true], ['escala', 'Escala de domingo', true], ['ferias', 'Férias', false], ['funcionarios', 'Funcionários', false], ['config', 'Configurações', false], ['historico', 'Histórico', false]];
+let VIEWS = ALL_VIEWS;
 const IDLE_MS = 30 * 60 * 1000;
 
 let auth, view = 'folha', month = null, year = null, idleTimer = null;
@@ -54,6 +55,7 @@ async function onUser(user) {
     const adm = await S.store.get(COL.admins, user.uid);
     if (!adm) { await auth.signOut(); showLogin('Este usuário não tem permissão de administrador do RH.'); return; }
     S.user = user;
+    S.perfil = D.PERFIS[adm.perfil] ? adm.perfil : 'total';
     await D.loadAll();
     initMonth();
     startIdle();
@@ -73,6 +75,9 @@ function startIdle() {
 }
 
 function initMonth() {
+  const allow = D.PERFIL_VIEWS[S.perfil];
+  VIEWS = allow ? ALL_VIEWS.filter((v) => allow.includes(v[0])) : ALL_VIEWS;
+  if (!VIEWS.some((v) => v[0] === view)) view = VIEWS[0][0];
   const today = new Date();
   const cur = C.monthKey(today.getFullYear(), today.getMonth() + 1);
   const known = D.monthsKnown();
@@ -80,6 +85,7 @@ function initMonth() {
   year = C.parseMonth(month).y;
   const h = location.hash.replace('#', '').split('/');
   if (VIEWS.some((v) => v[0] === h[0])) view = h[0];
+  else if (!VIEWS.some((v) => v[0] === view)) view = VIEWS[0][0];
   if (/^\d{4}-\d{2}$/.test(h[1] || '')) { month = h[1]; year = C.parseMonth(month).y; }
 }
 
@@ -126,7 +132,7 @@ function monthBar() {
   bar.hidden = !uses;
   if (!uses) return;
   bar.innerHTML = `<button class="btn sm" data-y="-1" aria-label="Ano anterior">‹</button><b class="yr">${year}</b><button class="btn sm" data-y="1" aria-label="Próximo ano">›</button>
-    ${C.MESES.map((n, i) => { const k = C.monthKey(year, i + 1), d = D.monthDoc(k); return `<button class="mchip ${k === month ? 'on' : ''} ${d ? d.status : 'none'}" data-m="${k}" title="${d ? (d.status === 'closed' ? 'Enviado' : 'Em preenchimento') : 'Ainda não criado'}">${n.slice(0, 3)}${d ? (d.status === 'closed' ? ' ✔' : ' ●') : ''}</button>`; }).join('')}`;
+    ${C.MESES.map((n, i) => { const k = C.monthKey(year, i + 1), d = D.monthDoc(k); if (S.perfil !== 'total') return `<button class="mchip ${k === month ? 'on' : ''}" data-m="${k}">${n.slice(0, 3)}</button>`; return `<button class="mchip ${k === month ? 'on' : ''} ${d ? d.status : 'none'}" data-m="${k}" title="${d ? (d.status === 'closed' ? 'Enviado' : 'Em preenchimento') : 'Ainda não criado'}">${n.slice(0, 3)}${d ? (d.status === 'closed' ? ' ✔' : ' ●') : ''}</button>`; }).join('')}`;
   bar.onclick = (ev) => {
     const y = ev.target.closest('[data-y]'), m = ev.target.closest('[data-m]');
     if (y) { year += +y.dataset.y; monthBar(); }
