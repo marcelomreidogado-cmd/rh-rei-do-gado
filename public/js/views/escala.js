@@ -1,7 +1,7 @@
 import * as C from '../calc.js';
 import * as D from '../data.js';
 import { S } from '../data.js';
-import { esc, $, $$, toast, openModal, confirmBox, copyRich } from '../ui.js';
+import { esc, $, $$, toast, openModal, confirmBox, copyRich, copyImageDataUrl } from '../ui.js';
 
 let mk, root, data;
 const CATS = ['atendimento', 'manipulacao'];
@@ -22,31 +22,80 @@ export function awayReason(empId, iso) {
 const short = (n) => { const t = n.split(/\s+/); return `${t[0]} ${t[1] && !['DA', 'DE', 'DO', 'DAS', 'DOS'].includes(t[1].toUpperCase()) ? t[1][0] + '.' : ''}`.trim(); };
 const cap = (s) => s.charAt(0) + s.slice(1).toLowerCase();
 
+const nm = (id) => { const e = D.emp(id); if (!e) return '?'; const [a, b] = short(e.nome).split(' '); return cap(a) + (b ? ' ' + b.toUpperCase() : ''); };
+const catNames = (ids, cat) => ids.filter((id) => D.emp(id)?.categoria === cat).map(nm);
+
 export async function render(el, month) {
   root = el; mk = month;
   data = await D.loadSundays(mk);
   const sundays = C.sundaysOf(mk);
   const req = S.config.required;
-  const emps = S.employees.filter((e) => e.ativo !== false);
+  const emps = S.employees.filter(C.inEscala);
   const counts = {};
   for (const d of sundays) for (const ids of Object.values(data.assignments[d] || {})) for (const id of ids) counts[id] = (counts[id] || 0) + 1;
+  const shortOf = (d, sid) => C.checkDay(data.assignments[d], sid, S.employees, req).some((x) => x.falta);
 
   root.innerHTML = `<div class="toolbar"><strong>Escala de domingo — ${esc(C.monthLabel(mk))}</strong><span class="spacer"></span>
+    <button class="btn" data-act="team">👥 Equipe por loja</button>
     <button class="btn" data-act="req">⚙ Quantidade por loja</button>
     <button class="btn" data-act="suggest">✨ Sugerir escala</button><button class="btn" data-act="clear">Limpar</button>
-    <button class="btn" data-act="copy">📋 Copiar</button><button class="btn" data-act="print">🖨 Imprimir</button></div>
+    <button class="btn primary" data-act="img">📷 Imagem para WhatsApp</button><button class="btn" data-act="copy">📋 Copiar texto</button><button class="btn" data-act="print">🖨 Imprimir (1 folha)</button></div>
     <div class="req-line">${C.STORES.map((s) => `<span class="pill"><b>${esc(s.nome)}</b> precisa de ${req[s.id]?.atendimento ?? 0} atend. + ${req[s.id]?.manipulacao ?? 0} manip.</span>`).join('')}</div>
+    <div class="escala-card" id="escalaCard"><h2>ESCALA DE DOMINGO — ${esc(C.monthLabel(mk).toUpperCase())}</h2>
+      <table><thead><tr><th>Domingo</th>${C.STORES.map((s) => `<th>${esc(s.nome)}</th>`).join('')}</tr></thead><tbody>
+      ${sundays.map((d) => `<tr><td class="dom">${C.fmtDM(d)}</td>${C.STORES.map((s) => { const ids = data.assignments[d]?.[s.id] || [];
+        return `<td class="${shortOf(d, s.id) ? 'short' : ''}">${CATS.map((cat) => `<p class="cat"><b>${cat === 'atendimento' ? 'Atend.' : 'Manip.'}:</b> ${esc(catNames(ids, cat).join(', ') || '—')}</p>`).join('')}</td>`; }).join('')}</tr>`).join('')}
+      </tbody></table></div>
+    <p class="muted">Clique em <b>Editar</b> (ou no nome de alguém) para trocar quem trabalha em cada domingo. A escala usa a loja onde a pessoa <b>trabalha</b> (botão “Equipe por loja”), não a loja do registro da folha.</p>
     <div class="sundays">${sundays.map((d) => `<article class="sunday"><h3>Domingo ${C.fmtDM(d)}</h3><div class="sun-stores">${C.STORES.map((s) => {
       const ids = data.assignments[d]?.[s.id] || [];
       const chk = C.checkDay(data.assignments[d], s.id, S.employees, req);
       const ok = chk.every((x) => x.falta === 0);
-      return `<div class="sun-store ${ids.length || chk.some((x) => x.precisa) ? (ok ? 'ok' : 'short') : ''}"><header><b>${esc(s.nome)}</b><button class="btn sm" data-act="edit" data-d="${d}" data-s="${s.id}">Editar</button></header>
-        ${CATS.map((cat) => { const list = ids.filter((id) => D.emp(id)?.categoria === cat); const c = chk.find((x) => x.cat === cat); return `<div class="cat"><span class="catname">${C.CATEGORIAS[cat]} <em class="${c.falta ? 'lack' : c.sobra ? 'extra' : 'fine'}">${c.tem}/${c.precisa}</em></span>${list.map((id) => `<span class="person ${D.emp(id).loja !== s.id ? 'cover' : ''}" title="${esc(D.emp(id).nome)}">${esc(cap(short(D.emp(id).nome)))}${D.emp(id).loja !== s.id ? ' ↔' : ''}</span>`).join('') || '<span class="muted">—</span>'}</div>`; }).join('')}
-        ${ids.filter((id) => !CATS.includes(D.emp(id)?.categoria)).map((id) => `<div class="cat"><span class="person cover">${esc(cap(short(D.emp(id).nome)))} (fora da escala)</span></div>`).join('')}
+      return `<div class="sun-store ${ids.length || chk.some((x) => x.precisa) ? (ok ? 'ok' : 'short') : ''}"><header><b>${esc(s.nome)}</b><button class="btn sm" data-act="edit" data-d="${d}" data-s="${s.id}">✏️ Editar</button></header>
+        ${CATS.map((cat) => { const list = ids.filter((id) => D.emp(id)?.categoria === cat); const c = chk.find((x) => x.cat === cat); return `<div class="cat"><span class="catname">${C.CATEGORIAS[cat]} <em class="${c.falta ? 'lack' : c.sobra ? 'extra' : 'fine'}">${c.tem}/${c.precisa}</em></span>${list.map((id) => { const cover = C.workStore(D.emp(id)) !== s.id; return `<span class="person ${cover ? 'cover' : ''}" data-act="edit" data-d="${d}" data-s="${s.id}" title="${esc(D.emp(id).nome)}${cover ? ' — cobrindo de ' + esc(C.workPlaceName(C.workStore(D.emp(id)))) : ''}">${esc(nm(id))}${cover ? ' ↔' : ''}</span>`; }).join('') || '<span class="muted">—</span>'}</div>`; }).join('')}
         ${chk.some((x) => x.falta) ? `<p class="lack">Faltam: ${chk.filter((x) => x.falta).map((x) => `${x.falta} ${C.CATEGORIAS[x.cat].toLowerCase()}`).join(', ')}</p>` : ''}</div>`;
     }).join('')}</div></article>`).join('')}</div>
-    <section class="store"><h2>Domingos por pessoa em ${esc(C.monthLabel(mk))}</h2><div class="table-wrap"><table class="grid mini"><thead><tr><th>Funcionário</th><th>Loja</th><th>Função na escala</th><th>Domingos</th></tr></thead><tbody>${emps.filter((e) => e.categoria !== 'nenhum').map((e) => `<tr><td>${esc(e.nome)}</td><td>${esc(C.storeById(e.loja)?.nome || '')}</td><td>${C.CATEGORIAS[e.categoria] || ''}</td><td class="num">${counts[e.id] || 0}</td></tr>`).join('')}</tbody></table></div></section>`;
+    <section class="store"><h2>Domingos por pessoa em ${esc(C.monthLabel(mk))}</h2><div class="table-wrap"><table class="grid mini"><thead><tr><th>Funcionário</th><th>Trabalha em</th><th>Função na escala</th><th>Domingos</th></tr></thead><tbody>${emps.map((e) => `<tr><td>${esc(e.nome)}</td><td>${esc(C.workPlaceName(C.workStore(e)))}</td><td>${C.CATEGORIAS[e.categoria] || ''}</td><td class="num">${counts[e.id] || 0}</td></tr>`).join('')}</tbody></table></div></section>`;
   wire();
+}
+
+/** Desenha a escala numa imagem (PNG) de uma pagina, para mandar no WhatsApp. */
+function escalaPng() {
+  const sundays = C.sundaysOf(mk), W = 1080, pad = 30, dw = 110, cw = (W - pad * 2 - dw) / 3, lh = 30;
+  const rows = sundays.map((d) => {
+    const cells = C.STORES.map((s) => { const ids = data.assignments[d]?.[s.id] || []; return CATS.map((cat) => [cat === 'atendimento' ? 'Atend.' : 'Manip.', catNames(ids, cat)]); });
+    const lines = Math.max(...cells.map((c) => c.reduce((n, [, names]) => n + Math.max(1, names.length), 0)));
+    return { d, cells, h: lines * lh + 22 };
+  });
+  const H = pad * 2 + 70 + 46 + rows.reduce((a, r) => a + r.h, 0) + 30;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#b91c1c'; g.font = 'bold 34px Arial'; g.textAlign = 'center';
+  g.fillText(`ESCALA DE DOMINGO — ${C.monthLabel(mk).toUpperCase()}`, W / 2, pad + 40);
+  g.fillStyle = '#374151'; g.font = '18px Arial'; g.fillText('Rei do Gado', W / 2, pad + 64);
+  let y = pad + 80;
+  g.fillStyle = '#b91c1c'; g.fillRect(pad, y, W - pad * 2, 46);
+  g.fillStyle = '#fff'; g.font = 'bold 22px Arial';
+  g.fillText('Domingo', pad + dw / 2, y + 31);
+  C.STORES.forEach((s, i) => g.fillText(s.nome, pad + dw + cw * i + cw / 2, y + 31));
+  y += 46; g.textAlign = 'left';
+  rows.forEach((r, ri) => {
+    g.fillStyle = ri % 2 ? '#f9fafb' : '#fff'; g.fillRect(pad, y, W - pad * 2, r.h);
+    g.strokeStyle = '#d1d5db'; g.lineWidth = 1; g.strokeRect(pad, y, W - pad * 2, r.h);
+    for (let i = 0; i < 3; i++) { g.beginPath(); g.moveTo(pad + dw + cw * i, y); g.lineTo(pad + dw + cw * i, y + r.h); g.stroke(); }
+    g.fillStyle = '#111827'; g.font = 'bold 24px Arial'; g.fillText(C.fmtDM(r.d), pad + 16, y + 38);
+    r.cells.forEach((cell, i) => {
+      let yy = y + 32; const x = pad + dw + cw * i + 12;
+      for (const [lab, names] of cell) {
+        g.fillStyle = '#6b7280'; g.font = 'bold 16px Arial'; g.fillText(lab, x, yy);
+        g.fillStyle = '#111827'; g.font = '20px Arial';
+        (names.length ? names : ['—']).forEach((n) => { g.fillText(n, x + 66, yy); yy += lh; });
+      }
+    });
+    y += r.h;
+  });
+  return c.toDataURL('image/png');
 }
 
 let wiredRoot = null;
@@ -61,7 +110,14 @@ function wire() {
       else if (act === 'suggest') await suggest();
       else if (act === 'clear') { if (await confirmBox('Limpar toda a escala deste mês?', { danger: true, okLabel: 'Limpar' })) { await D.saveSundays(mk, {}); render(root, mk); } }
       else if (act === 'copy') { const t = asText(); const ok = await copyRich(`<pre style="font:13px monospace">${esc(t)}</pre>`, t); toast(ok ? 'Escala copiada.' : 'Não foi possível copiar.', ok ? 'ok' : 'err'); }
-      else if (act === 'print') window.print();
+      else if (act === 'print') { document.body.classList.add('print-escala'); window.print(); setTimeout(() => document.body.classList.remove('print-escala'), 500); }
+      else if (act === 'img') {
+        const url = escalaPng();
+        const a = document.createElement('a'); a.href = url; a.download = `escala-domingo-${mk}.png`; document.body.appendChild(a); a.click(); a.remove();
+        const ok = await copyImageDataUrl(url);
+        toast(ok ? 'Imagem copiada — cole direto na conversa do WhatsApp (e também foi baixada).' : 'Imagem baixada — anexe no WhatsApp.');
+      }
+      else if (act === 'team') openTeam();
     } catch (e) { toast(e.message, 'err'); }
   });
 }
@@ -72,7 +128,7 @@ function asText() {
     lines.push('', `Domingo ${C.fmtDM(d)}`);
     for (const s of C.STORES) {
       const ids = data.assignments[d]?.[s.id] || [];
-      const part = (cat) => ids.filter((id) => D.emp(id)?.categoria === cat).map((id) => cap(short(D.emp(id).nome))).join(', ') || '-';
+      const part = (cat) => catNames(ids, cat).join(', ') || '-';
       lines.push(`${s.nome}: Atendimento: ${part('atendimento')} | Manipulação: ${part('manipulacao')}`);
     }
   }
@@ -88,6 +144,28 @@ async function suggest() {
   render(root, mk);
   if (shortages.length) toast(`Escala sugerida, mas faltam pessoas em ${shortages.length} posição(ões) — veja os alertas em vermelho. Você pode cobrir com alguém de outra loja (botão Editar).`, 'err', 9000);
   else toast('Escala sugerida com rodízio equilibrado. Ajuste o que precisar em “Editar”.');
+}
+
+function openTeam() {
+  const emps = S.employees.filter((e) => e.ativo !== false).sort((a, b) => (C.workStore(a) || '').localeCompare(C.workStore(b) || '') || a.nome.localeCompare(b.nome));
+  openModal({
+    title: 'Equipe por loja (onde cada um trabalha)', wide: true,
+    body: `<p class="muted">A folha continua separada pela loja do <b>registro</b> (imposto). Aqui vale onde a pessoa trabalha de verdade — é o que a escala de domingo usa. Administrativo e “Não trabalha domingo” ficam fora da escala.</p>
+      <div class="table-wrap"><table class="grid mini equipe"><thead><tr><th>Funcionário</th><th>Registro (folha)</th><th>Trabalha em</th><th>Função na escala</th></tr></thead><tbody>
+      ${emps.map((e) => `<tr data-id="${esc(e.id)}"><td>${esc(e.nome)}</td><td class="muted">${esc(C.storeById(e.loja)?.nome || '')}</td>
+        <td><select class="in" data-f="lojaTrabalho">${C.WORK_PLACES.map((w) => `<option value="${w.id}" ${C.workStore(e) === w.id ? 'selected' : ''}>${esc(w.nome)}</option>`).join('')}</select></td>
+        <td><select class="in" data-f="categoria">${Object.entries(C.CATEGORIAS).map(([k, v]) => `<option value="${k}" ${e.categoria === k ? 'selected' : ''}>${v}</option>`).join('')}</select></td></tr>`).join('')}
+      </tbody></table></div>`,
+    actions: [{ label: 'Cancelar' }, { label: 'Salvar', kind: 'primary', onClick: async (m) => {
+      let n = 0;
+      for (const tr of m.$$('tr[data-id]')) {
+        const e = D.emp(tr.dataset.id), lt = tr.querySelector('[data-f=lojaTrabalho]').value, cat = tr.querySelector('[data-f=categoria]').value;
+        if (lt === C.workStore(e) && cat === e.categoria) continue;
+        await D.saveEmployee({ ...e, lojaTrabalho: lt, categoria: cat }); n++;
+      }
+      render(root, mk); toast(n ? `Equipe atualizada (${n}). Clique em “Sugerir escala” para refazer com as lojas certas.` : 'Nada mudou.');
+    } }],
+  });
 }
 
 function openReq() {
@@ -109,12 +187,12 @@ function openEdit(d, storeId) {
   const cur = new Set(data.assignments[d]?.[storeId] || []);
   const elsewhere = {};
   for (const [sid, ids] of Object.entries(data.assignments[d] || {})) if (sid !== storeId) for (const id of ids) elsewhere[id] = C.storeById(sid).nome;
-  const list = (cat, home) => S.employees.filter((e) => e.ativo !== false && e.categoria === cat && (home ? e.loja === storeId : e.loja !== storeId));
-  const item = (e) => { const why = awayReason(e.id, d) || (elsewhere[e.id] ? `escalado em ${elsewhere[e.id]}` : ''); return `<label class="${why ? 'dis' : ''}"><input type="checkbox" value="${esc(e.id)}" ${cur.has(e.id) ? 'checked' : ''} ${why && !cur.has(e.id) ? 'disabled' : ''}> ${esc(e.nome)} ${why ? `<small class="lack">(${esc(why)})</small>` : ''}${e.loja !== storeId ? `<small> · ${esc(C.storeById(e.loja)?.nome)}</small>` : ''}</label>`; };
+  const list = (cat, home) => S.employees.filter((e) => C.inEscala(e) && e.categoria === cat && (home ? C.workStore(e) === storeId : C.workStore(e) !== storeId));
+  const item = (e) => { const why = awayReason(e.id, d) || (elsewhere[e.id] ? `escalado em ${elsewhere[e.id]}` : ''); return `<label class="${why ? 'dis' : ''}"><input type="checkbox" value="${esc(e.id)}" ${cur.has(e.id) ? 'checked' : ''} ${why && !cur.has(e.id) ? 'disabled' : ''}> ${esc(e.nome)} ${why ? `<small class="lack">(${esc(why)})</small>` : ''}${C.workStore(e) !== storeId ? `<small> · ${esc(C.workPlaceName(C.workStore(e)))}</small>` : ''}</label>`; };
   openModal({
     title: `${st.nome} — domingo ${C.fmtDM(d)}`, wide: true,
     body: `<div class="grid2 top">${CATS.map((cat) => `<div><h4>${C.CATEGORIAS[cat]} <small>(precisa de ${S.config.required[storeId]?.[cat] ?? 0})</small></h4><div class="checklist">${list(cat, true).map(item).join('') || '<p class="muted">Ninguém cadastrado.</p>'}</div>
-      <details><summary>Cobertura de outras lojas</summary><div class="checklist">${list(cat, false).map(item).join('')}</div></details></div>`).join('')}</div>
+      <details ${list(cat, false).some((e) => cur.has(e.id)) ? 'open' : ''}><summary>Cobertura de outras lojas</summary><div class="checklist">${list(cat, false).map(item).join('')}</div></details></div>`).join('')}</div>
       <p class="muted">Pessoas com falta, atestado, licença ou já escaladas em outra loja no mesmo domingo aparecem bloqueadas.</p>`,
     actions: [{ label: 'Cancelar' }, { label: 'Salvar', kind: 'primary', onClick: async (m) => {
       const next = { ...data.assignments, [d]: { ...(data.assignments[d] || {}), [storeId]: m.$$('input:checked').map((i) => i.value) } };

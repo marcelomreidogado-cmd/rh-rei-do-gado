@@ -223,3 +223,24 @@ test('afastamentos iniciais deixam assiduidade correta em agosto e setembro', { 
   assert.equal(C.leaveText(d.leaves, 'gustavo-felix', '2026-10', 'atestado'), 'INSS 01/10 a 24/10 (cont.)');
   assert.equal(C.leaveText(d.leaves, 'gustavo-felix', '2026-11', 'atestado'), '');
 });
+
+test('escala usa a loja onde trabalha, prioriza a propria loja e tira administrativo', () => {
+  const emps = [
+    { id: 'x1', nome: 'Xa', loja: 'bingen', lojaTrabalho: 'coronel', categoria: 'atendimento' }, // registrado em Bingen, trabalha no Coronel
+    { id: 'x2', nome: 'Xb', loja: 'bingen', categoria: 'atendimento' },
+    { id: 'x3', nome: 'Xc', loja: 'coronel', categoria: 'atendimento', funcao: 'Assist Financeiro' }, // administrativo
+    { id: 'x4', nome: 'Xd', loja: 'correas', categoria: 'atendimento' },
+  ];
+  assert.equal(C.workStore(emps[0]), 'coronel'); assert.equal(C.workStore(emps[2]), C.ADM); assert.equal(C.inEscala(emps[2]), false);
+  const required = { coronel: { atendimento: 1, manipulacao: 0 }, bingen: { atendimento: 1, manipulacao: 0 }, correas: { atendimento: 0, manipulacao: 0 } };
+  const { assignments, shortages } = C.suggestSchedule({ sundays: ['2026-09-06', '2026-09-13'], employees: emps, required });
+  for (const d of Object.values(assignments)) { assert.deepEqual(d.coronel, ['x1']); assert.deepEqual(d.bingen, ['x2']); }
+  assert.equal(shortages.length, 0);
+  // falta gente na loja -> cobre com alguem de outra loja livre no dia (nunca em duas lojas)
+  const req2 = { coronel: { atendimento: 2, manipulacao: 0 }, bingen: { atendimento: 1, manipulacao: 0 }, correas: { atendimento: 0, manipulacao: 0 } };
+  const r2 = C.suggestSchedule({ sundays: ['2026-09-06'], employees: emps, required: req2 });
+  const day = r2.assignments['2026-09-06'];
+  assert.deepEqual(day.coronel.sort(), ['x1', 'x4']);
+  assert.deepEqual(day.bingen, ['x2']);
+  assert.ok(!day.coronel.includes('x3'));
+});

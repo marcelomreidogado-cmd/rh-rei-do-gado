@@ -8,7 +8,17 @@ export const STORES = [
 ];
 export const storeById = (id) => STORES.find((s) => s.id === id);
 
-export const CATEGORIAS = { atendimento: 'Atendimento', manipulacao: 'Manipulação', nenhum: 'Fora da escala' };
+export const CATEGORIAS = { atendimento: 'Atendimento', manipulacao: 'Manipulação', nenhum: 'Não trabalha domingo' };
+
+// Onde a pessoa trabalha de verdade (pode ser diferente da loja do registro/imposto, usada na folha).
+export const ADM = 'adm';
+export const WORK_PLACES = [...STORES.map((s) => ({ id: s.id, nome: s.nome })), { id: ADM, nome: 'Administrativo (seg. a sex.)' }];
+const FUNCAO_ADM = /financ|administ|escrit|contab|\bRH\b|recursos humanos/i;
+/** Loja onde trabalha: o que foi cadastrado; se vazio, administrativo pela função ou a loja do registro. */
+export const workStore = (e) => (e ? e.lojaTrabalho || (FUNCAO_ADM.test(e.funcao || '') ? ADM : e.loja) : null);
+export const workPlaceName = (id) => WORK_PLACES.find((w) => w.id === id)?.nome || '';
+/** Entra na escala de domingo? (ativo, trabalha em loja e tem funcao de atendimento/manipulacao) */
+export const inEscala = (e) => !!e && e.ativo !== false && workStore(e) !== ADM && ['atendimento', 'manipulacao'].includes(e.categoria);
 
 // Campos que se repetem para os meses seguintes quando alterados
 export const RECURRING = ['salario', 'premio', 'adiantamento', 'assiduidade'];
@@ -247,38 +257,40 @@ export function checkDay(assign, storeId, emps, required) {
 }
 
 /**
- * Sugere escala justa: para cada domingo/loja/categoria escolhe os funcionarios da loja com menos domingos
- * trabalhados (contando historico), evitando repetir quem trabalhou no domingo anterior e quem esta afastado.
- * unavailable(empId, isoDate) -> boolean.  Retorna { assignments, shortages }
+ * Sugere a escala: para cada domingo/loja/funcao escolhe PRIMEIRO quem trabalha naquela loja (workStore),
+ * com menos domingos no ano (historico + mes) e, no empate, quem nao trabalhou no domingo anterior.
+ * So se faltar gente da propria loja chama alguem de outra loja (nunca a mesma pessoa em duas lojas no dia).
+ * unavailable(empId, isoDate) -> motivo/true quando nao pode. Retorna { assignments, shortages }.
  */
 export function suggestSchedule({ sundays, employees, required, unavailable = () => false, history = {}, keep = {} }) {
   const counts = { ...history };
   const assignments = {};
   const shortages = [];
+  const staff = employees.filter(inEscala);
+  const catOf = (id) => employees.find((e) => e.id === id)?.categoria;
   let prev = {};
   for (const d of sundays) {
-    assignments[d] = {};
-    const now = {};
-    for (const s of STORES) {
-      const ids = new Set(keep[d]?.[s.id] || []);
-      const req = required[s.id] || {};
-      for (const cat of ['atendimento', 'manipulacao']) {
-        const already = [...ids].filter((id) => employees.find((e) => e.id === id)?.categoria === cat).length;
-        const need = (req[cat] || 0) - already;
-        if (need <= 0) continue;
-        // menos domingos trabalhados primeiro; empate: quem descansou no domingo anterior; depois ordem alfabetica
-        const pool = employees
-          .filter((e) => e.loja === s.id && e.categoria === cat && e.ativo !== false && !ids.has(e.id) && !unavailable(e.id, d))
-          .sort((a, b) => (counts[a.id] || 0) - (counts[b.id] || 0) || ((prev[a.id] ? 1 : 0) - (prev[b.id] ? 1 : 0)) || a.nome.localeCompare(b.nome));
-        for (let i = 0; i < need && i < pool.length; i++) { ids.add(pool[i].id); }
-        const got = Math.min(need, pool.length);
-        if (got < need) shortages.push({ date: d, store: s.id, cat, falta: need - got });
-      }
-      assignments[d][s.id] = [...ids];
-      for (const id of ids) { now[id] = true; }
+    const day = {}; const used = new Set();
+    for (const s of STORES) { day[s.id] = [...(keep[d]?.[s.id] || [])]; day[s.id].forEach((id) => used.add(id)); }
+    const order = (a, b) => (counts[a.id] || 0) - (counts[b.id] || 0) || ((prev[a.id] ? 1 : 0) - (prev[b.id] ? 1 : 0)) || a.nome.localeCompare(b.nome);
+    const need = (sid, cat) => ((required[sid] || {})[cat] || 0) - day[sid].filter((id) => catOf(id) === cat).length;
+    const free = (e, cat) => e.categoria === cat && !used.has(e.id) && !unavailable(e.id, d);
+    // 1) gente da propria loja
+    for (const s of STORES) for (const cat of ['atendimento', 'manipulacao']) {
+      const pool = staff.filter((e) => workStore(e) === s.id && free(e, cat)).sort(order);
+      for (let i = 0, n = need(s.id, cat); i < n && i < pool.length; i++) { day[s.id].push(pool[i].id); used.add(pool[i].id); }
     }
-    for (const id of Object.keys(now)) counts[id] = (counts[id] || 0) + 1;
-    prev = now;
+    // 2) cobertura de outra loja so onde ainda falta
+    for (const s of STORES) for (const cat of ['atendimento', 'manipulacao']) {
+      let n = need(s.id, cat);
+      if (n <= 0) continue;
+      const pool = staff.filter((e) => workStore(e) !== s.id && free(e, cat)).sort(order);
+      for (let i = 0; n > 0 && i < pool.length; i++, n--) { day[s.id].push(pool[i].id); used.add(pool[i].id); }
+      if (n > 0) shortages.push({ date: d, store: s.id, cat, falta: n });
+    }
+    assignments[d] = day;
+    for (const id of used) counts[id] = (counts[id] || 0) + 1;
+    prev = Object.fromEntries([...used].map((id) => [id, true]));
   }
   return { assignments, shortages };
 }

@@ -4,14 +4,15 @@ import { S } from '../data.js';
 import { esc, $, $$, toast, openModal, confirmBox, copyRich } from '../ui.js';
 
 export const COLS = [
-  { k: 'cod', label: 'Cód', fixed: true }, { k: 'loja', label: 'Loja', mailOnly: true }, { k: 'nome', label: 'Funcionário', fixed: true },
-  { k: 'entrada', label: 'Entrada' }, { k: 'admissao', label: 'Admissão' }, { k: 'funcao', label: 'Função' },
-  { k: 'salario', label: 'Salário', money: true, rec: true }, { k: 'consumo', label: 'Consumo loja', money: true },
+  // entrada, admissao, funcao e salario ficam so no cadastro (aba Funcionarios)
+  { k: 'cod', label: 'Cód', fixed: true, mailOnly: true }, { k: 'loja', label: 'Loja', mailOnly: true }, { k: 'nome', label: 'Funcionário', fixed: true },
+  { k: 'consumo', label: 'Consumo loja', money: true },
   { k: 'falta', label: 'Falta' }, { k: 'atestado', label: 'Atestado' },
   { k: 'horaExtra', label: 'Hora Extra 50%', money: true }, { k: 'feriado', label: 'Feriado', money: true },
   { k: 'assiduidade', label: 'Assiduidade', money: true, rec: true }, { k: 'adiantamento', label: 'Adiantamento', money: true, rec: true },
   { k: 'premio', label: 'Prêmio', money: true, rec: true }, { k: 'descAdic', label: 'Descontos Adicionais', money: true },
   { k: 'passagem', label: 'Passagem' }, { k: 'dias', label: 'Dias' },
+  { k: 'obs', label: 'Observação', fixed: true },
 ];
 
 let mk = null;
@@ -28,15 +29,13 @@ function cellValue(col, { entry: e, emp }) {
     case 'cod': return C.storeById(emp.loja)?.cod || '';
     case 'loja': return C.storeById(emp.loja)?.nome || '';
     case 'nome': return emp.nome;
-    case 'entrada': return C.fmtDMY(emp.entrada);
-    case 'admissao': return C.fmtDMY(emp.admissao);
-    case 'funcao': return emp.funcao || '';
+    case 'obs': return e.obs || '';
     case 'falta': return v.faltas;
     case 'atestado': return v.atestado;
     case 'assiduidade': return C.brl(v.assiduidade);
     case 'passagem': return C.brl(v.passagem);
     case 'dias': return e.dias ? String(e.dias) : '';
-    case 'descAdic': return [C.brl(e.descAdic), e.descAdicNota && !/^[\d.,\s]+$/.test(e.descAdicNota) ? `(${e.descAdicNota})` : ''].filter(Boolean).join(' ');
+    case 'descAdic': return C.brl(e.descAdic);
     default: return col.money ? C.brl(e[col.k]) : '';
   }
 }
@@ -44,7 +43,8 @@ const isEmptyCol = (col, rows) => rows.every((r) => !cellValue(col, r));
 
 // ---------- e-mail para a contabilidade ----------
 export function buildEmail() {
-  const cols = visibleCols(true);
+  const all = D.rowsByStore(mk).flatMap((g) => g.rows);
+  const cols = visibleCols(true).filter((c) => c.k !== 'obs' || all.some((r) => r.entry.obs));
   const md = D.monthDoc(mk) || {};
   const groups = D.rowsByStore(mk).filter((g) => g.rows.length);
   const th = 'border:1px solid #9aa0a6;background:#e8eaed;padding:4px 6px;font:bold 12px Arial,sans-serif;text-align:center;white-space:nowrap';
@@ -73,7 +73,6 @@ function warnings() {
   const out = [];
   for (const g of D.rowsByStore(mk)) for (const r of g.rows) {
     const { entry: e, emp } = r;
-    if (!e.salario) out.push(`${emp.nome}: salário zerado.`);
     const away = C.leavesOf(S.leaves, emp.id, mk).length > 0 || e.faltaTxt || e.atestadoTxt;
     if (!e.dias && !away && emp.categoria !== 'nenhum') out.push(`${emp.nome}: dias de passagem em branco.`);
     for (const l of C.leavesOf(S.leaves, emp.id, mk, ['atestado', 'licenca', 'inss'])) if (!l.start) out.push(`${emp.nome}: afastamento sem data de início.`);
@@ -87,6 +86,16 @@ export function render(el, month) {
   const md = D.monthDoc(mk);
   if (!md) { renderNoMonth(); return; }
   const isClosed = closed();
+  // funcionario novo cadastrado na aba Funcionarios entra sozinho nos meses abertos (pela loja do registro)
+  if (!isClosed && !root.__adding) {
+    const novos = S.employees.filter((e) => C.activeInMonth(e, mk) && !D.entryFor(mk, e.id));
+    if (novos.length) {
+      root.__adding = true;
+      D.ensureMonthEntries(mk).then((n) => { root.__adding = false; if (n) toast(`${novos.map((e) => e.nome.split(' ')[0]).join(', ')} incluído(s) na folha de ${C.monthLabel(mk)}.`); render(root, mk); }).catch((e) => { root.__adding = false; toast(e.message, 'err'); });
+      root.innerHTML = '<p class="muted">Incluindo funcionários novos…</p>';
+      return;
+    }
+  }
   const vcols = visibleCols();
   const groups = D.rowsByStore(mk);
   const allRows = groups.flatMap((g) => g.rows);
@@ -111,7 +120,7 @@ export function render(el, month) {
     ${!isClosed && missing.length ? `<button class="chip add" data-act="addrow">＋ Incluir funcionário no mês (${missing.length})</button>` : ''}
   </div>
   ${groups.map((g) => `<section class="store"><h2>${esc(g.store.nome)} <small>cód ${g.store.cod} · ${g.rows.length} funcionário(s)</small></h2>
-    <div class="table-wrap"><table class="grid"><thead><tr>${vcols.map((c) => `<th data-col="${c.k}">${esc(c.k === 'consumo' && md.consumoPeriodo ? 'Consumo loja ' + md.consumoPeriodo : c.label)}${c.fixed || isClosed ? '' : ` <button class="th-x" data-act="hidecol" data-col="${c.k}" title="Excluir esta coluna do mês" aria-label="Excluir coluna ${esc(c.label)}">×</button>`}</th>`).join('')}<th class="act"></th></tr></thead>
+    <div class="table-wrap folha"><table class="grid"><thead><tr>${vcols.map((c) => `<th data-col="${c.k}">${esc(c.k === 'consumo' && md.consumoPeriodo ? 'Consumo loja ' + md.consumoPeriodo : c.label)}${c.fixed || isClosed ? '' : ` <button class="th-x" data-act="hidecol" data-col="${c.k}" title="Excluir esta coluna do mês" aria-label="Excluir coluna ${esc(c.label)}">×</button>`}</th>`).join('')}<th class="act"></th></tr></thead>
     <tbody>${g.rows.map((r) => rowHtml(r, vcols, isClosed)).join('') || `<tr><td colspan="${vcols.length + 1}" class="muted">Nenhum funcionário nesta loja no mês.</td></tr>`}</tbody></table></div></section>`).join('')}
   ${md.note !== undefined ? `<label class="block">Observações do mês (vai no rodapé do e-mail)<textarea class="in" id="monthNote" rows="2" ${isClosed ? 'disabled' : ''}>${esc(md.note || '')}</textarea></label>` : ''}
   ${allRows.length ? '' : '<p class="muted">Nenhum lançamento neste mês.</p>'}`;
@@ -136,9 +145,7 @@ function rowHtml(r, vcols, isClosed) {
     switch (c.k) {
       case 'cod': return `<td class="c-cod">${C.storeById(emp.loja)?.cod || ''}</td>`;
       case 'nome': return `<td class="c-nome" title="${esc(emp.nome)}">${esc(emp.nome)}</td>`;
-      case 'entrada': return `<td class="c-dt">${C.fmtDMY(emp.entrada)}</td>`;
-      case 'admissao': return `<td class="c-dt">${C.fmtDMY(emp.admissao)}</td>`;
-      case 'funcao': return `<td>${esc(emp.funcao || '')}</td>`;
+      case 'obs': return `<td class="c-obs"><input class="in obs" data-f="obs" data-emp="${esc(emp.id)}" value="${esc(e.obs || (e.descAdicNota && !/^[\d.,\s]+$/.test(e.descAdicNota) ? e.descAdicNota : ''))}" placeholder="observação" ${dis}></td>`;
       case 'falta': return `<td><button class="leave-btn ${v.faltas ? 'has' : ''}" data-act="leave" data-kind="falta" data-emp="${esc(emp.id)}" data-cell="falta">${esc(v.faltas) || '＋'}</button></td>`;
       case 'atestado': return `<td><button class="leave-btn ${v.atestado ? 'has' : ''}" data-act="leave" data-kind="atestado" data-emp="${esc(emp.id)}" data-cell="atestado">${esc(v.atestado) || '＋'}</button></td>`;
       case 'assiduidade': {
@@ -147,7 +154,7 @@ function rowHtml(r, vcols, isClosed) {
       }
       case 'passagem': return `<td class="num" data-cell="passagem">${C.brl(v.passagem)}</td>`;
       case 'dias': return `<td class="num"><input class="in dias" inputmode="numeric" data-f="dias" data-emp="${esc(emp.id)}" value="${e.dias || ''}" ${dis}></td>`;
-      case 'descAdic': return `<td class="num"><input class="in money" inputmode="decimal" data-f="descAdic" data-emp="${esc(emp.id)}" value="${C.brl(e.descAdic)}" ${dis}><input class="in note" data-f="descAdicNota" data-emp="${esc(emp.id)}" value="${esc(e.descAdicNota || '')}" placeholder="motivo" ${dis}></td>`;
+      case 'descAdic': return `<td class="num"><input class="in money" inputmode="decimal" data-f="descAdic" data-emp="${esc(emp.id)}" value="${C.brl(e.descAdic)}" ${dis}></td>`;
       default: return `<td class="num"><input class="in money" inputmode="decimal" data-f="${c.k}" data-emp="${esc(emp.id)}" value="${C.brl(e[c.k])}" ${dis}></td>`;
     }
   };
@@ -176,7 +183,7 @@ function wire() {
       const months = await D.setEntryField(mk, empId, f, t.value);
       const e = D.entryFor(mk, empId);
       if (f === 'dias') t.value = e.dias || '';
-      else if (f !== 'descAdicNota') t.value = C.brl(f === 'assiduidade' ? C.rowView(e, S.leaves, mk, S.config.vt).assiduidade : e[f]);
+      else if (f !== 'descAdicNota' && f !== 'obs') t.value = C.brl(f === 'assiduidade' ? C.rowView(e, S.leaves, mk, S.config.vt).assiduidade : e[f]);
       patchRow(empId);
       if (months.length) toast(`${COLS.find((c) => c.k === f).label} de ${D.emp(empId).nome.split(' ')[0]} também atualizado em: ${months.map((m) => C.monthLabel(m)).join(', ')}.`, 'ok', 6000);
     } catch (e) { toast(e.message, 'err'); render(root, mk); }
@@ -194,7 +201,7 @@ function wire() {
       } else if (act === 'showcol') { await D.setHiddenCols(mk, [...hidden()].filter((k) => k !== b.dataset.col)); render(root, mk); }
       else if (act === 'exclrow') {
         const r = { entry: D.entryFor(mk, empId), emp: D.emp(empId) };
-        const has = COLS.filter((c) => !c.fixed && !['entrada', 'admissao', 'funcao', 'loja'].includes(c.k) && c.k !== 'salario' && cellValue(c, r)).length;
+        const has = COLS.filter((c) => !c.fixed && c.k !== 'loja' && cellValue(c, r)).length + (r.entry.obs ? 1 : 0);
         if (has && !(await confirmBox(`${r.emp.nome} tem informações lançadas neste mês. Excluir a linha mesmo assim? Você pode restaurar depois.`, { okLabel: 'Excluir linha' }))) return;
         await D.setRowExcluded(mk, empId, true); render(root, mk);
       } else if (act === 'restorerow') { await D.setRowExcluded(mk, empId, false); render(root, mk); }
@@ -203,7 +210,7 @@ function wire() {
       else if (act === 'repeatdias') { const n = await D.repeatDias(mk); render(root, mk); toast(n ? `Dias repetidos para ${n} funcionário(s).` : 'Nada a repetir.'); }
       else if (act === 'autohide') {
         const rows = D.rowsByStore(mk).flatMap((g) => g.rows);
-        const empty = COLS.filter((c) => !c.fixed && !c.mailOnly && !hidden().has(c.k) && isEmptyCol(c, rows) && !['entrada', 'admissao', 'funcao', 'salario'].includes(c.k));
+        const empty = COLS.filter((c) => !c.fixed && !c.mailOnly && !hidden().has(c.k) && isEmptyCol(c, rows));
         if (!empty.length) return toast('Não há colunas vazias.');
         await D.setHiddenCols(mk, [...hidden(), ...empty.map((c) => c.k)]); render(root, mk); toast(`Colunas ocultadas: ${empty.map((c) => c.label).join(', ')}.`);
       } else if (act === 'send') openSend();

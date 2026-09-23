@@ -55,4 +55,15 @@ label{display:grid;gap:3px;font-weight:500}label small{font-weight:400}.row{disp
 .navbadge{display:inline-block;min-width:18px;margin-left:5px;padding:0 5px;border-radius:999px;background:#f59e0b;color:#fff;font-size:11px;font-weight:700;text-align:center;line-height:18px}.navbadge[hidden]{display:none}
 .fer-dobro{background:#fee2e2!important;color:#991b1b!important}.fer-urg{background:#ffedd5!important;color:#9a3412!important}.fer-venc{background:#fef9c3!important;color:#854d0e!important}.fer-ok{background:#dcfce7!important;color:#166534!important}
 .grid.fer tr[data-nivel=dobro] td{background:#fff5f5}.grid.fer small{display:block}
-@media print{.top,.monthbar,.toolbar,.foot,.btn,.toast,.chips-row{display:none!important}body{background:#fff}main{padding:0}.sunday,.sun-store{break-inside:avoid;box-shadow:none}}
+/* folha: nome e cabecalho fixos ao rolar */
+.table-wrap.folha{max-height:calc(100vh - 150px)}
+.grid th{z-index:2}.grid td.c-nome{z-index:1;box-shadow:1px 0 0 var(--line)}.grid th[data-col=nome]{position:sticky;left:0;z-index:3;box-shadow:1px 0 0 var(--line)}
+.grid td .in.obs{min-width:180px}.grid td.c-obs{min-width:190px}
+/* escala */
+.equipe td{vertical-align:middle}.equipe select{min-width:150px}
+.escala-card{background:#fff;border-radius:12px;box-shadow:var(--shadow);padding:14px;margin:12px 0;max-width:900px}
+.escala-card h2{text-align:center;margin:0 0 8px}.escala-card table{border-collapse:collapse;width:100%;font-size:13px}
+.escala-card th,.escala-card td{border:1px solid #cfd4da;padding:5px 7px;vertical-align:top}.escala-card th{background:#b91c1c;color:#fff}.escala-card td.dom{font-weight:700;white-space:nowrap;background:#f9fafb}
+.escala-card .cat{margin:0;font-size:12px}.escala-card .cat b{color:#6b7280;font-weight:600}.escala-card td.short{background:#fef2f2}
+.sun-store .person{cursor:pointer}.sun-store .person:hover{border-color:var(--red)}.sun-store header .btn{font-weight:600}
+@media print{.top,.monthbar,.toolbar,.foot,.btn,.toast,.chips-row{display:none!important}body.print-escala main>div>*:not(.escala-card){display:none!important}body.print-escala .escala-card{box-shadow:none;max-width:none;margin:0;padding:0}@page{margin:10mm}body{background:#fff}main{padding:0}.sunday,.sun-store{break-inside:avoid;box-shadow:none}}

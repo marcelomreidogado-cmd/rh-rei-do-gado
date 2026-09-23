@@ -56,7 +56,10 @@ test('E2E: mes novo herda salario/premio/adiantamento/assiduidade e alteracao pr
   await page.click('[data-act=createmonth]');
   await page.waitForSelector('table.grid');
   const bruno = row('bruno-jose');
-  assert.equal(await val(`${bruno} [data-f=salario]`), '1.945,00');
+  // entrada/admissao/funcao/salario sairam da folha (ficam no cadastro); observacao no fim da linha
+  for (const c of ['salario', 'entrada', 'admissao', 'funcao', 'cod']) assert.equal(await page.locator(`th[data-col=${c}]`).count(), 0, c);
+  assert.equal(await page.locator('table.grid thead th[data-col]').last().getAttribute('data-col'), 'obs');
+  assert.equal(await page.locator('[data-f=descAdicNota]').count(), 0);
   assert.equal(await val(`${bruno} [data-f=premio]`), '500,00');
   assert.equal(await val(`${bruno} [data-f=adiantamento]`), '750,00');
   assert.equal(await val(`${bruno} [data-f=assiduidade]`), '90,00');
@@ -69,11 +72,11 @@ test('E2E: mes novo herda salario/premio/adiantamento/assiduidade e alteracao pr
   await page.click('.mchip[data-m="2026-09"]'); await page.waitForSelector(`${bruno} [data-f=premio]`);
   await edit(`${bruno} [data-f=premio]`, '600,00');
   await page.waitForFunction(() => document.querySelector('#toast')?.textContent.includes('Outubro/2026'));
-  await edit(`${bruno} [data-f=salario]`, '2.000,00');
+  await edit(`${bruno} [data-f=obs]`, 'teste de observação');
   await edit(`${bruno} [data-f=consumo]`, '359,13');
   await page.click('.mchip[data-m="2026-10"]'); await page.waitForSelector(`${bruno} [data-f=premio]`);
   assert.equal(await val(`${bruno} [data-f=premio]`), '600,00');
-  assert.equal(await val(`${bruno} [data-f=salario]`), '2.000,00');
+  assert.equal(await val(`${bruno} [data-f=obs]`), '');
   assert.equal(await val(`${bruno} [data-f=consumo]`), '');
   // mes ja fechado (agosto) nao e alterado
   await page.click('.mchip[data-m="2026-08"]'); await page.waitForSelector(`${bruno} [data-f=premio]`);
@@ -232,6 +235,38 @@ test('E2E: importa os contracheques reais (OCR no navegador), confere e envia po
   await page.click('tr[data-emp="bruno-jose"] [data-act=view]'); await page.waitForSelector('.slipimg');
   assert.ok((await page.locator('.slipimg').evaluate((i) => i.naturalWidth)) > 500);
   await page.screenshot({ path: process.env.SHOT_DIR ? path.join(process.env.SHOT_DIR, 'contracheque.png') : undefined });
+});
+
+test('E2E: funcionario novo entra sozinho na folha e escala usa a loja onde trabalha', { skip, timeout: 90000 }, async () => {
+  await page.click('#nav a[data-v=funcionarios]'); await page.waitForSelector('table.grid');
+  // Melissa (Assist Financeiro) ja aparece como administrativo
+  assert.equal(await page.locator('tr[data-emp="melissa-garcia"] [data-inl=lojaTrabalho]').inputValue(), 'adm');
+  // Bruno e registrado em Bingen, mas trabalha em Coronel
+  await page.selectOption('tr[data-emp="bruno-jose"] [data-inl=lojaTrabalho]', 'coronel');
+  await page.waitForFunction(() => document.querySelector('#toast')?.textContent.includes('trabalha em Coronel'));
+  // cadastro novo
+  await page.click('[data-act=new]');
+  await page.fill('#f_nome', 'Teste Novo Funcionario'); await page.selectOption('#f_loja', 'correas'); await page.fill('#f_ent', '2026-09-01');
+  await page.selectOption('#f_cat', 'atendimento'); await page.fill('#f_sal', '1.900,00');
+  await page.click('.modal-foot button:has-text("Salvar")');
+  await page.waitForSelector('tr:has-text("TESTE NOVO FUNCIONARIO")');
+  await page.click('#nav a[data-v=folha]'); await page.click('.mchip[data-m="2026-09"]');
+  await page.waitForSelector('tr[data-row="teste-novo"]');
+  assert.match(await page.locator('section.store', { has: page.locator('tr[data-row="teste-novo"]') }).locator('h2').innerText(), /Correas/);
+  // escala: sugestao coloca Bruno em Coronel e nunca a Melissa
+  await page.click('#nav a[data-v=escala]'); await page.click('.mchip[data-m="2026-11"]'); await page.waitForSelector('.sundays');
+  await page.click('[data-act=suggest]'); await page.waitForSelector('.sun-store.ok, .sun-store.short');
+  const card = await page.locator('#escalaCard').innerText();
+  assert.ok(!/Melissa/.test(card), card);
+  const cells = await page.$$eval('#escalaCard tbody tr', (trs) => trs.map((tr) => [...tr.querySelectorAll('td')].map((t) => t.innerText)));
+  assert.ok(cells.every((r) => !/Bruno/.test(r[1])), 'Bruno nao vai para Bingen'); // coluna 1 = Bingen
+  assert.ok(cells.some((r) => /Bruno/.test(r[3])), 'Bruno escalado em Coronel');
+  // edicao manual pelo nome
+  await page.locator('.sun-store .person').first().click(); await page.waitForSelector('.modal .checklist');
+  await page.click('.modal [data-close]');
+  // imagem para WhatsApp
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('[data-act=img]')]);
+  assert.match(dl.suggestedFilename(), /escala-domingo-2026-11\.png/);
 });
 
 test('E2E: ferias — alertas, ajuste do periodo, registro e escala de domingo', { skip, timeout: 90000 }, async () => {

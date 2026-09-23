@@ -6,7 +6,7 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
 
 ## O que o sistema faz
 
-- **Folha mensal por loja**: salário, prêmio, adiantamento, assiduidade,
+- **Folha mensal por loja** (loja do registro/CNPJ): prêmio, adiantamento, assiduidade,
   consumo na loja, dias trabalhados (passagem = dias × R$ 11,80), faltas
   (uma ou mais datas) e atestados (datas ou "a partir de X dias"). Campos
   recorrentes (salário, prêmio, adiantamento, assiduidade) propagam
@@ -40,6 +40,18 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   no navegador), mostra para conferir e atualiza o vencimento de cada um. Os
   dados de férias ficam dentro do cadastro do funcionário (`rh_employees`),
   então **não precisa mudar as regras do Firestore**.
+- **Folha**: entrada, admissão, função e salário ficam só no cadastro
+  (aba Funcionários); a folha mostra os lançamentos do mês e uma coluna de
+  **Observação** no fim de cada linha. Nome e cabeçalho ficam fixos ao rolar.
+  Funcionário novo cadastrado entra sozinho no mês aberto, na loja do registro.
+- **Loja do registro × loja onde trabalha**: a folha segue a loja do registro
+  (imposto); a escala de domingo usa a loja onde a pessoa trabalha de verdade
+  ("Trabalha em", editável na aba Funcionários ou em Escala → Equipe por loja).
+  Função administrativa/financeira fica fora da escala automaticamente.
+- **Escala de domingo**: a sugestão prioriza quem trabalha na loja e só chama
+  alguém de outra loja quando falta gente; edição por loja/domingo (botão
+  Editar ou clique no nome); imagem pronta para o WhatsApp e impressão em uma
+  folha.
 - **Funcionários**: cadastro com CPF e telefone (validados), loja, cargo,
   categoria (atendimento/manipulação) e situação.
 - **Histórico**: toda alteração (quem, quando, o quê) fica registrada.
