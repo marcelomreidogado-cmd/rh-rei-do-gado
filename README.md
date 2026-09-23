@@ -51,7 +51,9 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
 - **Escala de domingo**: todos trabalham no domingo, cada um com **1 folga
   por mês**. "Sugerir folgas" distribui as folgas (colegas da mesma loja e
   função em domingos diferentes) e, quando a folga deixa a loja abaixo do
-  mínimo configurado, mostra quem de outra loja (com sobra) cobre. Ajuste
+  mínimo configurado, chama alguém de outra loja (com sobra). O quadro, a
+  imagem e o texto mostram, para cada loja e domingo, só quem **trabalha**
+  (atendimento e manipulação) e quem **folga**. Ajuste
   manual por loja/domingo (Editar ou clique no nome); imagem pronta para o
   WhatsApp e impressão em uma folha.
 - **Valores da folha** aparecem em reais (R$ 1.234,56), na tela e no e-mail.

@@ -35,6 +35,12 @@ function dayInfo(d, sid) {
   return { ids, folga, cobre, afast, foraCobrindo };
 }
 const lista = (ids) => ids.map(nm).join(', ');
+/** O que aparece no quadro de cada loja/domingo: so quem TRABALHA (atendimento, manipulacao) e quem FOLGA. */
+const blocos = (x) => [
+  ['Atendimento', x.ids.filter((id) => D.emp(id)?.categoria === 'atendimento'), '#15803d'],
+  ['Manipulação', x.ids.filter((id) => D.emp(id)?.categoria === 'manipulacao'), '#15803d'],
+  ['Folga', x.folga, '#b91c1c'],
+];
 
 export async function render(el, month) {
   root = el; mk = month;
@@ -55,23 +61,20 @@ export async function render(el, month) {
     <button class="btn" data-act="suggest">✨ Sugerir folgas</button><button class="btn" data-act="clear">Limpar</button>
     <button class="btn primary" data-act="img">📷 Imagem para WhatsApp</button><button class="btn" data-act="copy">📋 Copiar texto</button><button class="btn" data-act="print">🖨 Imprimir (1 folha)</button></div>
     <div class="req-line"><span class="muted">Todos trabalham no domingo, cada um com <b>1 folga no mês</b>. Mínimo por domingo:</span>${C.STORES.map((s) => `<span class="pill"><b>${esc(s.nome)}</b> ${req[s.id]?.atendimento ?? 0} atend. + ${req[s.id]?.manipulacao ?? 0} manip.</span>`).join('')}</div>
-    ${has ? `<div class="escala-card" id="escalaCard"><h2>FOLGAS DE DOMINGO — ${esc(C.monthLabel(mk).toUpperCase())}</h2>
+    ${has ? `<div class="escala-card" id="escalaCard"><h2>ESCALA DE DOMINGO — ${esc(C.monthLabel(mk).toUpperCase())}</h2>
       <table><thead><tr><th>Domingo</th>${C.STORES.map((s) => `<th>${esc(s.nome)}</th>`).join('')}</tr></thead><tbody>
       ${sundays.map((d) => `<tr><td class="dom">${C.fmtDM(d)}</td>${C.STORES.map((s) => { const x = dayInfo(d, s.id);
-        return `<td class="${shortOf(d, s.id) ? 'short' : ''}"><p class="cat"><b>Folga:</b> ${esc(lista(x.folga) || '—')}</p>${x.cobre.length ? `<p class="cat cob"><b>Cobre:</b> ${esc(x.cobre.map((id) => `${nm(id)} (${C.workPlaceName(C.workStore(D.emp(id)))})`).join(', '))}</p>` : ''}${x.afast.length ? `<p class="cat"><b>Afastado:</b> ${esc(x.afast.map((a) => `${nm(a.id)} (${a.why})`).join(', '))}</p>` : ''}</td>`; }).join('')}</tr>`).join('')}
-      </tbody></table><p class="muted small" style="margin:6px 0 0">Os demais trabalham normalmente na sua loja.</p></div>` : '<div class="empty"><p>Nenhuma escala neste mês. Clique em <b>✨ Sugerir folgas</b>: o sistema dá 1 folga para cada um e mostra quem de outra loja cobre.</p></div>'}
-    <p class="muted">Para trocar a folga de alguém ou quem cobre, clique em <b>Editar</b> (ou no nome). Marcado = trabalha; desmarcado = folga.</p>
+        return `<td class="${shortOf(d, s.id) ? 'short' : ''}">${blocos(x).map(([lab, ids]) => `<p class="cat ${lab === 'Folga' ? 'fol' : 'trab'}"><b>${lab}:</b> ${esc(lista(ids) || '—')}</p>`).join('')}</td>`; }).join('')}</tr>`).join('')}
+      </tbody></table></div>` : '<div class="empty"><p>Nenhuma escala neste mês. Clique em <b>✨ Sugerir folgas</b>: o sistema dá 1 folga para cada um e monta quem trabalha em cada loja.</p></div>'}
+    <p class="muted">Para trocar a folga de alguém ou mudar quem trabalha em cada loja, clique em <b>Editar</b> (ou no nome). Marcado = trabalha; desmarcado = folga.</p>
     <div class="sundays">${sundays.map((d) => `<article class="sunday"><h3>Domingo ${C.fmtDM(d)}</h3><div class="sun-stores">${C.STORES.map((s) => {
       const x = dayInfo(d, s.id);
       const chk = C.checkDay(data.assignments[d], s.id, S.employees, req);
       const ok = chk.every((c) => c.falta === 0);
       const pessoa = (id, cls, title) => `<span class="person ${cls}" data-act="edit" data-d="${d}" data-s="${s.id}" title="${esc(title)}">${esc(nm(id))}</span>`;
       return `<div class="sun-store ${has ? (ok ? 'ok' : 'short') : ''}"><header><b>${esc(s.nome)}</b><button class="btn sm" data-act="edit" data-d="${d}" data-s="${s.id}">✏️ Editar</button></header>
+        ${CATS.map((cat) => { const c = chk.find((y) => y.cat === cat); const ids = x.ids.filter((id) => D.emp(id)?.categoria === cat); return `<div class="cat"><span class="catname">${C.CATEGORIAS[cat]} — trabalha <em class="${c.falta ? 'lack' : 'fine'}">${c.tem} (mín. ${c.precisa})</em></span>${ids.map((id) => pessoa(id, '', D.emp(id).nome)).join('') || '<span class="muted">—</span>'}</div>`; }).join('')}
         <div class="cat"><span class="catname">Folga</span>${x.folga.map((id) => pessoa(id, 'folga', D.emp(id).nome + ' — folga')).join('') || '<span class="muted">—</span>'}</div>
-        ${x.cobre.length ? `<div class="cat"><span class="catname">Cobrindo (de outra loja)</span>${x.cobre.map((id) => pessoa(id, 'cover', `${D.emp(id).nome} — vem de ${C.workPlaceName(C.workStore(D.emp(id)))}`) + '').join('')}</div>` : ''}
-        ${x.foraCobrindo.length ? `<div class="cat"><span class="catname">Emprestado</span>${x.foraCobrindo.map((f) => `<span class="person cover" title="cobrindo ${esc(C.storeById(f.para).nome)}">${esc(nm(f.id))} → ${esc(C.storeById(f.para).nome)}</span>`).join('')}</div>` : ''}
-        ${x.afast.length ? `<div class="cat"><span class="catname">Afastado</span>${x.afast.map((a) => `<span class="person off">${esc(nm(a.id))} <small>(${esc(a.why)})</small></span>`).join('')}</div>` : ''}
-        ${CATS.map((cat) => { const c = chk.find((y) => y.cat === cat); return `<div class="cat"><span class="catname">${C.CATEGORIAS[cat]} trabalhando <em class="${c.falta ? 'lack' : 'fine'}">${c.tem} (mín. ${c.precisa})</em></span><small>${esc(lista(x.ids.filter((id) => D.emp(id)?.categoria === cat)) || '—')}</small></div>`; }).join('')}
         ${chk.some((c) => c.falta) ? `<p class="lack">Abaixo do mínimo: ${chk.filter((c) => c.falta).map((c) => `${c.falta} ${C.CATEGORIAS[c.cat].toLowerCase()}`).join(', ')}</p>` : ''}</div>`;
     }).join('')}</div></article>`).join('')}</div>
     <section class="store"><h2>Folgas por pessoa em ${esc(C.monthLabel(mk))}</h2><div class="table-wrap"><table class="grid mini"><thead><tr><th>Funcionário</th><th>Trabalha em</th><th>Função</th><th>Domingos trabalhados</th><th>Folgas</th></tr></thead><tbody>${emps.map((e) => `<tr><td>${esc(e.nome)}</td><td>${esc(C.workPlaceName(C.workStore(e)))}</td><td>${C.CATEGORIAS[e.categoria] || ''}</td><td class="num">${trab[e.id] || 0}</td>${(() => { const fora = sundays.every((d) => awayReason(e.id, d)); const n = folg[e.id] || 0; return fora ? '<td class="num muted">afastado no mês</td>' : `<td class="num ${has && n !== 1 ? 'bad' : ''}">${n}${has && !n ? ' ⚠ sem folga' : has && n > 1 ? ' ⚠ mais de 1' : ''}</td>`; })()}</tr>`).join('')}</tbody></table></div></section>`;
@@ -82,10 +85,7 @@ export async function render(el, month) {
 function escalaPng() {
   const sundays = C.sundaysOf(mk), W = 1080, pad = 30, dw = 110, cw = (W - pad * 2 - dw) / 3, lh = 28;
   const rows = sundays.map((d) => {
-    const cells = C.STORES.map((s) => { const x = dayInfo(d, s.id); const out = [['Folga', x.folga.map(nm), '#b91c1c']];
-      if (x.cobre.length) out.push(['Cobre', x.cobre.map((id) => `${nm(id)} (${C.storeById(C.workStore(D.emp(id)))?.nome || ''})`), '#1d4ed8']);
-      if (x.afast.length) out.push(['Afast.', x.afast.map((a) => `${nm(a.id)} (${a.why})`), '#6b7280']);
-      return out; });
+    const cells = C.STORES.map((s) => blocos(dayInfo(d, s.id)).map(([lab, ids, cor]) => [lab === 'Manipulação' ? 'Manip.' : lab === 'Atendimento' ? 'Atend.' : lab, ids.map(nm), cor]));
     const lines = Math.max(...cells.map((c) => c.reduce((n, [, names]) => n + Math.max(1, names.length), 0)));
     return { d, cells, h: lines * lh + 24 };
   });
@@ -94,8 +94,8 @@ function escalaPng() {
   const g = c.getContext('2d');
   g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
   g.fillStyle = '#b91c1c'; g.font = 'bold 34px Arial'; g.textAlign = 'center';
-  g.fillText(`FOLGAS DE DOMINGO — ${C.monthLabel(mk).toUpperCase()}`, W / 2, pad + 40);
-  g.fillStyle = '#374151'; g.font = '18px Arial'; g.fillText('Rei do Gado · os demais trabalham normalmente', W / 2, pad + 64);
+  g.fillText(`ESCALA DE DOMINGO — ${C.monthLabel(mk).toUpperCase()}`, W / 2, pad + 40);
+  g.fillStyle = '#374151'; g.font = '18px Arial'; g.fillText('Rei do Gado · quem trabalha e quem folga em cada loja', W / 2, pad + 64);
   let y = pad + 80;
   g.fillStyle = '#b91c1c'; g.fillRect(pad, y, W - pad * 2, 46);
   g.fillStyle = '#fff'; g.font = 'bold 22px Arial';
@@ -112,7 +112,8 @@ function escalaPng() {
       for (const [lab, names, cor] of cell) {
         g.fillStyle = cor; g.font = 'bold 16px Arial'; g.fillText(lab, x, yy);
         g.fillStyle = '#111827'; g.font = '19px Arial';
-        (names.length ? names : ['—']).forEach((n) => { g.fillText(n, x + 62, yy); yy += lh; });
+        (names.length ? names : ['—']).forEach((n) => { g.fillText(n, x + 68, yy); yy += lh; });
+        yy += 4;
       }
     });
     y += r.h;
@@ -145,12 +146,12 @@ function wire() {
 }
 
 function asText() {
-  const lines = [`FOLGAS DE DOMINGO - ${C.monthLabel(mk).toUpperCase()}`, '(os demais trabalham normalmente)'];
+  const lines = [`ESCALA DE DOMINGO - ${C.monthLabel(mk).toUpperCase()}`];
   for (const d of C.sundaysOf(mk)) {
-    lines.push('', `Domingo ${C.fmtDM(d)}`);
+    lines.push('', `*Domingo ${C.fmtDM(d)}*`);
     for (const s of C.STORES) {
-      const x = dayInfo(d, s.id);
-      lines.push(`${s.nome}: Folga: ${lista(x.folga) || '-'}${x.cobre.length ? ` | Cobre: ${x.cobre.map((id) => `${nm(id)} (${C.storeById(C.workStore(D.emp(id)))?.nome || ''})`).join(', ')}` : ''}${x.afast.length ? ` | Afastado: ${x.afast.map((a) => nm(a.id)).join(', ')}` : ''}`);
+      lines.push(`${s.nome.toUpperCase()}`);
+      for (const [lab, ids] of blocos(dayInfo(d, s.id))) lines.push(`  ${lab}: ${lista(ids) || '-'}`);
     }
   }
   return lines.join('\n');

@@ -182,7 +182,7 @@ test('E2E: escala de domingo sugere rodizio e respeita quantidades', { skip, tim
   await page.click('[data-act=copy]'); await page.waitForFunction(() => document.querySelector('#toast')?.textContent.includes('Escala copiada'));
   const t = await page.evaluate(() => navigator.clipboard.readText());
   console.log(JSON.stringify(t.slice(0,80)));
-  assert.ok(t.startsWith('FOLGAS DE DOMINGO - OUTUBRO/2026') && t.includes('Domingo 04/10') && t.includes('Domingo 25/10'));
+  assert.ok(t.startsWith('ESCALA DE DOMINGO - OUTUBRO/2026') && t.includes('Atendimento:') && t.includes('Folga:') && !t.includes('Cobre') && t.includes('Domingo 04/10') && t.includes('Domingo 25/10'));
   // cada pessoa da escala tem exatamente 1 folga no mes
   const folgas = await page.$$eval('section.store table tbody tr', (trs) => trs.map((tr) => tr.lastElementChild.innerText));
   assert.ok(folgas.length > 5 && folgas.every((f) => f.startsWith('1') || f.includes('afastado')), JSON.stringify(folgas));
@@ -262,7 +262,8 @@ test('E2E: funcionario novo entra sozinho na folha e escala usa a loja onde trab
   const card = await page.locator('#escalaCard').innerText();
   assert.ok(!/Melissa/.test(card), card);
   const cells = await page.$$eval('#escalaCard tbody tr', (trs) => trs.map((tr) => [...tr.querySelectorAll('td')].map((t) => t.innerText)));
-  assert.ok(cells.every((r) => !/Bruno/.test(r[1])), 'Bruno nao aparece em Bingen'); // coluna 1 = Bingen
+  assert.ok(cells.every((r) => !/Folga:[^\n]*Bruno/.test(r[1])), 'folga do Bruno nao aparece em Bingen'); // coluna 1 = Bingen
+  assert.ok(cells.every((r) => r.slice(1).every((c) => /Atendimento:/.test(c) && /Manipulação:/.test(c) && /Folga:/.test(c) && !/Cobre/.test(c))));
   assert.equal(cells.filter((r) => /Folga:[^\n]*Bruno/.test(r[3])).length, 1, 'Bruno folga 1 domingo no Coronel');
   assert.ok(!(await page.locator('section.store').last().innerText()).includes('MELISSA'));
   // edicao manual pelo nome
