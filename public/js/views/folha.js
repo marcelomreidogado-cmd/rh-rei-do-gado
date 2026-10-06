@@ -106,13 +106,18 @@ export function render(el, month) {
 
   root.innerHTML = `
   <div class="toolbar">
-    <span class="badge ${isClosed ? 'closed' : 'open'}">${isClosed ? '🔒 Enviado/fechado' : '✏️ Em preenchimento'}</span>
+    <span class="badge ${isClosed ? 'closed' : 'open'}">${isClosed ? '🔒 Mês fechado' : '✏️ Em preenchimento'}</span>
     <label class="inline">Período do consumo <input class="in" id="consumoPeriodo" style="width:150px" value="${esc(md.consumoPeriodo || '')}" placeholder="ex.: 29/08 a 30/09" ${isClosed ? 'disabled' : ''}></label>
     <span class="spacer"></span>
     ${isClosed ? '' : '<button class="btn" data-act="repeatdias" title="Preenche os dias de passagem em branco com os do mês anterior">Repetir dias do mês anterior</button>'}
     <button class="btn" data-act="autohide" ${isClosed ? 'disabled' : ''} title="Oculta as colunas sem nenhuma informação neste mês">Ocultar colunas vazias</button>
     <button class="btn primary" data-act="send">📧 Enviar à contabilidade</button>
+    ${isClosed
+      ? '<button class="btn reopen" data-act="reopen" title="Libera o mês para correções. Depois é só fechar novamente.">🔓 Reabrir mês para editar</button>'
+      : '<button class="btn" data-act="closemonth" title="Trava a edição do mês. Pode ser reaberto quando precisar.">🔒 Fechar mês</button>'}
   </div>
+  ${isClosed ? `<div class="closed-box">🔒 <b>${esc(C.monthLabel(mk))} está fechado</b> — os valores estão travados. Precisa corrigir alguma coisa? Clique em <b>Reabrir mês para editar</b>, faça a correção e depois clique em <b>Fechar mês</b> de novo. Pode reabrir e fechar quantas vezes precisar.</div>` : ''}
+  ${!isClosed && md.reopenedAt ? `<div class="reopen-box">🔓 Mês <b>reaberto para correção</b>. Quando terminar, clique em <b>Fechar mês</b>${md.sentAt ? ' (e reenvie a tabela à contabilidade, se os valores mudaram)' : ''}.</div>` : ''}
   ${warns.length ? `<details class="warn-box"><summary>⚠ ${warns.length} ponto(s) para conferir antes de enviar</summary><ul>${warns.map((w) => `<li>${esc(w)}</li>`).join('')}</ul></details>` : ''}
   <div class="chips-row">
     ${hiddenList.length ? `<span class="muted">Colunas excluídas:</span> ${hiddenList.map((c) => `<button class="chip" data-act="showcol" data-col="${c.k}" title="Restaurar coluna">${esc(c.label)} ↩</button>`).join('')}` : ''}
@@ -214,8 +219,24 @@ function wire() {
         if (!empty.length) return toast('Não há colunas vazias.');
         await D.setHiddenCols(mk, [...hidden(), ...empty.map((c) => c.k)]); render(root, mk); toast(`Colunas ocultadas: ${empty.map((c) => c.label).join(', ')}.`);
       } else if (act === 'send') openSend();
+      else if (act === 'reopen') await reabrirMes();
+      else if (act === 'closemonth') await fecharMes();
     } catch (e) { toast(e.message, 'err'); }
   });
+}
+
+// ---------- fechar / reabrir o mes (pode alternar quantas vezes precisar) ----------
+const statusChanged = () => { render(root, mk); window.dispatchEvent(new CustomEvent('rh:mes')); };
+async function fecharMes() {
+  if (!(await confirmBox(`Fechar ${C.monthLabel(mk)}?\n\nA edição fica travada. Se precisar corrigir algo depois, é só clicar em “Reabrir mês para editar”.`, { okLabel: 'Fechar mês', title: 'Fechar mês' }))) return false;
+  await D.setMonthStatus(mk, 'closed'); statusChanged();
+  toast('Mês fechado. Para corrigir algo, use “Reabrir mês para editar”.', 'ok', 6000);
+  return true;
+}
+async function reabrirMes() {
+  await D.setMonthStatus(mk, 'open'); statusChanged();
+  toast(`${C.monthLabel(mk)} reaberto. Faça as correções e depois clique em “Fechar mês”.`, 'ok', 6000);
+  return true;
 }
 
 function openAddRow() {
@@ -235,13 +256,13 @@ function openSend() {
     title: `Enviar à contabilidade — ${C.monthLabel(mk)}`, wide: true,
     body: `${w.length ? `<div class="warn-box"><b>Atenção:</b> ${w.length} ponto(s) para conferir:<ul>${w.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
       <p class="muted">Assunto sugerido: <b>${esc(mail.subject)}</b></p><div class="preview">${mail.html}</div>
-      <p class="muted">Clique em <b>Copiar tabela</b> e cole (Ctrl/⌘+V) no corpo do e-mail. Depois de enviar, marque o mês como enviado: ele fica travado para conferência.</p>`,
+      <p class="muted">Clique em <b>Copiar tabela</b> e cole (Ctrl/⌘+V) no corpo do e-mail. Depois de enviar, marque o mês como enviado: ele fica travado para conferência. Se precisar corrigir algo, é só reabrir o mês (aqui ou no botão <b>Reabrir mês para editar</b> da tela) e fechar de novo.</p>`,
     actions: [
       { label: 'Copiar assunto', keepOpen: true, onClick: async () => { await navigator.clipboard?.writeText(mail.subject); toast('Assunto copiado.'); return false; } },
       { label: '📋 Copiar tabela', kind: 'primary', keepOpen: true, onClick: async () => { const ok = await copyRich(mail.html, mail.text); toast(ok ? 'Tabela copiada! Cole no e-mail.' : 'Não foi possível copiar automaticamente. Selecione a tabela e copie com Ctrl/⌘+C.', ok ? 'ok' : 'err'); return false; } },
       isClosed
-        ? { label: 'Reabrir mês', kind: 'danger', onClick: async () => { if (!(await confirmBox('Reabrir o mês permite editar valores já enviados à contabilidade. A reabertura fica registrada no histórico.', { okLabel: 'Reabrir', danger: true }))) return false; await D.setMonthStatus(mk, 'open'); render(root, mk); } }
-        : { label: '✔ Marcar como enviado (fechar mês)', kind: 'success', onClick: async () => { await D.setMonthStatus(mk, 'closed'); render(root, mk); toast('Mês fechado. Agora importe os contracheques na aba Contracheques.'); } },
+        ? { label: '🔓 Reabrir mês para editar', kind: 'reopen', onClick: () => reabrirMes() }
+        : { label: '✔ Marcar como enviado (fechar mês)', kind: 'success', onClick: () => fecharMes() },
       { label: 'Fechar' },
     ],
   });
@@ -249,7 +270,7 @@ function openSend() {
 
 // ---------- afastamentos (falta / atestado) ----------
 function openLeave(empId, kind) {
-  if (closed()) return toast('Mês fechado. Reabra para editar.', 'err');
+  if (closed()) return toast('Mês fechado. Clique em “Reabrir mês para editar” para alterar.', 'err');
   const e = D.emp(empId);
   const entry = D.entryFor(mk, empId);
   const isFalta = kind === 'falta';

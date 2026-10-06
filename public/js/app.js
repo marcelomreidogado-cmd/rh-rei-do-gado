@@ -132,7 +132,7 @@ function monthBar() {
   bar.hidden = !uses;
   if (!uses) return;
   bar.innerHTML = `<button class="btn sm" data-y="-1" aria-label="Ano anterior">‹</button><b class="yr">${year}</b><button class="btn sm" data-y="1" aria-label="Próximo ano">›</button>
-    ${C.MESES.map((n, i) => { const k = C.monthKey(year, i + 1), d = D.monthDoc(k); if (S.perfil !== 'total') return `<button class="mchip ${k === month ? 'on' : ''}" data-m="${k}">${n.slice(0, 3)}</button>`; return `<button class="mchip ${k === month ? 'on' : ''} ${d ? d.status : 'none'}" data-m="${k}" title="${d ? (d.status === 'closed' ? 'Enviado' : 'Em preenchimento') : 'Ainda não criado'}">${n.slice(0, 3)}${d ? (d.status === 'closed' ? ' ✔' : ' ●') : ''}</button>`; }).join('')}`;
+    ${C.MESES.map((n, i) => { const k = C.monthKey(year, i + 1), d = D.monthDoc(k); if (S.perfil !== 'total') return `<button class="mchip ${k === month ? 'on' : ''}" data-m="${k}">${n.slice(0, 3)}</button>`; return `<button class="mchip ${k === month ? 'on' : ''} ${d ? d.status : 'none'}" data-m="${k}" title="${d ? (d.status === 'closed' ? 'Fechado (pode ser reaberto na aba Folha)' : 'Em preenchimento') : 'Ainda não criado'}">${n.slice(0, 3)}${d ? (d.status === 'closed' ? ' ✔' : ' ●') : ''}</button>`; }).join('')}`;
   bar.onclick = (ev) => {
     const y = ev.target.closest('[data-y]'), m = ev.target.closest('[data-m]');
     if (y) { year += +y.dataset.y; monthBar(); }
@@ -160,5 +160,6 @@ async function route() {
   } catch (e) { console.error(e); main.innerHTML = `<p class="lack">Erro ao abrir a tela: ${esc(e.message)}</p>`; }
 }
 
+window.addEventListener('rh:mes', () => { if ($('#monthbar')) monthBar(); }); // mes fechado/reaberto: atualiza os marcadores dos meses
 window.addEventListener('unhandledrejection', (e) => { console.error(e.reason); toast(e.reason?.message || 'Erro inesperado.', 'err'); });
 boot();

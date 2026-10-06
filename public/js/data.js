@@ -149,7 +149,7 @@ export const hasAbsence = (empId, mk, entry) => C.leavesOf(S.leaves, empId, mk).
  * repassados aos meses seguintes ja criados e ainda abertos. Devolve os meses atualizados.
  */
 export async function setEntryField(mk, empId, field, raw) {
-  if (monthClosed(mk)) throw new Error('Este mês já foi enviado. Reabra o mês para editar.');
+  if (monthClosed(mk)) throw new Error('Este mês está fechado. Clique em “Reabrir mês para editar” para alterar.');
   const id = C.entryId(mk, empId);
   const e = S.entries.get(id);
   if (!e) throw new Error('Lançamento não encontrado.');
@@ -175,7 +175,7 @@ export async function setEntryField(mk, empId, field, raw) {
 }
 
 export async function setRowExcluded(mk, empId, excluded) {
-  if (monthClosed(mk)) throw new Error('Mês fechado.');
+  if (monthClosed(mk)) throw new Error('Mês fechado. Reabra o mês para alterar.');
   const id = C.entryId(mk, empId);
   await S.store.set(COL.entries, id, { excluded }, true);
   S.entries.set(id, { ...S.entries.get(id), excluded });

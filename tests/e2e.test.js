@@ -152,15 +152,37 @@ test('E2E: excluir coluna/linha, restaurar e copiar tabela para e-mail', { skip,
   assert.equal(await page.locator('tr[data-row]').count(), 13);
 });
 
-test('E2E: enviar/fechar mes trava a edicao; reabrir libera', { skip, timeout: 60000 }, async () => {
+test('E2E: enviar/fechar mes trava a edicao; reabrir libera (quantas vezes precisar)', { skip, timeout: 60000 }, async () => {
+  const premio = `${row('bruno-jose')} [data-f=premio]`;
   await page.click('.mchip[data-m="2026-10"]'); await page.waitForSelector('table.grid');
+  // 1) fecha pelo envio a contabilidade (pede confirmacao: evita fechar sem querer)
   await page.click('[data-act=send]'); await page.click('.modal-foot button:has-text("Marcar como enviado")');
+  await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  assert.equal(await page.locator('.badge.open').count(), 1, 'cancelar a confirmacao nao fecha o mes');
+  await page.click('.modal-foot button:has-text("Marcar como enviado")');
+  await page.getByRole('button', { name: 'Fechar mês', exact: true }).click();
   await page.waitForSelector('.badge.closed');
-  assert.equal(await page.locator(`${row('bruno-jose')} [data-f=premio]`).isDisabled(), true);
-  await page.click('[data-act=send]'); await page.getByRole('button', { name: 'Reabrir mês', exact: true }).click();
-  await page.getByRole('button', { name: 'Reabrir', exact: true }).click();
+  assert.equal(await page.locator(premio).isDisabled(), true);
+  assert.equal(await page.locator('.closed-box').count(), 1);
+  assert.ok((await txt('.mchip[data-m="2026-10"]')).includes('✔'), 'marcador do mes atualiza ao fechar');
+  // 2) reabre pelo botao da tela, corrige e fecha de novo pelo botao da tela
+  await page.click('[data-act=reopen]');
   await page.waitForSelector('.badge.open');
-  assert.equal(await page.locator(`${row('bruno-jose')} [data-f=premio]`).isDisabled(), false);
+  assert.equal(await page.locator(premio).isDisabled(), false);
+  assert.ok((await txt('.mchip[data-m="2026-10"]')).includes('●'), 'marcador do mes atualiza ao reabrir');
+  const antes = await val(premio);
+  await edit(premio, '123,45');
+  assert.equal(await val(premio), 'R$ 123,45');
+  await page.click('[data-act=closemonth]');
+  await page.getByRole('button', { name: 'Fechar mês', exact: true }).click();
+  await page.waitForSelector('.badge.closed');
+  assert.equal(await page.locator(premio).isDisabled(), true);
+  assert.equal(await val(premio), 'R$ 123,45', 'a correcao fica gravada depois de fechar de novo');
+  // 3) reabre tambem pela janela de envio e deixa o mes aberto (como estava)
+  await page.click('[data-act=send]'); await page.click('.modal-foot button:has-text("Reabrir mês para editar")');
+  await page.waitForSelector('.badge.open');
+  await edit(premio, antes);
+  assert.equal(await page.locator(premio).isDisabled(), false);
 });
 
 test('E2E: escala de domingo sugere rodizio e respeita quantidades', { skip, timeout: 90000 }, async () => {

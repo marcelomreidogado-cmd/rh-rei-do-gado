@@ -15,8 +15,10 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   depois) sem apagar dado nenhum.
 - Botão para copiar a tabela (formatada, pronta para colar num e-mail) —
   usado para enviar à contabilidade todo dia 01.
-- Ao enviar a tabela, o mês pode ser fechado (trava edição); pode ser
-  reaberto depois se precisar corrigir algo.
+- O mês pode ser fechado (trava edição) ao enviar a tabela ou pelo botão
+  **Fechar mês** — sempre com confirmação, para não fechar sem querer. Mês
+  fechado mostra o botão **Reabrir mês para editar** direto na tela: reabre,
+  corrige e fecha de novo, quantas vezes precisar (fica no Histórico).
 - **Contracheques**: depois que a folha volta da contabilidade, os PDFs dos
   contracheques são importados e lidos automaticamente (OCR no navegador,
   com Tesseract.js — não sai nenhum dado do computador). O sistema confere
