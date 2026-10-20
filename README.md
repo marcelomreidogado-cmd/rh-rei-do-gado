@@ -11,6 +11,11 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   (uma ou mais datas) e atestados (datas ou "a partir de X dias"). Campos
   recorrentes (salário, prêmio, adiantamento, assiduidade) propagam
   automaticamente para os meses seguintes quando alterados no mês atual.
+- **Vale**: coluna ao lado do Adiantamento. Cada vale é lançado com o **dia**
+  e o **valor** (pode ter vários no mês); a folha mostra o total e quantos
+  vales foram, e o e-mail para a contabilidade mostra o total com os dias
+  (ex.: "R$ 150,00 (05/10 R$ 50,00; 12/10 R$ 100,00)"). Vale não passa para o
+  mês seguinte.
 - Colunas e linhas sem informação no mês podem ser ocultadas (e restauradas
   depois) sem apagar dado nenhum.
 - Botão para copiar a tabela (formatada, pronta para colar num e-mail) —

@@ -141,7 +141,7 @@ export async function setMonthStatus(mk, status) {
 }
 
 // ---------- lancamentos ----------
-const MONEY = ['salario', 'consumo', 'horaExtra', 'feriado', 'assiduidade', 'adiantamento', 'premio', 'descAdic'];
+const MONEY = ['salario', 'consumo', 'horaExtra', 'feriado', 'assiduidade', 'adiantamento', 'vale', 'premio', 'descAdic'];
 export const hasAbsence = (empId, mk, entry) => C.leavesOf(S.leaves, empId, mk).length > 0 || !!(entry && (entry.faltaTxt || entry.atestadoTxt));
 
 /**
@@ -172,6 +172,19 @@ export async function setEntryField(mk, empId, field, raw) {
   for (const t of targets) S.entries.set(t, { ...S.entries.get(t), [field]: value });
   if (e[field] !== value) await log('lancamento', `${mk} ${emp(empId)?.nome}: ${field} ${e[field] ?? ''} → ${value}${targets.length ? ` (repassado a ${targets.length} mês(es))` : ''}`);
   return targets.map((t) => S.entries.get(t).month).sort();
+}
+
+/** Grava os vales do mes (cada um com dia e valor) e o total na coluna Vale. */
+export async function setVales(mk, empId, vales) {
+  if (monthClosed(mk)) throw new Error('Este mês está fechado. Clique em “Reabrir mês para editar” para alterar.');
+  const id = C.entryId(mk, empId);
+  const e = S.entries.get(id);
+  if (!e) throw new Error('Lançamento não encontrado.');
+  const list = C.normVales(vales);
+  const patch = { vales: list, vale: C.valeTotal(list) };
+  await S.store.set(COL.entries, id, patch, true);
+  S.entries.set(id, { ...e, ...patch });
+  await log('vales', `${mk} ${emp(empId)?.nome}: ${list.map((v) => `${C.fmtDMY(v.data)} ${C.money(v.valor)}`).join('; ') || '(nenhum)'} = ${C.money(patch.vale) || 'R$ 0,00'}`);
 }
 
 export async function setRowExcluded(mk, empId, excluded) {

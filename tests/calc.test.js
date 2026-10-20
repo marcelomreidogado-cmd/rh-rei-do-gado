@@ -91,6 +91,17 @@ test('novo mes herda so campos recorrentes', () => {
   assert.equal(n.descAdic, 0);
   assert.equal(n.excluded, false);
 });
+test('vales: cada um com dia e valor, total, texto do e-mail e nao passa para o mes seguinte', () => {
+  const vales = [{ data: '2026-10-12', valor: '100,00' }, { data: '2026-10-05', valor: 50 }, { data: '', valor: 30 }, { data: '2026-10-07', valor: 0 }];
+  assert.deepEqual(C.normVales(vales), [{ data: '2026-10-05', valor: 50 }, { data: '2026-10-12', valor: 100 }]);
+  assert.equal(C.valeTotal(vales), 150);
+  assert.equal(C.valeTexto({ vales }), 'R$ 150,00 (05/10 R$ 50,00; 12/10 R$ 100,00)');
+  assert.equal(C.valeTexto({ vales: [{ data: '2026-10-05', valor: 80 }] }), 'R$ 80,00 (05/10)');
+  assert.equal(C.valeTexto({ vale: 0, vales: [] }), '');
+  const prev = { ...C.emptyEntry('2026-09', 'bruno', 1945), vale: 150, vales: [{ data: '2026-09-05', valor: 150 }] };
+  const n = C.carryOver(prev, '2026-10', 'bruno', 0);
+  assert.equal(n.vale, 0); assert.deepEqual(n.vales, []);
+});
 test('alteracao no mes atualiza apenas meses seguintes abertos', () => {
   const entries = ['2026-08', '2026-09', '2026-10', '2026-11', '2026-12'].map((m) => ({ ...C.emptyEntry(m, 'igor'), id: C.entryId(m, 'igor') }));
   entries.push({ ...C.emptyEntry('2026-10', 'outro'), id: C.entryId('2026-10', 'outro') });

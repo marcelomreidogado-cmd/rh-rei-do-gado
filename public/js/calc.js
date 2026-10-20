@@ -132,7 +132,7 @@ export function assiduidadeEfetiva(entry, leaves, mk) {
 
 // ---------- lancamento do mes ----------
 export const emptyEntry = (month, empId, salario = 0) => ({
-  month, empId, salario, consumo: 0, horaExtra: 0, feriado: 0, assiduidade: 0, adiantamento: 0, premio: 0,
+  month, empId, salario, consumo: 0, horaExtra: 0, feriado: 0, assiduidade: 0, adiantamento: 0, vale: 0, vales: [], premio: 0,
   descAdic: 0, descAdicNota: '', dias: 0, vt: VT_DIARIO, faltaTxt: '', atestadoTxt: '', obs: '', excluded: false,
 });
 
@@ -146,6 +146,20 @@ export function carryOver(prev, month, empId, fallbackSalario = 0) {
 }
 
 export const entryId = (month, empId) => `${month}_${empId}`;
+
+// ---------- vales (cada vale tem dia e valor; nao passa para o mes seguinte) ----------
+/** Limpa a lista de vales: so os que tem data e valor, em ordem de data. */
+export const normVales = (vales) => (vales || []).map((v) => ({ data: String(v.data || ''), valor: round2(num(v.valor)) }))
+  .filter((v) => /^\d{4}-\d{2}-\d{2}$/.test(v.data) && v.valor > 0).sort((a, b) => a.data.localeCompare(b.data));
+export const valeTotal = (vales) => round2(normVales(vales).reduce((s, v) => s + v.valor, 0));
+const dm = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+/** Texto do vale para o e-mail: "R$ 50,00 (05/10)" ou "R$ 150,00 (05/10 R$ 50,00; 12/10 R$ 100,00)". */
+export function valeTexto(entry) {
+  const vs = normVales(entry?.vales);
+  if (!vs.length) return money(entry?.vale);
+  const tot = money(valeTotal(vs));
+  return vs.length === 1 ? `${tot} (${dm(vs[0].data)})` : `${tot} (${vs.map((v) => `${dm(v.data)} ${money(v.valor)}`).join('; ')})`;
+}
 
 /** Funcionario deve aparecer no mes? (ativo e ja admitido/entrou; nao desligado antes do mes) */
 export function activeInMonth(emp, mk) {

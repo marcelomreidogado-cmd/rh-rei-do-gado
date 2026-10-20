@@ -116,6 +116,7 @@ def col_of(h):
     if h.startswith('FERIADO'): return 'feriado'
     if h == 'ASSIDUIDADE': return 'assiduidade'
     if h == 'ADIANTAMENTO': return 'adiantamento'
+    if h.startswith('VALE'): return 'vale'
     if h == 'PREMIO': return 'premio'
     if h.startswith('DESCONTOS'): return 'descAdic'
     if h.startswith('PASSAGEM'): return 'passagem'

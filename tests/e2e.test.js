@@ -185,6 +185,29 @@ test('E2E: enviar/fechar mes trava a edicao; reabrir libera (quantas vezes preci
   assert.equal(await page.locator(premio).isDisabled(), false);
 });
 
+test('E2E: vale com dia e valor (varios no mes) entra na folha e no e-mail', { skip, timeout: 60000 }, async () => {
+  const bruno = row('bruno-jose');
+  await page.waitForSelector(`${bruno} [data-act=vale]`);
+  assert.equal(await page.locator('th[data-col=vale]').count(), 3, 'coluna Vale nas 3 lojas');
+  await page.click(`${bruno} [data-act=vale]`);
+  await page.fill('#vdata', '2026-10-05'); await page.fill('#vvalor', '50,00'); await page.click('#vadd');
+  await page.fill('#vdata', '2026-10-12'); await page.fill('#vvalor', '100'); await page.press('#vvalor', 'Enter');
+  assert.match(await txt('#vlist tfoot'), /R\$ 150,00/);
+  await page.click('.modal-foot button:has-text("Salvar vales")');
+  await page.waitForFunction(() => document.querySelector('tr[data-row="bruno-jose"] [data-act=vale]')?.textContent.includes('150,00'));
+  assert.match(await txt(`${bruno} [data-act=vale]`), /R\$ 150,00\s*\(2\)/);
+  await page.click('[data-act=send]'); await page.waitForSelector('.preview table');
+  const html = await page.locator('.preview').innerHTML();
+  assert.ok(html.includes('>Vale<'), 'coluna Vale no e-mail');
+  assert.ok(html.includes('R$ 150,00 (05/10 R$ 50,00; 12/10 R$ 100,00)'), 'vales com dia no e-mail');
+  await page.locator('.modal-foot button', { hasText: /^Fechar$/ }).click();
+  // remove um vale
+  await page.click(`${bruno} [data-act=vale]`);
+  await page.click('#vlist [data-del="1"]');
+  await page.click('.modal-foot button:has-text("Salvar vales")');
+  await page.waitForFunction(() => document.querySelector('tr[data-row="bruno-jose"] [data-act=vale]')?.textContent.trim() === 'R$ 50,00');
+});
+
 test('E2E: escala de domingo sugere rodizio e respeita quantidades', { skip, timeout: 90000 }, async () => {
   await page.click('#nav a[data-v=escala]'); await page.waitForSelector('.sundays');
   await page.click('[data-act=req]');

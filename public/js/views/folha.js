@@ -10,6 +10,7 @@ export const COLS = [
   { k: 'falta', label: 'Falta' }, { k: 'atestado', label: 'Atestado' },
   { k: 'horaExtra', label: 'Hora Extra 50%', money: true }, { k: 'feriado', label: 'Feriado', money: true },
   { k: 'assiduidade', label: 'Assiduidade', money: true, rec: true }, { k: 'adiantamento', label: 'Adiantamento', money: true, rec: true },
+  { k: 'vale', label: 'Vale', money: true },
   { k: 'premio', label: 'Prêmio', money: true, rec: true }, { k: 'descAdic', label: 'Descontos Adicionais', money: true },
   { k: 'passagem', label: 'Passagem' }, { k: 'dias', label: 'Dias' },
   { k: 'obs', label: 'Observação', fixed: true },
@@ -36,6 +37,7 @@ function cellValue(col, { entry: e, emp }) {
     case 'passagem': return C.money(v.passagem);
     case 'dias': return e.dias ? String(e.dias) : '';
     case 'descAdic': return C.money(e.descAdic);
+    case 'vale': return C.valeTexto(e);
     default: return col.money ? C.money(e[col.k]) : '';
   }
 }
@@ -135,7 +137,7 @@ export function render(el, month) {
 function renderNoMonth() {
   const prev = D.monthDoc(C.addMonths(mk, -1));
   root.innerHTML = `<div class="empty"><h2>${esc(C.monthLabel(mk))} ainda não foi criado</h2>
-    <p>${prev ? 'Ao criar, o mês já vem preenchido com <b>salário, prêmio, adiantamento e assiduidade</b> do mês anterior. Faltas, atestados, consumo e dias de passagem começam em branco.' : 'O mês anterior ainda não existe. Crie os meses em ordem para herdar os valores.'}</p>
+    <p>${prev ? 'Ao criar, o mês já vem preenchido com <b>salário, prêmio, adiantamento e assiduidade</b> do mês anterior. Vales, faltas, atestados, consumo e dias de passagem começam em branco.' : 'O mês anterior ainda não existe. Crie os meses em ordem para herdar os valores.'}</p>
     <button class="btn primary" data-act="createmonth">Criar ${esc(C.monthLabel(mk))}</button></div>`;
   $('[data-act=createmonth]', root).onclick = async () => {
     try { await D.createMonth(mk); render(root, mk); toast(`${C.monthLabel(mk)} criado.`); } catch (e) { toast(e.message, 'err'); }
@@ -159,11 +161,18 @@ function rowHtml(r, vcols, isClosed) {
       }
       case 'passagem': return `<td class="num" data-cell="passagem">${C.money(v.passagem)}</td>`;
       case 'dias': return `<td class="num"><input class="in dias" inputmode="numeric" data-f="dias" data-emp="${esc(emp.id)}" value="${e.dias || ''}" ${dis}></td>`;
+      case 'vale': return `<td class="num">${valeBtn(e, emp)}</td>`;
       case 'descAdic': return `<td class="num"><input class="in money" inputmode="decimal" data-f="descAdic" data-emp="${esc(emp.id)}" value="${C.money(e.descAdic)}" ${dis}></td>`;
       default: return `<td class="num"><input class="in money" inputmode="decimal" data-f="${c.k}" data-emp="${esc(emp.id)}" value="${C.money(e[c.k])}" ${dis}></td>`;
     }
   };
   return `<tr data-row="${esc(emp.id)}">${vcols.map(cell).join('')}<td class="act">${isClosed ? '' : `<button class="row-x" data-act="exclrow" data-emp="${esc(emp.id)}" title="Excluir esta linha do mês" aria-label="Excluir linha de ${esc(emp.nome)}">✕</button>`}</td></tr>`;
+}
+
+function valeBtn(e, emp) {
+  const vs = C.normVales(e.vales), tot = C.money(e.vale);
+  const tip = vs.length ? 'Vales: ' + vs.map((v) => `${C.fmtDMY(v.data)} ${C.money(v.valor)}`).join('; ') : 'Lançar vale (dia e valor)';
+  return `<button class="leave-btn vale-btn ${tot ? 'has' : ''}" data-act="vale" data-emp="${esc(emp.id)}" title="${esc(tip)}">${tot ? `${tot}${vs.length > 1 ? ` <small>(${vs.length})</small>` : ''}` : '＋'}</button>`;
 }
 
 function patchRow(empId) {
@@ -212,6 +221,7 @@ function wire() {
       } else if (act === 'restorerow') { await D.setRowExcluded(mk, empId, false); render(root, mk); }
       else if (act === 'addrow') openAddRow();
       else if (act === 'leave') openLeave(empId, b.dataset.kind);
+      else if (act === 'vale') openVales(empId);
       else if (act === 'repeatdias') { const n = await D.repeatDias(mk); render(root, mk); toast(n ? `Dias repetidos para ${n} funcionário(s).` : 'Nada a repetir.'); }
       else if (act === 'autohide') {
         const rows = D.rowsByStore(mk).flatMap((g) => g.rows);
@@ -265,6 +275,50 @@ function openSend() {
         : { label: '✔ Marcar como enviado (fechar mês)', kind: 'success', onClick: () => fecharMes() },
       { label: 'Fechar' },
     ],
+  });
+}
+
+// ---------- vales (dia + valor; pode ter varios no mes) ----------
+function openVales(empId) {
+  if (closed()) return toast('Mês fechado. Clique em “Reabrir mês para editar” para alterar.', 'err');
+  const e = D.emp(empId), entry = D.entryFor(mk, empId);
+  let vales = C.normVales(entry.vales);
+  // vale antigo so com valor (sem dia): aparece para informar o dia
+  const semDia = !vales.length && C.num(entry.vale) > 0 ? C.num(entry.vale) : 0;
+  const hj = new Date(); const hoje = `${hj.getFullYear()}-${C.pad(hj.getMonth() + 1)}-${C.pad(hj.getDate())}`;
+  const sugestao = hoje >= C.monthStart(mk) && hoje <= C.monthEnd(mk) ? hoje : C.monthStart(mk);
+  openModal({
+    title: `Vales — ${e.nome}`,
+    body: `<p class="muted">Vales pegos por <b>${esc(e.nome)}</b> (folha de ${esc(C.monthLabel(mk))}). Informe o <b>dia</b> e o <b>valor</b> de cada vale — pode lançar vários.</p>
+      ${semDia ? `<div class="warn-box">Já havia ${C.money(semDia)} de vale sem o dia. Lance de novo com a data (o valor antigo é substituído ao salvar).</div>` : ''}
+      <div class="row" style="align-items:end;flex-wrap:wrap"><label>Dia<input type="date" class="in" id="vdata" value="${sugestao}"></label>
+        <label>Valor<input class="in money" id="vvalor" inputmode="decimal" placeholder="R$ 0,00" style="width:120px"></label>
+        <button class="btn" id="vadd" type="button">＋ Adicionar vale</button></div>
+      <div id="vlist"></div>`,
+    actions: [{ label: 'Cancelar' }, { label: 'Salvar vales', kind: 'primary', onClick: async () => {
+      if (C.num(document.querySelector('#vvalor')?.value) > 0 && !(await confirmBox('Tem um valor digitado que não foi adicionado. Salvar sem ele?', { okLabel: 'Salvar sem ele' }))) return false;
+      await D.setVales(mk, empId, vales); render(root, mk);
+      toast(vales.length ? `Vales de ${e.nome.split(' ')[0]}: ${C.money(C.valeTotal(vales))}.` : `Vales de ${e.nome.split(' ')[0]} removidos.`);
+    } }],
+    onMount: (mm) => {
+      const show = () => {
+        vales = C.normVales(vales);
+        mm.$('#vlist').innerHTML = vales.length
+          ? `<table class="mini"><thead><tr><th>Dia</th><th class="num">Valor</th><th></th></tr></thead><tbody>${vales.map((v, i) => `<tr><td>${C.fmtDMY(v.data)}</td><td class="num">${C.money(v.valor)}</td><td><button class="btn sm danger" data-del="${i}" type="button" aria-label="Remover vale de ${C.fmtDMY(v.data)}">Remover</button></td></tr>`).join('')}</tbody>
+             <tfoot><tr><th>Total</th><th class="num">${C.money(C.valeTotal(vales))}</th><th></th></tr></tfoot></table>`
+          : '<p class="muted">Nenhum vale lançado.</p>';
+      };
+      const add = () => {
+        const data = mm.$('#vdata').value, valor = C.round2(C.num(mm.$('#vvalor').value));
+        if (!data) return toast('Informe o dia do vale.', 'err');
+        if (!(valor > 0)) return toast('Informe o valor do vale.', 'err');
+        vales.push({ data, valor }); mm.$('#vvalor').value = ''; mm.$('#vvalor').focus(); show();
+      };
+      mm.$('#vadd').onclick = add;
+      mm.$('#vvalor').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); add(); } });
+      mm.$('#vlist').onclick = (ev) => { const b = ev.target.closest('[data-del]'); if (b) { vales.splice(+b.dataset.del, 1); show(); } };
+      show(); mm.$('#vvalor').focus();
+    },
   });
 }
 
