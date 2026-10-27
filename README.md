@@ -63,14 +63,16 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   (atendimento e manipulação) e quem **folga**. Ajuste
   manual por loja/domingo (Editar ou clique no nome); imagem pronta para o
   WhatsApp e impressão em uma folha.
-- **Escala 5x2 (simulação)** — aba separada da escala de domingo, para simular
-  o fim da 6x1 (EC 141/2026): cada funcionário folga 2 dias por semana
-  (seg–dom), sem deixar a loja abaixo do mínimo de atendimento/manipulação de
-  cada dia (configurável por loja: seg–sex, sábado e domingo; Coronel começa
-  com 2 atend. + 1 manip. na semana) e com folga no domingo pelo menos 1 vez a
-  cada 3 semanas (regra do comércio, pode desligar). Mostra a equipe mínima
-  necessária por loja, os dias abaixo do mínimo e deixa trocar T/F clicando.
-  Dados em `rh_sundays/5x2-AAAA-MM` e `rh_sundays/5x2-config` (sem mudar regras).
+- **Escala 5x2 (simulação)** — aba separada da escala de domingo. Dois modos:
+  *Rei do Gado* (equipe real: primeiro confirma quem entra no mês, mostrando
+  quem está afastado) e *Outro negócio* (cadastro livre de unidades, funções e
+  pessoas). Regras: dia em que a loja não abre (segunda) conta como folga; a
+  outra folga é um dia fixo da semana e, a cada 3 semanas, vira domingo; nunca
+  folga nos dias marcados (sábado); cada loja é calculada sozinha (nunca puxa
+  gente de outra). A grade mostra F (folga), A (afastado), dias fechados, quantos
+  estão na loja por função (vermelho = abaixo do mínimo) e folgas/domingos por
+  pessoa; clicar num dia troca trabalho ↔ folga. Dados em rh_sundays
+  (5x2-cfg, 5x2-AAAA-MM, 5x2-outro), sem mudar regras.
 - **Valores da folha** aparecem em reais (R$ 1.234,56), na tela e no e-mail.
 - **Usuários do sistema**: em Configurações → Usuários do sistema, um
   administrador inclui (ID + senha) ou remove o acesso de outras pessoas.

@@ -2,48 +2,60 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as C from '../public/js/calc.js';
 
-const E = (id, loja, cat) => ({ id, nome: id, loja, categoria: cat });
-const coronel = [E('a1', 'coronel', 'atendimento'), E('a2', 'coronel', 'atendimento'), E('a3', 'coronel', 'atendimento'), E('a4', 'coronel', 'atendimento'),
-  E('m1', 'coronel', 'manipulacao'), E('m2', 'coronel', 'manipulacao')];
+const P = (id, unidade, funcao) => ({ id, nome: id, unidade, funcao });
+const FECHA_SEG = [0, 2, 3, 4, 5, 6];
+const lojas = {
+  coronel: { nome: 'Coronel', abre: FECHA_SEG, minimos: { atendimento: [1, 0, 2, 2, 2, 2, 2], manipulacao: [1, 0, 1, 1, 1, 1, 1] } },
+  bingen: { nome: 'Bingen', abre: FECHA_SEG, minimos: { atendimento: [1, 0, 1, 1, 1, 1, 1], manipulacao: [1, 0, 1, 1, 1, 1, 1] } },
+};
+const pessoas = [P('a1', 'coronel', 'atendimento'), P('a2', 'coronel', 'atendimento'), P('a3', 'coronel', 'atendimento'), P('a4', 'coronel', 'atendimento'),
+  P('m1', 'coronel', 'manipulacao'), P('m2', 'coronel', 'manipulacao'), P('m3', 'coronel', 'manipulacao'),
+  P('b1', 'bingen', 'atendimento'), P('b2', 'bingen', 'atendimento'), P('b3', 'bingen', 'manipulacao'), P('b4', 'bingen', 'manipulacao')];
 
-test('semanas do mes vao de segunda a domingo e cobrem o mes', () => {
+test('semanas de segunda a domingo cobrindo o mes', () => {
   const w = C.semanasDoMes('2026-12');
   assert.equal(w[0][0], '2026-11-30'); assert.equal(C.weekday(w[0][0]), 1);
-  assert.equal(w.at(-1)[6], '2027-01-03'); assert.equal(C.weekday(w.at(-1)[6]), 0);
-  assert.equal(C.tipoDia('2026-12-06'), 'domingo'); assert.equal(C.tipoDia('2026-12-05'), 'sabado'); assert.equal(C.tipoDia('2026-12-07'), 'semana');
+  assert.equal(w.at(-1)[6], '2027-01-03');
 });
 
-test('equipe minima em 5x2 (Coronel: 2 atend + 1 manip na semana)', () => {
-  const m = C.DEFAULT_MIN_5X2;
-  assert.equal(C.equipeMinima5x2(m, 'coronel', 'atendimento'), 3); // 2*6 + 1 = 13 pessoa-dia / 5 = 2,6 -> 3
-  assert.equal(C.equipeMinima5x2(m, 'coronel', 'manipulacao'), 2); // 7/5 -> 2
-  assert.equal(C.equipeMinima5x2({ x: { semana: { atendimento: 1 } } }, 'x', 'atendimento'), 1);
-});
-
-test('sugestao 5x2: 2 folgas por semana, minimos respeitados e domingo a cada 3 semanas', () => {
+test('loja fechada na segunda: segunda + 1 folga por semana, nunca no sabado, domingo a cada 3 semanas, cada loja sozinha', () => {
   const weeks = C.semanasDoMes('2026-12');
-  const minimos = { coronel: C.DEFAULT_MIN_5X2.coronel, bingen: {}, correas: {} };
-  const { folgas, deficits } = C.sugerir5x2({ weeks, employees: coronel, minimos });
-  for (const e of coronel) for (const w of weeks) assert.equal(w.filter((d) => folgas[e.id].includes(d)).length, 2, `${e.id} ${w[0]}`);
-  assert.deepEqual(deficits, []);
-  const chk = C.conferir5x2({ weeks, employees: coronel, minimos, folgas });
-  assert.deepEqual(chk.deficits, []); assert.deepEqual(chk.avisos, []);
-  // folgas juntas na maioria das semanas
-  let juntas = 0, total = 0;
-  for (const e of coronel) for (const w of weeks) { const k = w.map((d, i) => (folgas[e.id].includes(d) ? i : -1)).filter((i) => i >= 0); total++; if (k[1] - k[0] === 1) juntas++; }
-  assert.ok(juntas / total >= 0.5, `${juntas}/${total}`);
+  const r = C.gerar5x2({ weeks, pessoas, unidades: lojas, semFolga: [6] });
+  for (const p of pessoas) {
+    for (const w of weeks) {
+      const f = w.filter((d) => r.folgas[p.id].includes(d));
+      assert.equal(f.length, 1, `${p.id} ${w[0]}: 1 folga além da segunda`);
+      assert.ok(f.every((d) => ![1, 6].includes(C.weekday(d))), `${p.id}: folga nunca na segunda (já fechada) nem no sábado`);
+    }
+    let seguidos = 0;
+    for (const w of weeks) { seguidos = r.folgas[p.id].includes(w[6]) ? 0 : seguidos + 1; assert.ok(seguidos < 3, `${p.id}: 3 domingos seguidos`); }
+  }
+  assert.deepEqual(r.faltas, []); assert.deepEqual(r.avisos, []);
+  // dia fixo: a folga de semana (sem ser domingo) cai sempre no mesmo dia da semana para cada pessoa
+  for (const p of pessoas) assert.ok(new Set(r.folgas[p.id].map(C.weekday).filter((d) => d !== 0)).size <= 1, p.id);
 });
 
-test('sugestao 5x2 aponta falta de gente quando a equipe nao fecha', () => {
+test('equipe que nao fecha: aponta a falta na propria loja (nunca puxa de outra)', () => {
   const weeks = C.semanasDoMes('2026-12');
-  const pouca = coronel.filter((e) => ['a1', 'a2', 'm1'].includes(e.id)); // 2 atend + 1 manip: nao cobre 2+1 todo dia com 2 folgas
-  const { deficits } = C.sugerir5x2({ weeks, employees: pouca, minimos: { coronel: C.DEFAULT_MIN_5X2.coronel } });
-  assert.ok(deficits.length > 0 && deficits.every((x) => x.store === 'coronel'));
+  const poucos = pessoas.filter((p) => !['a3', 'a4'].includes(p.id)); // Coronel com 2 atendentes e minimo 2
+  const r = C.gerar5x2({ weeks, pessoas: poucos, unidades: lojas, semFolga: [6] });
+  assert.ok(r.faltas.length > 0 && r.faltas.every((x) => x.unidade === 'coronel' && x.funcao === 'atendimento'));
+  for (const p of poucos.filter((x) => x.unidade === 'bingen')) assert.ok(r.folgas[p.id].length > 0);
 });
 
-test('afastado: dias fora contam como folga da semana', () => {
+test('loja aberta todos os dias: 2 folgas por semana, juntas quando possivel', () => {
   const weeks = C.semanasDoMes('2026-12');
-  const unavailable = (id, d) => id === 'a1' && d >= '2026-12-07' && d <= '2026-12-13';
-  const { folgas } = C.sugerir5x2({ weeks, employees: coronel, minimos: { coronel: C.DEFAULT_MIN_5X2.coronel }, unavailable });
-  assert.equal(weeks[1].filter((d) => folgas.a1.includes(d)).length, 0);
+  const u = { x: { nome: 'X', abre: [0, 1, 2, 3, 4, 5, 6], minimos: { caixa: [1, 1, 1, 1, 1, 1, 1] } } };
+  const gente = ['c1', 'c2', 'c3', 'c4'].map((id) => P(id, 'x', 'caixa'));
+  const r = C.gerar5x2({ weeks, pessoas: gente, unidades: u, semFolga: [6] });
+  for (const p of gente) for (const w of weeks) assert.equal(w.filter((d) => r.folgas[p.id].includes(d)).length, 2);
+  assert.deepEqual(r.faltas, []);
+  assert.deepEqual(C.faltas5x2({ weeks, pessoas: gente, unidades: u, folgas: r.folgas }), []);
+});
+
+test('afastado nao conta como gente trabalhando', () => {
+  const weeks = C.semanasDoMes('2026-12');
+  const un = (id, d) => (id === 'b1' && d >= '2026-12-01' && d <= '2026-12-31' ? 'atestado' : '');
+  const r = C.gerar5x2({ weeks, pessoas, unidades: lojas, semFolga: [6], unavailable: un });
+  assert.ok(r.faltas.some((x) => x.unidade === 'bingen' && x.funcao === 'atendimento'));
 });

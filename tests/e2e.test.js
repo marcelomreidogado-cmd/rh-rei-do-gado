@@ -356,17 +356,33 @@ test('E2E: usuario so de Escala e Ferias ve apenas essas abas e nao carrega dado
   assert.ok((await page.$$eval('#nav a', (as) => as.length)) >= 7);
 });
 
-test('E2E: escala 5x2 (simulacao) sugere 2 folgas por semana e deixa ajustar', { skip, timeout: 90000 }, async () => {
-  await page.click('#nav a[data-v=escala5x2]'); await page.click('.mchip[data-m="2026-12"]'); await page.waitForSelector('.cards5x2');
-  assert.match(await txt('.cards5x2'), /Coronel[\s\S]*Seg a Sex 2[\s\S]*Seg a Sex 1/);
-  await page.click('[data-act=suggest]'); await page.waitForSelector('table.g5x2');
-  // cada linha de funcionario disponivel: 2 folgas em cada semana completa
-  const linhas = await page.$$eval('table.g5x2 tbody tr:not(.tot)', (trs) => trs.map((tr) => [...tr.querySelectorAll('td.cel')].map((td) => td.innerText)));
-  for (const l of linhas) { if (l.includes('A')) continue; for (let w = 0; w < l.length; w += 7) assert.equal(l.slice(w, w + 7).filter((x) => x === 'F').length, 2, JSON.stringify(l)); }
-  const c = page.locator('td.cel[data-e]').first(); const antes = await c.innerText(); await c.click();
-  await page.waitForFunction((a) => document.querySelector('td.cel[data-e]').innerText !== a, antes);
-  // escala de domingo atual continua separada
-  await page.click('#nav a[data-v=escala]'); await page.waitForSelector('.sundays');
+test('E2E: escala 5x2 — confirmar equipe, gerar sem folga no sabado nem na segunda, ajustar a mao e outro negocio', { skip, timeout: 120000 }, async () => {
+  await page.click('#nav a[data-v=escala5x2]'); await page.click('.mchip[data-m="2026-12"]');
+  await page.waitForSelector('.x5-equipe');
+  // passo 1: confirmar a equipe (tira uma pessoa)
+  const caixas = page.locator('.x5-equipe input[type=checkbox]');
+  assert.ok(await caixas.count() >= 8);
+  const tirado = await caixas.first().getAttribute('value'); await caixas.first().uncheck();
+  await page.click('[data-act=gerar]'); await page.waitForSelector('table.x5grid');
+  assert.equal(await page.locator(`td.c[data-p="${tirado}"]`).count(), 0, 'quem foi desmarcado nao entra');
+  // segunda fechada (sem celulas clicaveis), nenhuma folga no sabado
+  const res = await page.$$eval('td.c', (tds) => tds.map((t) => ({ d: t.dataset.d, f: t.classList.contains('f') })));
+  const dow = (d) => new Date(d + 'T00:00:00Z').getUTCDay();
+  assert.ok(res.length > 0 && res.every((x) => dow(x.d) !== 1), 'segunda fechada');
+  assert.ok(res.filter((x) => x.f).every((x) => dow(x.d) !== 6), 'sem folga no sabado');
+  assert.equal(await page.locator('text=mudar alguém de loja').count(), 0);
+  // ajuste manual: clicar numa celula troca trabalho/folga
+  const cel = page.locator('td.c:not(.f)').first(); const p = await cel.getAttribute('data-p'), d = await cel.getAttribute('data-d');
+  await cel.click(); await page.waitForSelector(`td.c.f[data-p="${p}"][data-d="${d}"]`);
+  // outro negocio: cadastro livre
+  await page.click('[data-act=modo][data-m=outro]'); await page.waitForSelector('[data-act=ajustes]');
+  await page.click('.empty [data-act=ajustes]'); await page.waitForSelector('#cad');
+  for (let i = 0; i < 3; i++) await page.click('#cad [data-add=p]');
+  const nomes = page.locator('#cad [data-pn]'); for (let i = 0; i < 3; i++) await nomes.nth(i).fill(['Ana', 'Bia', 'Caio'][i]);
+  await page.click('.modal-foot button:has-text("Salvar")');
+  await page.click('[data-act=gerar]'); await page.waitForSelector('table.x5grid');
+  assert.match(await page.locator('table.x5grid').innerText(), /Ana[\s\S]*Bia[\s\S]*Caio/);
+  await page.click('[data-act=modo][data-m=rei]'); await page.waitForSelector('table.x5grid');
 });
 
 test('E2E: ferias — alertas, ajuste do periodo, registro e escala de domingo', { skip, timeout: 90000 }, async () => {

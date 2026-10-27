@@ -312,23 +312,31 @@ export async function payslipImage(mk, empId) { const d = await S.store.get(COL.
 
 // ---------- escala de domingo ----------
 // ---------- escala 5x2 (simulacao) — fica em rh_sundays (ids "5x2-...") para os dois perfis poderem usar ----------
-export async function load5x2(mk) {
-  const [doc, cfg] = await Promise.all([S.store.get(COL.sundays, `5x2-${mk}`), S.store.get(COL.sundays, '5x2-config')]);
-  const minimos = {};
+// 5x2-cfg       : Rei do Gado — {lojas:{id:{abre:[dias], minimos:{atendimento:[7], manipulacao:[7]}}}, semFolga, domingo3}
+// 5x2-AAAA-MM   : Rei do Gado — {equipe:[ids], confirmado, folgas:{id:[datas]}}
+// 5x2-outro     : outro negocio — {unidades:[{id,nome,abre,minimos:{funcao:[7]}}], funcoes:[{id,nome}], pessoas:[{id,nome,funcao,unidade}], semFolga, domingo3, meses:{AAAA-MM:{folgas}}}
+const FECHA_SEG = [0, 2, 3, 4, 5, 6];
+export function default5x2Cfg() {
+  const req = S.config.required || {};
+  const lojas = {};
   for (const st of C.STORES) {
-    minimos[st.id] = {};
-    for (const t of Object.keys(C.TIPOS_DIA)) minimos[st.id][t] = { ...C.DEFAULT_MIN_5X2[st.id][t], ...((cfg?.minimos?.[st.id] || {})[t] || {}) };
+    const r = req[st.id] || {};
+    const sem = st.id === 'coronel' ? 2 : 1;
+    lojas[st.id] = { abre: [...FECHA_SEG], minimos: { atendimento: [r.atendimento ?? 1, 0, sem, sem, sem, sem, sem], manipulacao: [r.manipulacao ?? 1, 0, 1, 1, 1, 1, 1] } };
   }
-  return { folgas: doc?.folgas || {}, existe: !!doc, minimos, domingo3: cfg?.domingo3 !== false };
+  return { lojas, semFolga: [6], domingo3: true };
 }
-export async function save5x2(mk, folgas) {
-  await S.store.set(COL.sundays, `5x2-${mk}`, { folgas, updatedAt: nowIso(), updatedBy: S.user?.id || '' });
+export async function load5x2(mk) {
+  const [doc, cfg] = await Promise.all([S.store.get(COL.sundays, `5x2-${mk}`), S.store.get(COL.sundays, '5x2-cfg')]);
+  const base = default5x2Cfg();
+  const c = cfg ? { ...base, ...cfg, lojas: { ...base.lojas, ...(cfg.lojas || {}) } } : base;
+  return { cfg: c, mes: doc && doc.confirmado ? doc : null };
 }
-export async function clear5x2(mk) { await S.store.del(COL.sundays, `5x2-${mk}`); await log('escala_5x2_limpa', mk); }
-export async function save5x2Config(minimos, domingo3) {
-  await S.store.set(COL.sundays, '5x2-config', { minimos, domingo3, updatedAt: nowIso(), updatedBy: S.user?.id || '' });
-  await log('escala_5x2_minimos', JSON.stringify(minimos));
-}
+export async function save5x2Mes(mk, data) { await S.store.set(COL.sundays, `5x2-${mk}`, { ...data, updatedAt: nowIso(), updatedBy: S.user?.id || '' }); }
+export async function clear5x2Mes(mk) { await S.store.del(COL.sundays, `5x2-${mk}`); }
+export async function save5x2Cfg(cfg) { await S.store.set(COL.sundays, '5x2-cfg', { ...cfg, updatedAt: nowIso(), updatedBy: S.user?.id || '' }); await log('escala_5x2_ajustes', ''); }
+export async function load5x2Outro() { return (await S.store.get(COL.sundays, '5x2-outro')) || { unidades: [], funcoes: [], pessoas: [], semFolga: [6], domingo3: true, meses: {} }; }
+export async function save5x2Outro(doc) { const d = { ...doc }; delete d.id; await S.store.set(COL.sundays, '5x2-outro', { ...d, updatedAt: nowIso(), updatedBy: S.user?.id || '' }); }
 
 export async function loadSundays(mk) {
   const d = await S.store.get(COL.sundays, mk);
