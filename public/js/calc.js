@@ -514,20 +514,54 @@ export function gerar5x2({ weeks, pessoas, unidades, semFolga = [6], domingo3 = 
   return { folgas, plano, faltas, avisos };
 }
 
-/** Faltas de gente (para conferir depois de ajustes manuais). */
-export function faltas5x2({ weeks, pessoas, unidades, folgas, unavailable = () => '' }) {
+/** Quantos de uma funcao estao trabalhando numa unidade no dia, contando quem foi emprestado e quem veio cobrir. */
+export function naUnidade5x2({ pessoas, unidade, funcao, d, folgas, cobre = {}, unavailable = () => '' }) {
+  return pessoas.filter((p) => p.funcao === funcao && !unavailable(p.id, d) && !(folgas[p.id] || []).includes(d)
+    && ((cobre[p.id] || {})[d] ? cobre[p.id][d] === unidade : p.unidade === unidade)).length;
+}
+
+/** Faltas de gente por unidade/funcao/dia (ja considera as coberturas entre unidades). */
+export function faltas5x2({ weeks, pessoas, unidades, folgas, cobre = {}, unavailable = () => '' }) {
   const out = [];
   for (const [uid, u] of Object.entries(unidades)) {
     const abre = new Set(u.abre || []);
-    for (const f of new Set(pessoas.filter((p) => p.unidade === uid).map((p) => p.funcao))) {
-      const grupo = pessoas.filter((p) => p.unidade === uid && p.funcao === f);
+    for (const f of new Set(pessoas.map((p) => p.funcao))) {
       for (const week of weeks) for (const d of week) {
         const dow = weekday(d); if (!abre.has(dow)) continue;
         const min = ((u.minimos || {})[f] || [])[dow] || 0;
-        const tem = grupo.filter((p) => !unavailable(p.id, d) && !(folgas[p.id] || []).includes(d)).length;
+        if (!min) continue;
+        const tem = naUnidade5x2({ pessoas, unidade: uid, funcao: f, d, folgas, cobre, unavailable });
         if (tem < min) out.push({ date: d, unidade: uid, funcao: f, falta: min - tem });
       }
     }
   }
   return out;
+}
+
+/**
+ * Cobertura entre unidades: onde faltar gente num dia, chama alguem da MESMA funcao de outra unidade que esteja
+ * trabalhando naquele dia e cuja unidade continue no minimo sem ele. Prefere quem cobriu menos vezes no mes.
+ * Retorna cobre: {pessoaId: {data: unidadeDestino}} (so para aquele dia — ninguem muda de unidade).
+ */
+export function cobrir5x2({ weeks, pessoas, unidades, folgas, cobre: inicial = {}, unavailable = () => '' }) {
+  const cobre = JSON.parse(JSON.stringify(inicial || {}));
+  const vezes = {}; for (const [id, m] of Object.entries(cobre)) vezes[id] = Object.keys(m).length;
+  const abre = (u, d) => (unidades[u]?.abre || []).includes(weekday(d));
+  const min = (u, f, d) => ((unidades[u]?.minimos || {})[f] || [])[weekday(d)] || 0;
+  const tem = (u, f, d) => naUnidade5x2({ pessoas, unidade: u, funcao: f, d, folgas, cobre, unavailable });
+  for (const week of weeks) for (const d of week) for (const u of Object.keys(unidades)) {
+    if (!abre(u, d)) continue;
+    for (const f of new Set(pessoas.map((p) => p.funcao))) {
+      while (tem(u, f, d) < min(u, f, d)) {
+        const doadores = pessoas.filter((p) => p.funcao === f && p.unidade !== u && unidades[p.unidade] && abre(p.unidade, d)
+          && !unavailable(p.id, d) && !(folgas[p.id] || []).includes(d) && !(cobre[p.id] || {})[d]
+          && tem(p.unidade, f, d) - 1 >= min(p.unidade, f, d))
+          .sort((a, b) => (vezes[a.id] || 0) - (vezes[b.id] || 0) || (tem(b.unidade, f, d) - min(b.unidade, f, d)) - (tem(a.unidade, f, d) - min(a.unidade, f, d)) || a.nome.localeCompare(b.nome));
+        if (!doadores.length) break;
+        const p = doadores[0];
+        (cobre[p.id] = cobre[p.id] || {})[d] = u; vezes[p.id] = (vezes[p.id] || 0) + 1;
+      }
+    }
+  }
+  return cobre;
 }

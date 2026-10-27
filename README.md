@@ -68,10 +68,12 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   quem está afastado) e *Outro negócio* (cadastro livre de unidades, funções e
   pessoas). Regras: dia em que a loja não abre (segunda) conta como folga; a
   outra folga é um dia fixo da semana e, a cada 3 semanas, vira domingo; nunca
-  folga nos dias marcados (sábado); cada loja é calculada sozinha (nunca puxa
-  gente de outra). A grade mostra F (folga), A (afastado), dias fechados, quantos
+  folga nos dias marcados (sábado); onde a folga deixa uma loja abaixo do
+  mínimo, alguém da mesma função de outra loja (que continua no mínimo) cobre
+  naquele dia, e quem cobriu menos vezes vai primeiro. A grade mostra F (folga), A (afastado), dias fechados, quantos
   estão na loja por função (vermelho = abaixo do mínimo) e folgas/domingos por
-  pessoa; clicar num dia troca trabalho ↔ folga. Dados em rh_sundays
+  pessoa, quem vem cobrir; clicar num dia alterna trabalha → folga → cobre
+  outra loja. Dados em rh_sundays
   (5x2-cfg, 5x2-AAAA-MM, 5x2-outro), sem mudar regras.
 - **Valores da folha** aparecem em reais (R$ 1.234,56), na tela e no e-mail.
 - **Usuários do sistema**: em Configurações → Usuários do sistema, um

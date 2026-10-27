@@ -370,10 +370,13 @@ test('E2E: escala 5x2 — confirmar equipe, gerar sem folga no sabado nem na seg
   const dow = (d) => new Date(d + 'T00:00:00Z').getUTCDay();
   assert.ok(res.length > 0 && res.every((x) => dow(x.d) !== 1), 'segunda fechada');
   assert.ok(res.filter((x) => x.f).every((x) => dow(x.d) !== 6), 'sem folga no sabado');
-  assert.equal(await page.locator('text=mudar alguém de loja').count(), 0);
+  // cobertura entre lojas no dia (Correas tem 1 por funcao: alguem de outra loja cobre a folga)
+  assert.ok(await page.locator('td.cob').count() > 0, 'tem cobertura entre lojas');
+  assert.ok(await page.locator('tr.vem').count() > 0);
   // ajuste manual: clicar numa celula troca trabalho/folga
   const cel = page.locator('td.c:not(.f)').first(); const p = await cel.getAttribute('data-p'), d = await cel.getAttribute('data-d');
   await cel.click(); await page.waitForSelector(`td.c.f[data-p="${p}"][data-d="${d}"]`);
+  await page.click(`td.c[data-p="${p}"][data-d="${d}"]`); await page.waitForSelector(`td.c.cob[data-p="${p}"][data-d="${d}"]`); // folga -> cobre outra loja
   // outro negocio: cadastro livre
   await page.click('[data-act=modo][data-m=outro]'); await page.waitForSelector('[data-act=ajustes]');
   await page.click('.empty [data-act=ajustes]'); await page.waitForSelector('#cad');

@@ -59,3 +59,15 @@ test('afastado nao conta como gente trabalhando', () => {
   const r = C.gerar5x2({ weeks, pessoas, unidades: lojas, semFolga: [6], unavailable: un });
   assert.ok(r.faltas.some((x) => x.unidade === 'bingen' && x.funcao === 'atendimento'));
 });
+
+test('cobertura entre lojas: quem sobra numa loja cobre a folga da outra so naquele dia', () => {
+  const weeks = C.semanasDoMes('2026-12');
+  const pouca = [P('c1', 'correas', 'atendimento'), P('k1', 'coronel', 'atendimento'), P('k2', 'coronel', 'atendimento'), P('k3', 'coronel', 'atendimento'), P('k4', 'coronel', 'atendimento')];
+  const un = { correas: { nome: 'Correas', abre: FECHA_SEG, minimos: { atendimento: [1, 0, 1, 1, 1, 1, 1] } }, coronel: { nome: 'Coronel', abre: FECHA_SEG, minimos: { atendimento: [1, 0, 2, 2, 2, 2, 2] } } };
+  const r = C.gerar5x2({ weeks, pessoas: pouca, unidades: un, semFolga: [6] });
+  assert.ok(C.faltas5x2({ weeks, pessoas: pouca, unidades: un, folgas: r.folgas }).length > 0, 'sem cobertura a Correas fica descoberta');
+  const cobre = C.cobrir5x2({ weeks, pessoas: pouca, unidades: un, folgas: r.folgas });
+  assert.deepEqual(C.faltas5x2({ weeks, pessoas: pouca, unidades: un, folgas: r.folgas, cobre }), []);
+  for (const [id, m] of Object.entries(cobre)) { assert.ok(id.startsWith('k')); for (const [d, u] of Object.entries(m)) { assert.equal(u, 'correas'); assert.ok(!r.folgas[id].includes(d)); } }
+  assert.equal(pouca.find((p) => p.id === 'k1').unidade, 'coronel', 'ninguem muda de loja no cadastro');
+});
