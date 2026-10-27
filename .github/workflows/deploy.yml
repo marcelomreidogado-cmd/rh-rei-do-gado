@@ -7,7 +7,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -18,15 +18,29 @@ jobs:
 
   deploy:
     needs: test
-    runs-on: ubuntu-latest
+    # Ubuntu fixo: o ubuntu-latest passou a migrar para o Ubuntu 26 em out/2026
+    runs-on: ubuntu-24.04
     permissions:
-      contents: read
+      contents: write # para anotar o erro no commit quando a publicacao falhar
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Deploy to Firebase Hosting
+        id: deploy
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
           projectId: motoboy-ddefa
           channelId: live
+      - name: Registrar o erro no commit (para diagnostico)
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          { echo "Falha na publicacao (Firebase Hosting)."; echo; echo '```';
+            ( tail -n 60 firebase-debug.log 2>/dev/null || echo "sem firebase-debug.log" ) | sed -E 's/(private_key[^:]*:).*/\1 ***/';
+            echo '```'; } > erro.md
+          gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" -F body=@erro.md || true
