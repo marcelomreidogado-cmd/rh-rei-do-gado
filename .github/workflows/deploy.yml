@@ -35,6 +35,9 @@ jobs:
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
           projectId: motoboy-ddefa
           channelId: live
+          # versao fixa: o firebase-tools 15.34 passou a exigir a permissao serviceusage.services.get,
+          # que a conta de servico do deploy nao tem (erro 403 em 27/10/2026)
+          firebaseToolsVersion: '13.35.1'
       - name: Registrar o erro no commit (para diagnostico)
         if: failure()
         env:
