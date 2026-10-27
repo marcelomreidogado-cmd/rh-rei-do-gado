@@ -7,12 +7,13 @@ import { esc, $, $$, toast } from './ui.js';
 import * as Folha from './views/folha.js';
 import * as Contra from './views/contracheques.js';
 import * as Escala from './views/escala.js';
+import * as Escala5x2 from './views/escala5x2.js';
 import * as Func from './views/funcionarios.js';
 import * as Ferias from './views/ferias.js';
 import * as Ajustes from './views/ajustes.js';
 
 const DEMO = new URLSearchParams(location.search).has('demo') && ['localhost', '127.0.0.1'].includes(location.hostname);
-const ALL_VIEWS = [['folha', 'Folha de pagamento', true], ['contracheques', 'Contracheques', true], ['escala', 'Escala de domingo', true], ['ferias', 'Férias', false], ['funcionarios', 'Funcionários', false], ['config', 'Configurações', false], ['historico', 'Histórico', false]];
+const ALL_VIEWS = [['folha', 'Folha de pagamento', true], ['contracheques', 'Contracheques', true], ['escala', 'Escala de domingo', true], ['escala5x2', 'Escala 5x2 (simulação)', true], ['ferias', 'Férias', false], ['funcionarios', 'Funcionários', false], ['config', 'Configurações', false], ['historico', 'Histórico', false]];
 let VIEWS = ALL_VIEWS;
 const IDLE_MS = 30 * 60 * 1000;
 
@@ -153,6 +154,7 @@ async function route() {
     if (view === 'folha') Folha.render(main, month);
     else if (view === 'contracheques') await Contra.render(main, month);
     else if (view === 'escala') await Escala.render(main, month);
+    else if (view === 'escala5x2') await Escala5x2.render(main, month);
     else if (view === 'ferias') Ferias.render(main);
     else if (view === 'funcionarios') Func.render(main);
     else if (view === 'config') Ajustes.renderConfig(main, auth);

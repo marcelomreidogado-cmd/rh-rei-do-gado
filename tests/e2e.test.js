@@ -8,7 +8,8 @@ import { chromium } from 'playwright-core';
 import { startServer } from './e2e/server.js';
 
 const SEED = process.env.SEED_JSON, PDFS = process.env.PAYSLIP_DIR, FERIAS_IMG = process.env.FERIAS_IMG;
-const CHROME = ['/opt/pw-browsers/chromium-1194/chrome-linux/chrome', process.env.CHROME_BIN].find((p) => p && fs.existsSync(p));
+const pwChrome = () => { try { for (const d of fs.readdirSync('/opt/pw-browsers').filter((x) => /^chromium-\d+$/.test(x)).sort().reverse()) for (const s of ['chrome-linux64/chrome', 'chrome-linux/chrome']) { const p = `/opt/pw-browsers/${d}/${s}`; if (fs.existsSync(p)) return p; } } catch (e) { /* sem pasta */ } return null; };
+const CHROME = [process.env.CHROME_BIN, pwChrome()].find((p) => p && fs.existsSync(p));
 const skip = !SEED || !fs.existsSync(SEED) || !CHROME;
 
 let srv, base, browser, ctx, page;
@@ -340,7 +341,7 @@ test('E2E: usuario so de Escala e Ferias ve apenas essas abas e nao carrega dado
   await page.fill('#lid', 'escala1'); await page.fill('#lpw', 'senha123'); await page.click('#lgo');
   await page.waitForSelector('#nav');
   const abas = await page.$$eval('#nav a', (as) => as.map((a) => a.dataset.v));
-  assert.deepEqual(abas, ['escala', 'ferias']);
+  assert.deepEqual(abas, ['escala', 'escala5x2', 'ferias']);
   await page.waitForSelector('.sundays');
   assert.equal(await page.locator('[data-act=team]').count(), 0);
   const sens = await page.evaluate(() => ({ cpf: window.__D.S.employees.some((e) => e.cpf || e.telefone || e.salarioBase), entries: window.__D.S.entries.size, n: window.__D.S.employees.length }));
@@ -353,6 +354,19 @@ test('E2E: usuario so de Escala e Ferias ve apenas essas abas e nao carrega dado
   await page.click('#logout'); await page.waitForSelector('#lf');
   await page.fill('#lid', 'admin'); await page.fill('#lpw', 'admin'); await page.click('#lgo'); await page.waitForSelector('#nav');
   assert.ok((await page.$$eval('#nav a', (as) => as.length)) >= 7);
+});
+
+test('E2E: escala 5x2 (simulacao) sugere 2 folgas por semana e deixa ajustar', { skip, timeout: 90000 }, async () => {
+  await page.click('#nav a[data-v=escala5x2]'); await page.click('.mchip[data-m="2026-12"]'); await page.waitForSelector('.cards5x2');
+  assert.match(await txt('.cards5x2'), /Coronel[\s\S]*Seg a Sex 2[\s\S]*Seg a Sex 1/);
+  await page.click('[data-act=suggest]'); await page.waitForSelector('table.g5x2');
+  // cada linha de funcionario disponivel: 2 folgas em cada semana completa
+  const linhas = await page.$$eval('table.g5x2 tbody tr:not(.tot)', (trs) => trs.map((tr) => [...tr.querySelectorAll('td.cel')].map((td) => td.innerText)));
+  for (const l of linhas) { if (l.includes('A')) continue; for (let w = 0; w < l.length; w += 7) assert.equal(l.slice(w, w + 7).filter((x) => x === 'F').length, 2, JSON.stringify(l)); }
+  const c = page.locator('td.cel[data-e]').first(); const antes = await c.innerText(); await c.click();
+  await page.waitForFunction((a) => document.querySelector('td.cel[data-e]').innerText !== a, antes);
+  // escala de domingo atual continua separada
+  await page.click('#nav a[data-v=escala]'); await page.waitForSelector('.sundays');
 });
 
 test('E2E: ferias — alertas, ajuste do periodo, registro e escala de domingo', { skip, timeout: 90000 }, async () => {

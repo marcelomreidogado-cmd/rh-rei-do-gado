@@ -438,3 +438,100 @@ export function parseRelatorioFerias(text, { hoje = new Date().toISOString().sli
   }
   return out;
 }
+
+// ---------- escala 5x2 (EC 141/2026 — fim da 6x1) — SIMULACAO ----------
+// Cada funcionario trabalha 5 dias e folga 2 por semana (seg a dom). Pela lei do comercio (Lei 10.101/2000,
+// art. 6º) a folga precisa cair num domingo pelo menos 1 vez a cada 3 semanas.
+export const DIAS_SEM = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+export const weekday = (iso) => new Date(iso + 'T00:00:00Z').getUTCDay(); // 0 = domingo
+export const tipoDia = (iso) => { const w = weekday(iso); return w === 0 ? 'domingo' : w === 6 ? 'sabado' : 'semana'; };
+export const TIPOS_DIA = { semana: 'Seg a Sex', sabado: 'Sábado', domingo: 'Domingo' };
+/** Semanas (segunda a domingo) que cobrem o mes inteiro: [[7 datas], ...] */
+export function semanasDoMes(mk) {
+  let d = monthStart(mk);
+  d = isoAddDays(d, -((weekday(d) + 6) % 7)); // volta ate a segunda
+  const out = [];
+  while (d <= monthEnd(mk)) { out.push(Array.from({ length: 7 }, (_, i) => isoAddDays(d, i))); d = isoAddDays(d, 7); }
+  return out;
+}
+export const DEFAULT_MIN_5X2 = {
+  bingen: { semana: { atendimento: 1, manipulacao: 1 }, sabado: { atendimento: 1, manipulacao: 1 }, domingo: { atendimento: 1, manipulacao: 1 } },
+  correas: { semana: { atendimento: 1, manipulacao: 1 }, sabado: { atendimento: 1, manipulacao: 1 }, domingo: { atendimento: 1, manipulacao: 1 } },
+  coronel: { semana: { atendimento: 2, manipulacao: 1 }, sabado: { atendimento: 2, manipulacao: 1 }, domingo: { atendimento: 1, manipulacao: 1 } },
+};
+const minOf = (minimos, sid, iso, cat) => (((minimos[sid] || {})[tipoDia(iso)] || {})[cat]) || 0;
+/** Quantas pessoas de uma funcao a loja precisa, no minimo, para cobrir a semana em 5x2. */
+export function equipeMinima5x2(minimos, sid, cat) {
+  const m = (minimos[sid] || {});
+  const dia = (t) => ((m[t] || {})[cat]) || 0;
+  const soma = dia('semana') * 5 + dia('sabado') + dia('domingo');
+  return Math.max(dia('semana'), dia('sabado'), dia('domingo'), Math.ceil(soma / 5));
+}
+
+/**
+ * Sugere as folgas 5x2: 2 por semana para cada um, nos dias em que a loja tem mais sobra de gente da mesma
+ * funcao; folgas juntas quando possivel; domingo de folga pelo menos 1 vez a cada 3 semanas (se domingo3).
+ * Retorna { folgas: {empId: [datas]}, deficits: [{date, store, cat, falta}] }.
+ */
+export function sugerir5x2({ weeks, employees, minimos, unavailable = () => false, domingo3 = true, offset = 0 }) {
+  const staff = employees.filter(inEscala).sort((a, b) => a.nome.localeCompare(b.nome));
+  const folgas = Object.fromEntries(staff.map((e) => [e.id, []]));
+  const deficits = [];
+  for (const s of STORES) {
+    const team = staff.filter((e) => workStore(e) === s.id);
+    const semDom = Object.fromEntries(team.map((e, i) => [e.id, (i + offset) % 3])); // domingos seguidos trabalhados (escalonado)
+    weeks.forEach((week, w) => {
+      const sobra = {};
+      for (const d of week) for (const c of ['atendimento', 'manipulacao']) sobra[d + c] = team.filter((e) => e.categoria === c && !unavailable(e.id, d)).length - minOf(minimos, s.id, d, c);
+      const dom = week[6];
+      const ordem = team.map((e, i) => ({ e, i })).sort((a, b) => (semDom[b.e.id] >= 2) - (semDom[a.e.id] >= 2) || (a.i + w) % team.length - (b.i + w) % team.length);
+      for (const { e, i } of ordem) {
+        const fora = week.filter((d) => unavailable(e.id, d)).length;
+        const quer = Math.max(0, 2 - fora);
+        const escolhidos = [];
+        const pode = (d) => !unavailable(e.id, d) && !escolhidos.includes(d);
+        if (quer && domingo3 && semDom[e.id] >= 2 && pode(dom)) escolhidos.push(dom);
+        while (escolhidos.length < quer) {
+          const cands = week.filter(pode);
+          if (!cands.length) break;
+          const nota = (d) => {
+            const k = week.indexOf(d);
+            const junto = escolhidos.some((x) => Math.abs(week.indexOf(x) - k) === 1) ? 3 : 0;
+            const rot = ((k - (i + offset + w)) % 7 + 7) % 7;
+            return sobra[d + e.categoria] * 10 + junto - rot * 0.01;
+          };
+          escolhidos.push(cands.sort((a, b) => nota(b) - nota(a))[0]);
+        }
+        for (const d of escolhidos) sobra[d + e.categoria]--;
+        folgas[e.id].push(...escolhidos);
+        semDom[e.id] = escolhidos.includes(dom) || unavailable(e.id, dom) ? 0 : semDom[e.id] + 1;
+      }
+      for (const d of week) for (const c of ['atendimento', 'manipulacao']) if (sobra[d + c] < 0) deficits.push({ date: d, store: s.id, cat: c, falta: -sobra[d + c] });
+    });
+  }
+  for (const id of Object.keys(folgas)) folgas[id].sort();
+  return { folgas, deficits };
+}
+
+/** Confere uma escala 5x2 (para alertas na tela). */
+export function conferir5x2({ weeks, employees, minimos, folgas, unavailable = () => false, domingo3 = true }) {
+  const staff = employees.filter(inEscala);
+  const deficits = [], avisos = [];
+  for (const s of STORES) for (const week of weeks) for (const d of week) for (const c of ['atendimento', 'manipulacao']) {
+    const tem = staff.filter((e) => workStore(e) === s.id && e.categoria === c && !unavailable(e.id, d) && !(folgas[e.id] || []).includes(d)).length;
+    const min = minOf(minimos, s.id, d, c);
+    if (tem < min) deficits.push({ date: d, store: s.id, cat: c, falta: min - tem, tem, min });
+  }
+  for (const e of staff) {
+    let semDom = 0;
+    weeks.forEach((week) => {
+      const off = week.filter((d) => (folgas[e.id] || []).includes(d) || unavailable(e.id, d)).length;
+      if (off < 2) avisos.push({ empId: e.id, semana: week[0], tipo: 'poucas', texto: `${off} folga(s) na semana de ${fmtDM(week[0])}` });
+      if (off > 2 && week.some((d) => (folgas[e.id] || []).includes(d))) avisos.push({ empId: e.id, semana: week[0], tipo: 'muitas', texto: `${off} dias fora na semana de ${fmtDM(week[0])}` });
+      const dom = week[6];
+      semDom = (folgas[e.id] || []).includes(dom) || unavailable(e.id, dom) ? 0 : semDom + 1;
+      if (domingo3 && semDom >= 3) { avisos.push({ empId: e.id, semana: week[0], tipo: 'domingo', texto: `3 domingos seguidos trabalhando (até ${fmtDM(dom)})` }); semDom = 0; }
+    });
+  }
+  return { deficits, avisos };
+}

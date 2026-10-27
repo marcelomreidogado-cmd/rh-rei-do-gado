@@ -10,7 +10,7 @@ export const COL = {
 
 // Perfis de acesso: 'total' (tudo) ou 'escala_ferias' (so as abas Escala de domingo e Ferias)
 export const PERFIS = { total: 'Acesso total', escala_ferias: 'Só Escala e Férias' };
-export const PERFIL_VIEWS = { escala_ferias: ['escala', 'ferias'] };
+export const PERFIL_VIEWS = { escala_ferias: ['escala', 'escala5x2', 'ferias'] };
 const EQUIPE_FIELDS = ['nome', 'loja', 'lojaTrabalho', 'categoria', 'funcao', 'admissao', 'entrada', 'ativo', 'demissao'];
 const FERIAS_FIELDS = ['ferias', 'feriasVenc', 'feriasVencOrigem', 'feriasVencEm'];
 const pick = (o, keys) => Object.fromEntries(keys.map((k) => [k, o[k] ?? null]));
@@ -311,6 +311,25 @@ export async function patchPayslip(mk, empId, patch) {
 export async function payslipImage(mk, empId) { const d = await S.store.get(COL.payslipImgs, C.entryId(mk, empId)); return d?.img || null; }
 
 // ---------- escala de domingo ----------
+// ---------- escala 5x2 (simulacao) — fica em rh_sundays (ids "5x2-...") para os dois perfis poderem usar ----------
+export async function load5x2(mk) {
+  const [doc, cfg] = await Promise.all([S.store.get(COL.sundays, `5x2-${mk}`), S.store.get(COL.sundays, '5x2-config')]);
+  const minimos = {};
+  for (const st of C.STORES) {
+    minimos[st.id] = {};
+    for (const t of Object.keys(C.TIPOS_DIA)) minimos[st.id][t] = { ...C.DEFAULT_MIN_5X2[st.id][t], ...((cfg?.minimos?.[st.id] || {})[t] || {}) };
+  }
+  return { folgas: doc?.folgas || {}, existe: !!doc, minimos, domingo3: cfg?.domingo3 !== false };
+}
+export async function save5x2(mk, folgas) {
+  await S.store.set(COL.sundays, `5x2-${mk}`, { folgas, updatedAt: nowIso(), updatedBy: S.user?.id || '' });
+}
+export async function clear5x2(mk) { await S.store.del(COL.sundays, `5x2-${mk}`); await log('escala_5x2_limpa', mk); }
+export async function save5x2Config(minimos, domingo3) {
+  await S.store.set(COL.sundays, '5x2-config', { minimos, domingo3, updatedAt: nowIso(), updatedBy: S.user?.id || '' });
+  await log('escala_5x2_minimos', JSON.stringify(minimos));
+}
+
 export async function loadSundays(mk) {
   const d = await S.store.get(COL.sundays, mk);
   S.sundays.set(mk, d || { id: mk, assignments: {} });
