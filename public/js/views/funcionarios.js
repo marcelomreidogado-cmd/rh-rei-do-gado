@@ -39,7 +39,7 @@ function openForm(e) {
       <label>Loja do registro (folha/imposto)<select class="in" id="f_loja">${C.STORES.map((s) => `<option value="${s.id}" ${n.loja === s.id ? 'selected' : ''}>${s.nome}</option>`).join('')}</select></label>
       <label>Trabalha em (escala)<select class="in" id="f_lt">${C.WORK_PLACES.map((w) => `<option value="${w.id}" ${C.workStore(n) === w.id ? 'selected' : ''}>${w.nome}</option>`).join('')}</select></label>
       <label>Função<input class="in" id="f_funcao" value="${esc(n.funcao || '')}"></label>
-      <label>Escala de domingo<select class="in" id="f_cat">${Object.entries(C.CATEGORIAS).map(([k, v]) => `<option value="${k}" ${n.categoria === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+      <label>Função nas escalas<select class="in" id="f_cat">${Object.entries(C.CATEGORIAS).map(([k, v]) => `<option value="${k}" ${n.categoria === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
       <label>Salário base (R$)<input class="in" id="f_sal" inputmode="decimal" value="${C.brl(n.salarioBase, false)}"></label>
       <label>Entrada<input class="in" type="date" id="f_ent" value="${n.entrada || ''}"></label>
       <label>Admissão (registro)<input class="in" type="date" id="f_adm" value="${n.admissao || ''}"></label>

@@ -71,3 +71,29 @@ test('cobertura entre lojas: quem sobra numa loja cobre a folga da outra so naqu
   for (const [id, m] of Object.entries(cobre)) { assert.ok(id.startsWith('k')); for (const [d, u] of Object.entries(m)) { assert.equal(u, 'correas'); assert.ok(!r.folgas[id].includes(d)); } }
   assert.equal(pouca.find((p) => p.id === 'k1').unidade, 'coronel', 'ninguem muda de loja no cadastro');
 });
+
+test('hibrido: cobre a funcao que estiver faltando (na propria loja e em outra)', () => {
+  assert.deepEqual(C.alocar({ atendimento: 1, manipulacao: 1 }, [{ id: 'a', funcoes: ['atendimento'] }, { id: 'j', funcoes: ['atendimento', 'manipulacao'] }]).papel, { a: 'atendimento', j: 'manipulacao' });
+  const weeks = C.semanasDoMes('2026-12');
+  const H = (id, unidade) => ({ id, nome: id, unidade, funcao: 'atendimento', funcoes: ['atendimento', 'manipulacao'] });
+  // Bingen: 1 atendente, 1 manipulador e o hibrido -> folgas de qualquer um sao cobertas pelo hibrido
+  const gente = [P('ba', 'bingen', 'atendimento'), P('bm', 'bingen', 'manipulacao'), H('jef', 'bingen')];
+  const un = { bingen: { nome: 'Bingen', abre: FECHA_SEG, minimos: { atendimento: [1, 0, 1, 1, 1, 1, 1], manipulacao: [1, 0, 1, 1, 1, 1, 1] } } };
+  const r = C.gerar5x2({ weeks, pessoas: gente, unidades: un, semFolga: [6] });
+  for (const p of gente) for (const w of weeks) assert.equal(w.filter((d) => r.folgas[p.id].includes(d)).length, 1, `${p.id}: 1 folga além da segunda`);
+  // so falta quando duas pessoas folgam no mesmo dia; hibrido nunca folga junto com os dois fixos
+  const dia = weeks.flat().find((d) => r.folgas.bm.includes(d) && !r.folgas.jef.includes(d));
+  assert.ok(dia, 'existe dia de folga do manipulador com o hibrido trabalhando');
+  assert.equal(C.naUnidade5x2({ pessoas: gente, unidade: 'bingen', unidades: un, funcao: 'manipulacao', d: dia, folgas: r.folgas }), 1, 'hibrido vira manipulador no dia');
+  // hibrido de outra loja cobre manipulacao
+  // (na Coronel so ele faz manipulacao, mas la o minimo de manipulacao e zero nesse teste)
+  const dois = [P('ca', 'correas', 'atendimento'), P('cm', 'correas', 'manipulacao'), P('ka', 'coronel', 'atendimento'), P('kb', 'coronel', 'atendimento'), H('jef', 'coronel')];
+  const u2 = { correas: { nome: 'Correas', abre: FECHA_SEG, minimos: { atendimento: [1, 0, 1, 1, 1, 1, 1], manipulacao: [1, 0, 1, 1, 1, 1, 1] } }, coronel: { nome: 'Coronel', abre: FECHA_SEG, minimos: { atendimento: [1, 0, 1, 1, 1, 1, 1], manipulacao: [0, 0, 0, 0, 0, 0, 0] } } };
+  const folgas = { cm: ['2026-12-02'] };
+  const cobre = C.cobrir5x2({ weeks: [weeks[0]], pessoas: dois, unidades: u2, folgas });
+  assert.equal(cobre.jef?.['2026-12-02'], 'correas', 'o hibrido vai fazer manipulacao na Correas');
+  assert.deepEqual(C.faltas5x2({ weeks: [weeks[0]], pessoas: dois, unidades: u2, folgas, cobre }), []);
+  // com um manipulador fixo sobrando, ele vai antes e o hibrido fica de reserva na loja dele
+  const tres = [...dois, P('km', 'coronel', 'manipulacao')];
+  assert.equal(C.cobrir5x2({ weeks: [weeks[0]], pessoas: tres, unidades: u2, folgas }).km?.['2026-12-02'], 'correas');
+});

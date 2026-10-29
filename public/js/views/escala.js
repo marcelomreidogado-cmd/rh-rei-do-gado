@@ -23,7 +23,7 @@ const short = (n) => { const t = n.split(/\s+/); return `${t[0]} ${t[1] && !['DA
 const cap = (s) => s.charAt(0) + s.slice(1).toLowerCase();
 
 const nm = (id) => { const e = D.emp(id); if (!e) return '?'; const [a, b] = short(e.nome).split(' '); return cap(a) + (b ? ' ' + b.toUpperCase() : ''); };
-const catNames = (ids, cat) => ids.filter((id) => D.emp(id)?.categoria === cat).map(nm);
+const ehHib = (id) => D.emp(id)?.categoria === C.HIBRIDO;
 
 /** Situacao de uma loja num domingo: quem folga, quem cobre (de outra loja), quem esta afastado e quem trabalha. */
 function dayInfo(d, sid) {
@@ -32,13 +32,15 @@ function dayInfo(d, sid) {
   const cobre = ids.filter((id) => C.workStore(D.emp(id)) !== sid);
   const afast = S.employees.filter((e) => C.inEscala(e) && C.workStore(e) === sid && awayReason(e.id, d) && !ids.includes(e.id)).map((e) => ({ id: e.id, why: awayReason(e.id, d) }));
   const foraCobrindo = Object.entries(data.assignments[d] || {}).filter(([o]) => o !== sid).flatMap(([o, l]) => l.filter((id) => C.workStore(D.emp(id)) === sid).map((id) => ({ id, para: o })));
-  return { ids, folga, cobre, afast, foraCobrindo };
+  // quem trabalha separado por funcao (o hibrido entra onde estiver faltando gente)
+  const papeis = C.papeisDoDia(data.assignments[d], sid, S.employees, S.config.required);
+  return { ids, folga, cobre, afast, foraCobrindo, papeis };
 }
 const lista = (ids) => ids.map(nm).join(', ');
 /** O que aparece no quadro de cada loja/domingo: so quem TRABALHA (atendimento, manipulacao) e quem FOLGA. */
 const blocos = (x) => [
-  ['Atendimento', x.ids.filter((id) => D.emp(id)?.categoria === 'atendimento'), '#15803d'],
-  ['Manipulação', x.ids.filter((id) => D.emp(id)?.categoria === 'manipulacao'), '#15803d'],
+  ['Atendimento', x.papeis.atendimento, '#15803d'],
+  ['Manipulação', x.papeis.manipulacao, '#15803d'],
   ['Folga', x.folga, '#b91c1c'],
 ];
 
@@ -73,7 +75,7 @@ export async function render(el, month) {
       const ok = chk.every((c) => c.falta === 0);
       const pessoa = (id, cls, title) => `<span class="person ${cls}" data-act="edit" data-d="${d}" data-s="${s.id}" title="${esc(title)}">${esc(nm(id))}</span>`;
       return `<div class="sun-store ${has ? (ok ? 'ok' : 'short') : ''}"><header><b>${esc(s.nome)}</b><button class="btn sm" data-act="edit" data-d="${d}" data-s="${s.id}">✏️ Editar</button></header>
-        ${CATS.map((cat) => { const c = chk.find((y) => y.cat === cat); const ids = x.ids.filter((id) => D.emp(id)?.categoria === cat); return `<div class="cat"><span class="catname">${C.CATEGORIAS[cat]} — trabalha <em class="${c.falta ? 'lack' : 'fine'}">${c.tem} (mín. ${c.precisa})</em></span>${ids.map((id) => pessoa(id, '', D.emp(id).nome)).join('') || '<span class="muted">—</span>'}</div>`; }).join('')}
+        ${CATS.map((cat) => { const c = chk.find((y) => y.cat === cat); const ids = x.papeis[cat]; return `<div class="cat"><span class="catname">${C.CATEGORIAS[cat]} — trabalha <em class="${c.falta ? 'lack' : 'fine'}">${c.tem} (mín. ${c.precisa})</em></span>${ids.map((id) => pessoa(id, ehHib(id) ? 'hib' : '', D.emp(id).nome + (ehHib(id) ? ` — híbrido, neste domingo em ${C.CATEGORIAS[cat].toLowerCase()}` : ''))).join('') || '<span class="muted">—</span>'}</div>`; }).join('')}
         <div class="cat"><span class="catname">Folga</span>${x.folga.map((id) => pessoa(id, 'folga', D.emp(id).nome + ' — folga')).join('') || '<span class="muted">—</span>'}</div>
         ${chk.some((c) => c.falta) ? `<p class="lack">Abaixo do mínimo: ${chk.filter((c) => c.falta).map((c) => `${c.falta} ${C.CATEGORIAS[c.cat].toLowerCase()}`).join(', ')}</p>` : ''}</div>`;
     }).join('')}</div></article>`).join('')}</div>
@@ -209,14 +211,17 @@ function openEdit(d, storeId) {
   const elsewhere = {};
   for (const [sid, ids] of Object.entries(data.assignments[d] || {})) if (sid !== storeId) for (const id of ids) elsewhere[id] = C.storeById(sid).nome;
   const list = (cat, home) => S.employees.filter((e) => C.inEscala(e) && e.categoria === cat && (home ? C.workStore(e) === storeId : C.workStore(e) !== storeId));
+  // coluna do hibrido so aparece se houver alguem hibrido na escala
+  const cols = S.employees.some((e) => C.inEscala(e) && e.categoria === C.HIBRIDO) ? [...CATS, C.HIBRIDO] : CATS;
+  const minTxt = (cat) => (cat === C.HIBRIDO ? 'entra onde faltar' : `mínimo ${S.config.required[storeId]?.[cat] ?? 0}`);
   const item = (e) => { const why = awayReason(e.id, d) || (elsewhere[e.id] ? `escalado em ${elsewhere[e.id]}` : ''); return `<label class="${why ? 'dis' : ''}"><input type="checkbox" value="${esc(e.id)}" ${cur.has(e.id) ? 'checked' : ''} ${why && !cur.has(e.id) ? 'disabled' : ''}> ${esc(e.nome)} ${why ? `<small class="lack">(${esc(why)})</small>` : ''}${C.workStore(e) !== storeId ? `<small> · ${esc(C.workPlaceName(C.workStore(e)))}</small>` : ''}</label>`; };
   openModal({
     title: `${st.nome} — domingo ${C.fmtDM(d)}`, wide: true,
-    body: `<div class="grid2 top">${CATS.map((cat) => `<div><h4>${C.CATEGORIAS[cat]} <small>(mínimo ${S.config.required[storeId]?.[cat] ?? 0})</small></h4><div class="checklist">${list(cat, true).map(item).join('') || '<p class="muted">Ninguém cadastrado.</p>'}</div>
+    body: `<div class="${cols.length > 2 ? 'grid3' : 'grid2'} top">${cols.map((cat) => `<div><h4>${cat === C.HIBRIDO ? 'Híbrido' : C.CATEGORIAS[cat]} <small>(${minTxt(cat)})</small></h4><div class="checklist">${list(cat, true).map(item).join('') || '<p class="muted">Ninguém cadastrado.</p>'}</div>
       <details ${list(cat, false).some((e) => cur.has(e.id)) ? 'open' : ''}><summary>Cobertura de outras lojas</summary><div class="checklist">${list(cat, false).map(item).join('')}</div></details></div>`).join('')}</div>
       <p class="muted"><b>Marcado = trabalha neste domingo · desmarcado = folga.</b> Para alguém de outra loja cobrir, abra “Cobertura de outras lojas” (tire a pessoa da loja dela primeiro). Afastados aparecem bloqueados.</p>`,
     actions: [{ label: 'Cancelar' }, { label: 'Salvar', kind: 'primary', onClick: async (m) => {
-      const next = { ...data.assignments, [d]: { ...(data.assignments[d] || {}), [storeId]: m.$$('input:checked').map((i) => i.value) } };
+      const next = { ...data.assignments, [d]: { ...(data.assignments[d] || {}), [storeId]: [...new Set(m.$$('input:checked').map((i) => i.value))] } };
       await D.saveSundays(mk, next); render(root, mk);
     } }],
   });

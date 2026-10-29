@@ -256,3 +256,18 @@ test('faltas seguidas viram faixa de datas', () => {
   assert.equal(C.faixasDatas(['2026-10-10']), '10/10');
   assert.equal(C.faixasDatas([]), '');
 });
+
+test('escala de domingo: hibrido conta como atendimento ou manipulacao e cobre a folga de qualquer um', () => {
+  const emps = [
+    { id: 'a', nome: 'A', loja: 'bingen', categoria: 'atendimento' }, { id: 'm', nome: 'M', loja: 'bingen', categoria: 'manipulacao' },
+    { id: 'j', nome: 'J', loja: 'bingen', categoria: 'hibrido' },
+  ];
+  const req = { bingen: { atendimento: 1, manipulacao: 1 }, correas: { atendimento: 0, manipulacao: 0 }, coronel: { atendimento: 0, manipulacao: 0 } };
+  assert.ok(C.inEscala(emps[2]));
+  const p = C.papeisDoDia({ bingen: ['a', 'j'] }, 'bingen', emps, req);
+  assert.deepEqual([p.atendimento, p.manipulacao], [['a'], ['j']]);
+  assert.ok(C.checkDay({ bingen: ['m', 'j'] }, 'bingen', emps, req).every((x) => !x.falta));
+  const { shortages, folgas } = C.suggestSchedule({ sundays: ['2026-11-01', '2026-11-08', '2026-11-15', '2026-11-22', '2026-11-29'], employees: emps, required: req });
+  assert.deepEqual(shortages, []);
+  assert.equal(Object.values(folgas).flat().length, 3);
+});

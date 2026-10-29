@@ -8,7 +8,28 @@ export const STORES = [
 ];
 export const storeById = (id) => STORES.find((s) => s.id === id);
 
-export const CATEGORIAS = { atendimento: 'Atendimento', manipulacao: 'Manipulação', nenhum: 'Não trabalha domingo' };
+export const CATEGORIAS = { atendimento: 'Atendimento', manipulacao: 'Manipulação', hibrido: 'Híbrido (atendimento e manipulação)', nenhum: 'Não trabalha domingo' };
+export const HIBRIDO = 'hibrido';
+/** Funcoes que a pessoa pode fazer no dia (hibrido = atendimento ou manipulacao). */
+export const funcoesDe = (e) => (!e ? [] : e.categoria === HIBRIDO ? ['atendimento', 'manipulacao'] : [e.categoria]);
+/**
+ * Distribui as pessoas de um dia entre as funcoes: quem so faz uma funcao fica nela; o hibrido vai para a funcao
+ * em que estiver faltando mais gente (empate: a primeira da lista dele).
+ * minimos: {funcao: n}; pessoas: [{id, funcoes:[...]}]. Retorna { papel:{id:funcao}, tem:{funcao:n}, falta:{funcao:n} }.
+ */
+export function alocar(minimos, pessoas) {
+  const tem = {}, papel = {};
+  for (const f of Object.keys(minimos || {})) tem[f] = 0;
+  const fixos = pessoas.filter((p) => p.funcoes.length === 1), flex = pessoas.filter((p) => p.funcoes.length > 1);
+  for (const p of fixos) { papel[p.id] = p.funcoes[0]; tem[p.funcoes[0]] = (tem[p.funcoes[0]] || 0) + 1; }
+  for (const p of flex) {
+    const f = [...p.funcoes].sort((a, b) => (((minimos || {})[b] || 0) - (tem[b] || 0)) - (((minimos || {})[a] || 0) - (tem[a] || 0)))[0];
+    papel[p.id] = f; tem[f] = (tem[f] || 0) + 1;
+  }
+  const falta = {};
+  for (const [f, n] of Object.entries(minimos || {})) falta[f] = Math.max(0, n - (tem[f] || 0));
+  return { papel, tem, falta };
+}
 
 // Onde a pessoa trabalha de verdade (pode ser diferente da loja do registro/imposto, usada na folha).
 export const ADM = 'adm';
@@ -18,7 +39,7 @@ const FUNCAO_ADM = /financ|administ|escrit|contab|\bRH\b|recursos humanos/i;
 export const workStore = (e) => (e ? e.lojaTrabalho || (FUNCAO_ADM.test(e.funcao || '') ? ADM : e.loja) : null);
 export const workPlaceName = (id) => WORK_PLACES.find((w) => w.id === id)?.nome || '';
 /** Entra na escala de domingo? (ativo, trabalha em loja e tem funcao de atendimento/manipulacao) */
-export const inEscala = (e) => !!e && e.ativo !== false && workStore(e) !== ADM && ['atendimento', 'manipulacao'].includes(e.categoria);
+export const inEscala = (e) => !!e && e.ativo !== false && workStore(e) !== ADM && ['atendimento', 'manipulacao', HIBRIDO].includes(e.categoria);
 
 // Campos que se repetem para os meses seguintes quando alterados
 export const RECURRING = ['salario', 'premio', 'adiantamento', 'assiduidade'];
@@ -268,17 +289,25 @@ export function bestEmployeeMatch(name, employees, storeId) {
 // ---------- escala de domingo ----------
 export const DEFAULT_REQUIRED = { bingen: { atendimento: 1, manipulacao: 1 }, correas: { atendimento: 1, manipulacao: 1 }, coronel: { atendimento: 1, manipulacao: 1 } };
 
-export function countAssigned(assign, storeId, emps) {
+const reqOf = (required, storeId) => ({ atendimento: 0, manipulacao: 0, ...((required && required[storeId]) || {}) });
+/** Quem trabalha numa loja no domingo, separado por funcao (hibrido entra onde falta). */
+export function papeisDoDia(assign, storeId, emps, required) {
   const ids = (assign && assign[storeId]) || [];
-  const c = { atendimento: 0, manipulacao: 0, nenhum: 0 };
-  for (const id of ids) { const e = emps.find((x) => x.id === id); c[e ? e.categoria || 'nenhum' : 'nenhum']++; }
-  return c;
+  const pessoas = ids.map((id) => emps.find((x) => x.id === id)).filter(Boolean).map((e) => ({ id: e.id, funcoes: funcoesDe(e).filter((f) => ['atendimento', 'manipulacao'].includes(f)) })).filter((p) => p.funcoes.length);
+  const r = alocar(reqOf(required, storeId), pessoas);
+  const out = { atendimento: [], manipulacao: [] };
+  for (const id of ids) if (r.papel[id]) out[r.papel[id]].push(id);
+  return { ...out, tem: r.tem, falta: r.falta };
+}
+export function countAssigned(assign, storeId, emps, required) {
+  const p = papeisDoDia(assign, storeId, emps, required);
+  return { atendimento: p.tem.atendimento || 0, manipulacao: p.tem.manipulacao || 0 };
 }
 /** Situacao de uma loja num domingo: faltam / sobram por categoria */
 export function checkDay(assign, storeId, emps, required) {
-  const c = countAssigned(assign, storeId, emps);
-  const req = (required && required[storeId]) || { atendimento: 0, manipulacao: 0 };
-  return ['atendimento', 'manipulacao'].map((cat) => ({ cat, tem: c[cat], precisa: req[cat] || 0, falta: Math.max(0, (req[cat] || 0) - c[cat]), sobra: Math.max(0, c[cat] - (req[cat] || 0)) }));
+  const req = reqOf(required, storeId);
+  const p = papeisDoDia(assign, storeId, emps, required);
+  return ['atendimento', 'manipulacao'].map((cat) => { const tem = p.tem[cat] || 0; return { cat, tem, precisa: req[cat] || 0, falta: Math.max(0, (req[cat] || 0) - tem), sobra: Math.max(0, tem - (req[cat] || 0)) }; });
 }
 
 /**
@@ -304,11 +333,15 @@ export function suggestSchedule({ sundays, employees, required, unavailable = ()
       if (!cands.length) return; // afastado o mes todo
       const score = ({ d, k }) => {
         const f = folgas[d].map(who);
-        const same = f.filter((o) => workStore(o) === s.id && o.categoria === e.categoria).length; // colega da mesma loja e funcao
-        const sameCat = f.filter((o) => o.categoria === e.categoria).length; // mesma funcao em qualquer loja (tira quem poderia cobrir)
+        const junto = (o) => funcoesDe(o).some((c) => funcoesDe(e).includes(c)); // faz alguma funcao em comum
+        const same = f.filter((o) => workStore(o) === s.id && junto(o)).length; // colega da mesma loja e funcao
+        const sameCat = f.filter(junto).length; // mesma funcao em qualquer loja (tira quem poderia cobrir)
         const store = f.filter((o) => workStore(o) === s.id).length;
         const rot = (k - (i + offset) % sundays.length + sundays.length) % sundays.length; // gira a semana da folga a cada mes
-        return same * 10000 + sameCat * 1000 + store * 100 + f.length * 10 + rot;
+        // quanto a loja fica abaixo do minimo nesse domingo se ele folgar (o hibrido conta onde faltar)
+        const sobra = team.filter((o) => o.id !== e.id && !folgas[d].includes(o.id) && !unavailable(o.id, d)).map((o) => o.id);
+        const deficit = Object.values(papeisDoDia({ [s.id]: sobra }, s.id, staff, required).falta).reduce((a, n) => a + n, 0);
+        return deficit * 100000 + same * 10000 + sameCat * 1000 + store * 100 + f.length * 10 + rot;
       };
       const best = cands.sort((x, y) => score(x) - score(y))[0];
       folgas[best.d].push(e.id); folgaDe[e.id] = best.d;
@@ -319,24 +352,28 @@ export function suggestSchedule({ sundays, employees, required, unavailable = ()
   for (const d of sundays) {
     const day = {}; covers[d] = {};
     for (const s of STORES) day[s.id] = staff.filter((e) => workStore(e) === s.id && folgaDe[e.id] !== d && !unavailable(e.id, d)).map((e) => e.id);
-    const cat = (id) => staff.find((e) => e.id === id)?.categoria;
-    const count = (sid, c) => day[sid].filter((id) => cat(id) === c).length;
-    const min = (sid, c) => (required[sid] || {})[c] || 0;
+    const who2 = (id) => staff.find((e) => e.id === id);
+    const faltaEm = (sid, c, dia = day) => papeisDoDia(dia, sid, staff, required).falta[c] || 0;
+    const somaFalta = (sid, dia = day) => faltaEm(sid, 'atendimento', dia) + faltaEm(sid, 'manipulacao', dia);
     for (const s of STORES) for (const c of ['atendimento', 'manipulacao']) {
-      let falta = min(s.id, c) - count(s.id, c);
-      while (falta > 0) {
-        // doador: outra loja com sobra na mesma funcao; quem cobriu menos vezes no mes
+      while (faltaEm(s.id, c) > 0) {
+        // doador: alguem de outra loja que faz essa funcao (ou hibrido) e cuja loja nao fica com falta a mais sem ele
         const pool = [];
         for (const o of STORES) {
-          if (o.id === s.id || count(o.id, c) <= min(o.id, c)) continue;
-          for (const id of day[o.id]) if (cat(id) === c && !covers[d][id]) pool.push({ id, from: o.id, sobra: count(o.id, c) - min(o.id, c) });
+          if (o.id === s.id) continue;
+          for (const id of day[o.id]) {
+            if (covers[d][id] || !funcoesDe(who2(id)).includes(c)) continue;
+            const teste = { ...day, [o.id]: day[o.id].filter((x) => x !== id) };
+            if (somaFalta(o.id, teste) <= somaFalta(o.id)) pool.push({ id, from: o.id, hib: who2(id).categoria === HIBRIDO ? 1 : 0 });
+          }
         }
         if (!pool.length) break;
-        pool.sort((x, y) => (nCover[x.id] || 0) - (nCover[y.id] || 0) || y.sobra - x.sobra || x.id.localeCompare(y.id));
+        pool.sort((x, y) => (nCover[x.id] || 0) - (nCover[y.id] || 0) || x.hib - y.hib || x.id.localeCompare(y.id));
         const p = pool[0];
         day[p.from] = day[p.from].filter((id) => id !== p.id); day[s.id].push(p.id);
-        covers[d][p.id] = p.from; nCover[p.id] = (nCover[p.id] || 0) + 1; falta--;
+        covers[d][p.id] = p.from; nCover[p.id] = (nCover[p.id] || 0) + 1;
       }
+      const falta = faltaEm(s.id, c);
       if (falta > 0) shortages.push({ date: d, store: s.id, cat: c, falta });
     }
     assignments[d] = day;
@@ -468,65 +505,94 @@ export function semanasDoMes(mk) {
 /** Numero da semana corrida (continua entre meses) para o rodizio de domingo. */
 export const semanaCorrida = (seg) => Math.floor(isoDiffDays('2024-01-01', seg) / 7); // 01/01/2024 foi segunda
 
+/** Funcoes que a pessoa da 5x2 pode fazer (hibrido tem mais de uma). */
+export const funcoesP = (p) => (p.funcoes && p.funcoes.length ? p.funcoes : [p.funcao]);
+const minimosDia = (u, dow) => { const o = {}; for (const [f, arr] of Object.entries((u && u.minimos) || {})) o[f] = (arr || [])[dow] || 0; return o; };
+
 /**
  * Gera a escala 5x2.
- * pessoas: [{id, nome, unidade, funcao}]
+ * pessoas: [{id, nome, unidade, funcao, funcoes?}] (funcoes com 2+ itens = hibrido, cobre a funcao que faltar)
  * unidades: {id: {abre: [dias da semana 0..6], minimos: {funcao: [7 numeros, indice = dia da semana]}}}
  * semFolga: dias da semana que nunca recebem folga (ex.: [6] = sabado)
  * Retorna { folgas: {id: [datas]}, plano: {id: {fixo:[dias], grupoDomingo}}, faltas: [{date, unidade, funcao, falta}], avisos: [texto] }
  */
 export function gerar5x2({ weeks, pessoas, unidades, semFolga = [6], domingo3 = true, unavailable = () => '' }) {
-  const folgas = {}, plano = {}, faltas = [], avisos = [];
+  const folgas = {}, plano = {}, avisos = [];
   for (const [uid, u] of Object.entries(unidades)) {
     const abre = new Set(u.abre || [0, 1, 2, 3, 4, 5, 6]);
     const fechados = 7 - abre.size;
     const precisa = Math.max(0, 2 - fechados); // folgas a dar alem dos dias fechados
     const domAberto = abre.has(0);
-    const funcoes = [...new Set(pessoas.filter((p) => p.unidade === uid).map((p) => p.funcao))];
-    for (const f of funcoes) {
-      const grupo = pessoas.filter((p) => p.unidade === uid && p.funcao === f).sort((a, b) => a.nome.localeCompare(b.nome));
-      const n = grupo.length;
-      const min = (dow) => (abre.has(dow) ? ((u.minimos || {})[f] || [])[dow] || 0 : 0);
-      const cands = [2, 3, 4, 5, 6, 1].filter((d) => abre.has(d) && !semFolga.includes(d)); // ter..sab, seg por ultimo
-      const fora = {}; for (const d of cands) fora[d] = 0;
-      // rodizio do domingo: quantos podem folgar no mesmo domingo sem ficar abaixo do minimo
-      const podeDom = domAberto && precisa > 0 && domingo3 && !semFolga.includes(0) ? n - min(0) : 0;
-      const usaRodizio = podeDom > 0;
-      if (domAberto && precisa > 0 && domingo3 && !semFolga.includes(0) && n && Math.ceil(n / 3) > podeDom) {
-        avisos.push({ unidade: uid, funcao: f, pessoas: n, minDomingo: min(0) });
+    const ordemF = Object.keys(u.minimos || {});
+    const daUnidade = pessoas.filter((p) => p.unidade === uid);
+    // fixos primeiro (por funcao e nome); hibridos por ultimo, encaixados onde sobra gente
+    const gente = [...daUnidade].sort((a, b) => (funcoesP(a).length > 1) - (funcoesP(b).length > 1)
+      || ordemF.indexOf(a.funcao) - ordemF.indexOf(b.funcao) || a.nome.localeCompare(b.nome));
+    const minF = (f, dow) => (abre.has(dow) ? ((u.minimos || {})[f] || [])[dow] || 0 : 0);
+    const minimosD = (dow) => (abre.has(dow) ? minimosDia(u, dow) : {});
+    const somaMin = (dow) => Object.values(minimosD(dow)).reduce((x, n) => x + n, 0);
+    // quanto falta no dia da semana se "fora" estiver de folga
+    const deficit = (dow, fora) => Object.values(alocar(minimosD(dow), daUnidade.filter((p) => !fora.has(p.id)).map((p) => ({ id: p.id, funcoes: funcoesP(p) }))).falta).reduce((x, n) => x + n, 0);
+    const cands = [2, 3, 4, 5, 6, 1].filter((d) => abre.has(d) && !semFolga.includes(d)); // ter..sab, seg por ultimo
+    const usaRodizio = domAberto && precisa > 0 && domingo3 && !semFolga.includes(0);
+    const foraDia = {}; for (const d of cands) foraDia[d] = new Set();
+    const gruposDom = [new Set(), new Set(), new Set()];
+    const idx = {}; // posicao da pessoa dentro do seu grupo (funcao / hibridos) para girar os dias
+    const funcoesVistas = {};
+    for (const p of gente) { const k = funcoesP(p).length > 1 ? '*' : p.funcao; idx[p.id] = funcoesVistas[k] = (funcoesVistas[k] ?? -1) + 1; }
+    for (const p of gente) {
+      const i = idx[p.id];
+      const fixo = [];
+      for (let k = 0; k < precisa && cands.length; k++) {
+        const nota = (d) => {
+          const fora = new Set([...foraDia[d], p.id]);
+          return -deficit(d, fora) * 1000 + (daUnidade.length - fora.size - somaMin(d)) * 10
+            + (fixo.some((x) => Math.abs(x - d) === 1) ? 3 : 0) - ((cands.indexOf(d) - i + 70) % cands.length) * 0.01;
+        };
+        const d = cands.filter((x) => !fixo.includes(x)).sort((a, b) => nota(b) - nota(a))[0];
+        if (d === undefined) break;
+        fixo.push(d); foraDia[d].add(p.id);
       }
-      grupo.forEach((p, i) => {
-        const fixo = [];
-        for (let k = 0; k < precisa && cands.length; k++) {
-          const nota = (d) => (n - min(d) - fora[d]) * 10 + (fixo.some((x) => Math.abs(x - d) === 1) ? 3 : 0) - ((cands.indexOf(d) - i + 70) % cands.length) * 0.01;
-          const d = cands.filter((x) => !fixo.includes(x)).sort((a, b) => nota(b) - nota(a))[0];
-          if (d === undefined) break;
-          fixo.push(d); fora[d]++;
+      let grupoDomingo = null;
+      if (usaRodizio && fixo.length) {
+        const notaG = (g) => -deficit(0, new Set([...gruposDom[g], p.id])) * 1000 - gruposDom[g].size * 10 - ((g - i + 30) % 3) * 0.01;
+        grupoDomingo = [0, 1, 2].sort((a, b) => notaG(b) - notaG(a))[0];
+        gruposDom[grupoDomingo].add(p.id);
+      }
+      plano[p.id] = { fixo, grupoDomingo };
+      folgas[p.id] = [];
+      for (const week of weeks) {
+        const dias = [...fixo];
+        if (grupoDomingo !== null && (semanaCorrida(week[0]) + grupoDomingo) % 3 === 0) dias[dias.length - 1] = 0; // domingo no lugar do ultimo dia fixo
+        for (const dow of dias) folgas[p.id].push(week[(dow + 6) % 7]);
+      }
+      folgas[p.id].sort();
+    }
+    // aviso: alguma funcao fica sem gente num domingo de rodizio (equipe pequena demais para folgar 1 domingo a cada 3 semanas)
+    if (usaRodizio) {
+      for (const f of ordemF) {
+        const n = daUnidade.filter((p) => funcoesP(p).length === 1 && p.funcao === f).length;
+        if (!n || !minF(f, 0)) continue;
+        if (gruposDom.some((g) => alocar(minimosD(0), daUnidade.filter((p) => !g.has(p.id)).map((p) => ({ id: p.id, funcoes: funcoesP(p) }))).falta[f] > 0)) {
+          avisos.push({ unidade: uid, funcao: f, pessoas: n, minDomingo: minF(f, 0) });
         }
-        const grupoDomingo = usaRodizio ? Math.floor(i * 3 / Math.max(n, 3)) % 3 : null;
-        plano[p.id] = { fixo, grupoDomingo };
-        folgas[p.id] = [];
-        for (const week of weeks) {
-          let dias = [...fixo];
-          if (usaRodizio && (semanaCorrida(week[0]) + grupoDomingo) % 3 === 0 && dias.length) dias[dias.length - 1] = 0; // domingo no lugar do ultimo dia fixo
-          for (const dow of dias) folgas[p.id].push(week[(dow + 6) % 7]);
-        }
-        folgas[p.id].sort();
-      });
-      for (const week of weeks) for (const d of week) {
-        const dow = weekday(d); if (!abre.has(dow)) continue;
-        const tem = grupo.filter((p) => !unavailable(p.id, d) && !folgas[p.id].includes(d)).length;
-        if (tem < min(dow)) faltas.push({ date: d, unidade: uid, funcao: f, falta: min(dow) - tem });
       }
     }
   }
+  const faltas = faltas5x2({ weeks, pessoas, unidades, folgas, unavailable });
   return { folgas, plano, faltas, avisos };
 }
 
-/** Quantos de uma funcao estao trabalhando numa unidade no dia, contando quem foi emprestado e quem veio cobrir. */
-export function naUnidade5x2({ pessoas, unidade, funcao, d, folgas, cobre = {}, unavailable = () => '' }) {
-  return pessoas.filter((p) => p.funcao === funcao && !unavailable(p.id, d) && !(folgas[p.id] || []).includes(d)
-    && ((cobre[p.id] || {})[d] ? cobre[p.id][d] === unidade : p.unidade === unidade)).length;
+/** Quem esta trabalhando numa unidade no dia (contando quem foi emprestado e quem veio cobrir), ja com a funcao do dia. */
+export function contagem5x2({ pessoas, unidade, unidades = {}, d, folgas, cobre = {}, unavailable = () => '' }) {
+  const presentes = pessoas.filter((p) => !unavailable(p.id, d) && !(folgas[p.id] || []).includes(d)
+    && ((cobre[p.id] || {})[d] ? cobre[p.id][d] === unidade : p.unidade === unidade)).map((p) => ({ id: p.id, funcoes: funcoesP(p) }));
+  return alocar(minimosDia(unidades[unidade], weekday(d)), presentes);
+}
+
+/** Quantos de uma funcao estao trabalhando numa unidade no dia (hibrido conta onde for alocado). */
+export function naUnidade5x2({ funcao, ...a }) {
+  return contagem5x2(a).tem[funcao] || 0;
 }
 
 /** Faltas de gente por unidade/funcao/dia (ja considera as coberturas entre unidades). */
@@ -534,38 +600,35 @@ export function faltas5x2({ weeks, pessoas, unidades, folgas, cobre = {}, unavai
   const out = [];
   for (const [uid, u] of Object.entries(unidades)) {
     const abre = new Set(u.abre || []);
-    for (const f of new Set(pessoas.map((p) => p.funcao))) {
-      for (const week of weeks) for (const d of week) {
-        const dow = weekday(d); if (!abre.has(dow)) continue;
-        const min = ((u.minimos || {})[f] || [])[dow] || 0;
-        if (!min) continue;
-        const tem = naUnidade5x2({ pessoas, unidade: uid, funcao: f, d, folgas, cobre, unavailable });
-        if (tem < min) out.push({ date: d, unidade: uid, funcao: f, falta: min - tem });
-      }
+    for (const week of weeks) for (const d of week) {
+      if (!abre.has(weekday(d))) continue;
+      const { falta } = contagem5x2({ pessoas, unidade: uid, unidades, d, folgas, cobre, unavailable });
+      for (const [f, n] of Object.entries(falta)) if (n > 0) out.push({ date: d, unidade: uid, funcao: f, falta: n });
     }
   }
-  return out;
+  return out.sort((a, b) => a.date.localeCompare(b.date) || a.unidade.localeCompare(b.unidade));
 }
 
 /**
- * Cobertura entre unidades: onde faltar gente num dia, chama alguem da MESMA funcao de outra unidade que esteja
- * trabalhando naquele dia e cuja unidade continue no minimo sem ele. Prefere quem cobriu menos vezes no mes.
+ * Cobertura entre unidades: onde faltar gente num dia, chama alguem que faca aquela funcao (ou hibrido) de outra
+ * unidade que esteja trabalhando naquele dia e cuja unidade nao fique com falta a mais sem ele. Prefere quem cobriu menos
+ * vezes no mes e, no empate, quem nao e hibrido (o hibrido fica de reserva na propria loja).
  * Retorna cobre: {pessoaId: {data: unidadeDestino}} (so para aquele dia — ninguem muda de unidade).
  */
 export function cobrir5x2({ weeks, pessoas, unidades, folgas, cobre: inicial = {}, unavailable = () => '' }) {
   const cobre = JSON.parse(JSON.stringify(inicial || {}));
   const vezes = {}; for (const [id, m] of Object.entries(cobre)) vezes[id] = Object.keys(m).length;
   const abre = (u, d) => (unidades[u]?.abre || []).includes(weekday(d));
-  const min = (u, f, d) => ((unidades[u]?.minimos || {})[f] || [])[weekday(d)] || 0;
-  const tem = (u, f, d) => naUnidade5x2({ pessoas, unidade: u, funcao: f, d, folgas, cobre, unavailable });
+  const cont = (u, d, c = cobre) => contagem5x2({ pessoas, unidade: u, unidades, d, folgas, cobre: c, unavailable });
+  const somaFalta = (u, d, c) => Object.values(cont(u, d, c).falta).reduce((a, n) => a + n, 0);
   for (const week of weeks) for (const d of week) for (const u of Object.keys(unidades)) {
     if (!abre(u, d)) continue;
-    for (const f of new Set(pessoas.map((p) => p.funcao))) {
-      while (tem(u, f, d) < min(u, f, d)) {
-        const doadores = pessoas.filter((p) => p.funcao === f && p.unidade !== u && unidades[p.unidade] && abre(p.unidade, d)
+    for (const f of Object.keys(unidades[u].minimos || {})) {
+      for (let guarda = 0; guarda < 20 && (cont(u, d).falta[f] || 0) > 0; guarda++) {
+        const doadores = pessoas.filter((p) => funcoesP(p).includes(f) && p.unidade !== u && unidades[p.unidade] && abre(p.unidade, d)
           && !unavailable(p.id, d) && !(folgas[p.id] || []).includes(d) && !(cobre[p.id] || {})[d]
-          && tem(p.unidade, f, d) - 1 >= min(p.unidade, f, d))
-          .sort((a, b) => (vezes[a.id] || 0) - (vezes[b.id] || 0) || (tem(b.unidade, f, d) - min(b.unidade, f, d)) - (tem(a.unidade, f, d) - min(a.unidade, f, d)) || a.nome.localeCompare(b.nome));
+          && somaFalta(p.unidade, d, { ...cobre, [p.id]: { ...(cobre[p.id] || {}), [d]: u } }) <= somaFalta(p.unidade, d, cobre))
+          .sort((a, b) => (vezes[a.id] || 0) - (vezes[b.id] || 0) || funcoesP(a).length - funcoesP(b).length || a.nome.localeCompare(b.nome));
         if (!doadores.length) break;
         const p = doadores[0];
         (cobre[p.id] = cobre[p.id] || {})[d] = u; vezes[p.id] = (vezes[p.id] || 0) + 1;

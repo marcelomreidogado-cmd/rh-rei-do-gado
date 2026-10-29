@@ -58,7 +58,19 @@ export async function loadAll() {
   S.months = new Map(mon.map((m) => [m.id, m]));
   S.leaves = lea;
   setConfig(cfg);
-  if (S.rulesV2) syncShared(emp, fm, new Map(eq.map((x) => [x.id, x]))).catch((e) => console.warn('sync equipe/ferias', e));
+  await migrar().catch((e) => console.warn('migracao', e));
+  if (S.rulesV2) syncShared(S.employees, fm, new Map(eq.map((x) => [x.id, x]))).catch((e) => console.warn('sync equipe/ferias', e));
+}
+
+/** Ajustes pedidos pelo Marcelo que mexem no cadastro (rodam uma vez so; marcados em configuracao.migracoes). */
+async function migrar() {
+  const feitas = S.config.migracoes || {};
+  if (!feitas.jefersonHibrido) {
+    // 29/10/2026: Jeferson entra nas escalas como hibrido (atendimento ou manipulacao)
+    const j = S.employees.find((e) => e.id === 'jeferson-soares') || S.employees.find((e) => /^JEFERSON\b/i.test(e.nome || ''));
+    if (j && j.categoria !== C.HIBRIDO) await saveEmployee({ ...j, categoria: C.HIBRIDO });
+    await saveConfig({ migracoes: { ...feitas, jefersonHibrido: true } });
+  }
 }
 
 /** Mantem rh_equipe (copia sem dados sensiveis) e rh_ferias em dia, a partir do cadastro completo. */

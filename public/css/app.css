@@ -84,3 +84,5 @@ label{display:grid;gap:3px;font-weight:500}label small{font-weight:400}.row{disp
 @media print{.top,.monthbar,.toolbar,.foot,.btn,.toast,.chips-row{display:none!important}body.print-escala main>div>*:not(.escala-card){display:none!important}body.print-escala .escala-card{box-shadow:none;max-width:none;margin:0;padding:0}@page{margin:10mm}body{background:#fff}main{padding:0}.sunday,.sun-store{break-inside:avoid;box-shadow:none}}
 .btn.reopen{background:#f59e0b;border-color:#d97706;color:#fff;font-weight:700}.btn.reopen:hover{background:#d97706}.closed-box,.reopen-box{border-radius:10px;padding:10px 14px;margin:0 0 10px;line-height:1.45}.closed-box{background:#ecfdf3;border:1px solid #a7e3bd;color:#14532d}.reopen-box{background:#fffbeb;border:1px solid #fcd34d;color:#78350f}
 .vale-btn{min-width:90px;text-align:right}.vale-btn.has{background:#fffbeb}.vale-btn small{color:#92400e;font-weight:700}
+.x5grid td.c .x5-pap{color:#9ca3af;font-size:10px;font-weight:400}
+.person.hib{border-color:#a78bfa;background:#f5f3ff}

@@ -231,6 +231,11 @@ test('E2E: escala de domingo sugere rodizio e respeita quantidades', { skip, tim
   const dbg = await page.evaluate(() => [...document.querySelectorAll('.sun-store.short')].map((e) => e.innerText.replace(/\n/g, ' | ')));
   console.log('  domingos com alerta:', dbg.length, dbg.slice(0, 3));
   // cada domingo/loja deve ter as pessoas pedidas (quando ha gente): coronel 2+2 disponiveis?
+  // Jeferson (hibrido) entra na escala de domingo: aparece trabalhando em atendimento ou manipulacao
+  assert.ok(await page.locator('.sun-store .person.hib').count() > 0, 'hibrido aparece na escala de domingo');
+  await page.locator('.sun-store .person.hib').first().click(); await page.waitForSelector('.modal h4:has-text("Híbrido")');
+  await page.click('.modal-foot button:has-text("Cancelar")');
+  if (process.env.SHOT_DIR) await page.screenshot({ path: path.join(process.env.SHOT_DIR, 'escala-domingo.png'), fullPage: true });
   const cor = await page.evaluate(() => document.querySelector('.sunday .sun-store:nth-child(3)').innerText);
   assert.match(cor, /Coronel/);
   await page.click('[data-act=copy]'); await page.waitForFunction(() => document.querySelector('#toast')?.textContent.includes('Escala copiada'));
@@ -381,6 +386,11 @@ test('E2E: escala 5x2 — confirmar equipe, gerar sem folga no sabado nem na seg
   // cobertura entre lojas no dia (Correas tem 1 por funcao: alguem de outra loja cobre a folga)
   assert.ok(await page.locator('td.cob').count() > 0, 'tem cobertura entre lojas');
   assert.ok(await page.locator('tr.vem').count() > 0);
+  // Jeferson e hibrido: aparece como Atend./Manip. e, nos dias em que trabalha, mostra a funcao do dia
+  const jef = page.locator('tr:has(td.nm:has-text("Jeferson"))');
+  assert.match(await jef.locator('td.nm').innerText(), /Atend\.\/Manip\./);
+  assert.ok(await jef.locator('td.c .x5-pap').count() > 0, 'hibrido mostra a/m');
+  if (process.env.SHOT_DIR) await page.screenshot({ path: path.join(process.env.SHOT_DIR, 'escala5x2.png'), fullPage: true });
   // ajuste manual: clicar numa celula troca trabalho/folga
   const cel = page.locator('td.c:not(.f)').first(); const p = await cel.getAttribute('data-p'), d = await cel.getAttribute('data-d');
   await cel.click(); await page.waitForSelector(`td.c.f[data-p="${p}"][data-d="${d}"]`);

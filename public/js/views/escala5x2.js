@@ -9,6 +9,11 @@ import { awayReason } from './escala.js';
 
 let root, mk, modo = 'rei', st; // st: { cfg, mes } (rei) ou { outro } (outro)
 const FUN_REI = { atendimento: 'Atendimento', manipulacao: 'Manipulação' };
+const ROT_HIBRIDO = 'Atend./Manip.';
+const rotuloCat = (cat) => (cat === C.HIBRIDO ? ROT_HIBRIDO : FUN_REI[cat] || '');
+/** Funcao mostrada ao lado do nome (hibrido = faz as duas). */
+const rotulo = (p, m) => (C.funcoesP(p).length > 1 ? (modo === 'rei' ? ROT_HIBRIDO : 'Qualquer função') : m.funcoes[p.funcao] || '');
+const ehHib = (p) => C.funcoesP(p).length > 1;
 const ORDEM_DIAS = [1, 2, 3, 4, 5, 6, 0]; // seg..dom
 const nomeCurto = (n) => { const t = String(n).trim().split(/\s+/); const cap = (x) => x.charAt(0).toUpperCase() + x.slice(1).toLowerCase(); return cap(t[0]) + (t[1] && !['DA', 'DE', 'DO', 'DAS', 'DOS', 'da', 'de', 'do'].includes(t[1]) ? ' ' + t[1][0].toUpperCase() + '.' : ''); };
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -40,12 +45,13 @@ function modelo() {
     const o = st.outro;
     const unidades = Object.fromEntries(o.unidades.map((u) => [u.id, { nome: u.nome, abre: u.abre, minimos: u.minimos || {} }]));
     const funcoes = Object.fromEntries(o.funcoes.map((f) => [f.id, f.nome]));
-    return { unidades, funcoes, pessoas: o.pessoas.filter((p) => unidades[p.unidade] && funcoes[p.funcao]), semFolga: o.semFolga || [6], domingo3: o.domingo3 !== false, folgas: o.meses?.[mk]?.folgas || null, cobre: o.meses?.[mk]?.cobre || {}, unavailable: () => '' };
+    const pes = o.pessoas.filter((p) => unidades[p.unidade] && (funcoes[p.funcao] || p.funcao === '*')).map((p) => (p.funcao === '*' ? { ...p, funcao: Object.keys(funcoes)[0], funcoes: Object.keys(funcoes) } : p));
+    return { unidades, funcoes, pessoas: pes, semFolga: o.semFolga || [6], domingo3: o.domingo3 !== false, folgas: o.meses?.[mk]?.folgas || null, cobre: o.meses?.[mk]?.cobre || {}, unavailable: () => '' };
   }
   const cfg = st.cfg;
   const equipe = new Set(st.mes?.equipe || []);
   const unidades = Object.fromEntries(C.STORES.map((s) => [s.id, { nome: s.nome, ...cfg.lojas[s.id] }]));
-  const pessoas = S.employees.filter((e) => C.inEscala(e) && equipe.has(e.id)).map((e) => ({ id: e.id, nome: e.nome, unidade: C.workStore(e), funcao: e.categoria }));
+  const pessoas = S.employees.filter((e) => C.inEscala(e) && equipe.has(e.id)).map((e) => ({ id: e.id, nome: e.nome, unidade: C.workStore(e), funcao: e.categoria === C.HIBRIDO ? 'atendimento' : e.categoria, funcoes: C.funcoesDe(e) }));
   return { unidades, funcoes: FUN_REI, pessoas, semFolga: cfg.semFolga || [6], domingo3: cfg.domingo3 !== false, folgas: st.mes?.folgas || null, cobre: st.mes?.cobre || {}, unavailable: awayReason };
 }
 
@@ -70,7 +76,7 @@ function telaEquipe() {
   return `<section class="card x5-equipe"><h2>Quem entra na escala de ${esc(C.monthLabel(mk))}?</h2>
     <div class="x5-cols">${C.STORES.map((s) => {
       const eq = S.employees.filter((e) => C.inEscala(e) && C.workStore(e) === s.id).sort((a, b) => a.categoria.localeCompare(b.categoria) || a.nome.localeCompare(b.nome));
-      return `<div><h3>${esc(s.nome)}</h3>${eq.map((e) => { const af = afastamentoNoMes(e.id); return `<label class="x5-pessoa"><input type="checkbox" value="${esc(e.id)}" checked> <span>${esc(nomeCurto(e.nome))}</span> <small class="muted">${FUN_REI[e.categoria]}</small>${af ? ` <span class="badge warn">${esc(af)}</span>` : ''}</label>`; }).join('') || '<p class="muted">Ninguém.</p>'}</div>`; }).join('')}</div>
+      return `<div><h3>${esc(s.nome)}</h3>${eq.map((e) => { const af = afastamentoNoMes(e.id); return `<label class="x5-pessoa"><input type="checkbox" value="${esc(e.id)}" checked> <span>${esc(nomeCurto(e.nome))}</span> <small class="muted">${rotuloCat(e.categoria)}</small>${af ? ` <span class="badge warn">${esc(af)}</span>` : ''}</label>`; }).join('') || '<p class="muted">Ninguém.</p>'}</div>`; }).join('')}</div>
     <div class="x5-acoes"><button class="btn primary" data-act="gerar">Confirmar e gerar escala</button></div></section>`;
 }
 
@@ -94,7 +100,7 @@ function telaEscala() {
   montaSiglas(m.unidades);
   return `${resumo}
     ${Object.entries(m.unidades).map(([u, un]) => {
-      const gente = m.pessoas.filter((p) => p.unidade === u).sort((a, b) => Object.keys(m.funcoes).indexOf(a.funcao) - Object.keys(m.funcoes).indexOf(b.funcao) || a.nome.localeCompare(b.nome));
+      const gente = m.pessoas.filter((p) => p.unidade === u).sort((a, b) => ehHib(a) - ehHib(b) || Object.keys(m.funcoes).indexOf(a.funcao) - Object.keys(m.funcoes).indexOf(b.funcao) || a.nome.localeCompare(b.nome));
       if (!gente.length) return '';
       const abre = new Set(un.abre);
       const contaSem = (p) => weeks.map((w) => w.filter((d) => !abre.has(C.weekday(d)) || (m.folgas[p.id] || []).includes(d) || m.unavailable(p.id, d)).length);
@@ -103,15 +109,18 @@ function telaEscala() {
         const ruins = weeks.map((w, i) => ({ w, n: contaSem(p)[i] })).filter((x) => x.n !== 2 && x.w.every((d) => !m.unavailable(p.id, d)));
         const sab = fs.filter((d) => m.semFolga.includes(C.weekday(d)));
         const avisos = [...ruins.map((x) => `semana de ${C.fmtDM(x.w[0])}: ${x.n} folga(s)`), ...sab.map((d) => `folga em ${C.DIAS_SEM_LONGO[C.weekday(d)].toLowerCase()} ${C.fmtDM(d)}`)];
-        return `<tr><td class="nm">${esc(nomeCurto(p.nome))} <small>${esc(m.funcoes[p.funcao] || '')}</small>${avisos.length ? ` <span class="x5-av" title="${esc(avisos.join('\n'))}">⚠</span>` : ''}</td>${dias.map((d) => { const w = C.weekday(d); const sem = w === 1 ? 'sem' : ''; const dom = w === 0 ? 'dom' : '';
+        return `<tr><td class="nm">${esc(nomeCurto(p.nome))} <small>${esc(rotulo(p, m))}</small>${avisos.length ? ` <span class="x5-av" title="${esc(avisos.join('\n'))}">⚠</span>` : ''}</td>${dias.map((d) => { const w = C.weekday(d); const sem = w === 1 ? 'sem' : ''; const dom = w === 0 ? 'dom' : '';
         if (!abre.has(w)) return `<td class="fech ${sem}"></td>`;
         const af = m.unavailable(p.id, d); if (af) return `<td class="af ${sem} ${dom}" title="${esc(af)}">A</td>`;
         const f = (m.folgas[p.id] || []).includes(d);
         const vai = (m.cobre[p.id] || {})[d];
         if (vai && m.unidades[vai]) return `<td class="c cob ${sem} ${dom}" data-p="${esc(p.id)}" data-d="${d}" title="Cobrindo ${esc(m.unidades[vai].nome)} — clique para mudar">${esc(sigla(m.unidades[vai].nome))}</td>`;
-        return `<td class="c ${f ? 'f' : ''} ${sem} ${dom}" data-p="${esc(p.id)}" data-d="${d}" title="${f ? 'Folga — clique para cobrir outra loja ou trabalhar' : 'Clique para dar folga'}">${f ? 'F' : ''}</td>`; }).join('')}<td class="tt">${fs.length}</td><td class="tt">${fs.filter((d) => C.weekday(d) === 0).length}</td></tr>`; }).join('')}
-      ${Object.keys(m.funcoes).filter((f) => gente.some((p) => p.funcao === f)).map((f) => `<tr class="cont"><td class="nm">${esc(m.funcoes[f])} na loja</td>${dias.map((d) => { const w = C.weekday(d); if (!abre.has(w)) return `<td class="fech ${w === 1 ? 'sem' : ''}"></td>`;
-        const tem = C.naUnidade5x2({ pessoas: m.pessoas, unidade: u, funcao: f, d, folgas: m.folgas, cobre: m.cobre, unavailable: m.unavailable }); const min = ((un.minimos || {})[f] || [])[w] || 0;
+        // hibrido trabalhando: mostra se no dia faz atendimento (a) ou manipulacao (m)
+        const papel = !f && ehHib(p) ? C.contagem5x2({ pessoas: m.pessoas, unidade: u, unidades: m.unidades, d, folgas: m.folgas, cobre: m.cobre, unavailable: m.unavailable }).papel[p.id] : '';
+        const pTxt = papel ? (m.funcoes[papel] || papel) : '';
+        return `<td class="c ${f ? 'f' : ''} ${sem} ${dom}" data-p="${esc(p.id)}" data-d="${d}" title="${f ? 'Folga — clique para cobrir outra loja ou trabalhar' : (pTxt ? `Faz ${esc(pTxt.toLowerCase())} — ` : '') + 'Clique para dar folga'}">${f ? 'F' : pTxt ? `<span class="x5-pap">${esc(pTxt[0].toLowerCase())}</span>` : ''}</td>`; }).join('')}<td class="tt">${fs.length}</td><td class="tt">${fs.filter((d) => C.weekday(d) === 0).length}</td></tr>`; }).join('')}
+      ${Object.keys(m.funcoes).filter((f) => gente.some((p) => C.funcoesP(p).includes(f))).map((f) => `<tr class="cont"><td class="nm">${esc(m.funcoes[f])} na loja</td>${dias.map((d) => { const w = C.weekday(d); if (!abre.has(w)) return `<td class="fech ${w === 1 ? 'sem' : ''}"></td>`;
+        const tem = C.naUnidade5x2({ pessoas: m.pessoas, unidade: u, unidades: m.unidades, funcao: f, d, folgas: m.folgas, cobre: m.cobre, unavailable: m.unavailable }); const min = ((un.minimos || {})[f] || [])[w] || 0;
         return `<td class="${tem < min ? 'baixo' : ''} ${w === 0 ? 'dom' : ''}" title="mínimo ${min}">${tem}</td>`; }).join('')}<td></td><td></td></tr>`).join('')}
       ${(() => { const vem = (d) => m.pessoas.filter((p) => p.unidade !== u && (m.cobre[p.id] || {})[d] === u); if (!dias.some((d) => vem(d).length)) return '';
         return `<tr class="vem"><td class="nm">Vem cobrir</td>${dias.map((d) => { const w = C.weekday(d); const l = vem(d); return `<td class="${w === 1 ? 'sem' : ''} ${w === 0 ? 'dom' : ''}" title="${esc(l.map((p) => `${p.nome} (${m.unidades[p.unidade]?.nome || ''})`).join('\n'))}">${l.map((p) => esc(iniciais(p.nome))).join(' ')}</td>`; }).join('')}<td></td><td></td></tr>`; })()}
@@ -216,7 +225,7 @@ function abrirCadastro() {
   if (!o.funcoes.length) o.funcoes.push({ id: uid(), nome: 'Atendimento' });
   const corpo = () => `
     <div class="x5-aj"><h3>Funções</h3><div class="x5-lista">${o.funcoes.map((f) => `<span class="x5-item"><input class="in" data-fn="${f.id}" value="${esc(f.nome)}"><button type="button" class="icon-btn" data-del-fn="${f.id}" title="Remover">✕</button></span>`).join('')}<button type="button" class="btn sm" data-add="fn">＋ função</button></div></div>
-    <div class="x5-aj"><h3>Pessoas</h3><table class="x5-pes"><tbody>${o.pessoas.map((p) => `<tr><td><input class="in" data-pn="${p.id}" value="${esc(p.nome)}" placeholder="Nome"></td><td><select class="in" data-pf="${p.id}">${o.funcoes.map((f) => `<option value="${f.id}" ${p.funcao === f.id ? 'selected' : ''}>${esc(f.nome)}</option>`).join('')}</select></td><td><select class="in" data-pu="${p.id}">${o.unidades.map((u) => `<option value="${u.id}" ${p.unidade === u.id ? 'selected' : ''}>${esc(u.nome)}</option>`).join('')}</select></td><td><button type="button" class="icon-btn" data-del-p="${p.id}" title="Remover">✕</button></td></tr>`).join('')}</tbody></table><button type="button" class="btn sm" data-add="p">＋ pessoa</button></div>
+    <div class="x5-aj"><h3>Pessoas</h3><table class="x5-pes"><tbody>${o.pessoas.map((p) => `<tr><td><input class="in" data-pn="${p.id}" value="${esc(p.nome)}" placeholder="Nome"></td><td><select class="in" data-pf="${p.id}">${o.funcoes.map((f) => `<option value="${f.id}" ${p.funcao === f.id ? 'selected' : ''}>${esc(f.nome)}</option>`).join('')}<option value="*" ${p.funcao === '*' ? 'selected' : ''}>Qualquer função (híbrido)</option></select></td><td><select class="in" data-pu="${p.id}">${o.unidades.map((u) => `<option value="${u.id}" ${p.unidade === u.id ? 'selected' : ''}>${esc(u.nome)}</option>`).join('')}</select></td><td><button type="button" class="icon-btn" data-del-p="${p.id}" title="Remover">✕</button></td></tr>`).join('')}</tbody></table><button type="button" class="btn sm" data-add="p">＋ pessoa</button></div>
     ${o.unidades.map((u) => `<div class="x5-aj"><h3><input class="in x5-un" data-un="${u.id}" value="${esc(u.nome)}">${o.unidades.length > 1 ? `<button type="button" class="icon-btn" data-del-un="${u.id}" title="Remover">✕</button>` : ''}</h3><p class="muted small">Dias que abre</p>${chipsDias('abre-' + u.id, u.abre)}<p class="muted small">Mínimo de pessoas por dia</p>${tabelaMin(u.id, Object.fromEntries(o.funcoes.map((f) => [f.id, f.nome])), u.minimos || {}, u.abre)}</div>`).join('')}
     <button type="button" class="btn sm" data-add="un">＋ unidade</button>
     <div class="x5-aj"><h3>Folgas</h3><p class="muted small">Dias em que ninguém folga</p>${chipsDias('semfolga', o.semFolga || [6])}<label class="inline"><input type="checkbox" id="dom3" ${o.domingo3 !== false ? 'checked' : ''}> Folga no domingo a cada 3 semanas</label></div>`;

@@ -75,6 +75,12 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   pessoa, quem vem cobrir; clicar num dia alterna trabalha → folga → cobre
   outra loja. Dados em rh_sundays
   (5x2-cfg, 5x2-AAAA-MM, 5x2-outro), sem mudar regras.
+- **Híbrido nas escalas**: em Funcionários (ou Escala → Equipe por loja), a
+  função nas escalas pode ser *Híbrido* — a pessoa faz atendimento ou
+  manipulação e, em cada dia, entra onde estiver faltando gente (na própria
+  loja ou cobrindo outra). Na 5x2 aparece como "Atend./Manip." com a/m no dia;
+  no domingo, com contorno lilás. Jeferson foi marcado como híbrido
+  (29/10/2026). No *Outro negócio* existe "Qualquer função (híbrido)".
 - **Valores da folha** aparecem em reais (R$ 1.234,56), na tela e no e-mail.
 - **Usuários do sistema**: em Configurações → Usuários do sistema, um
   administrador inclui (ID + senha) ou remove o acesso de outras pessoas.
