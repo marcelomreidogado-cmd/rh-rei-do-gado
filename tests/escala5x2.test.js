@@ -97,3 +97,41 @@ test('hibrido: cobre a funcao que estiver faltando (na propria loja e em outra)'
   const tres = [...dois, P('km', 'coronel', 'manipulacao')];
   assert.equal(C.cobrir5x2({ weeks: [weeks[0]], pessoas: tres, unidades: u2, folgas }).km?.['2026-12-02'], 'correas');
 });
+
+test('rede inteira: folgas planejadas contando com a troca de loja no dia (todas as lojas cobrem e sao cobertas)', () => {
+  const weeks = C.semanasDoMes('2026-12');
+  const un = { coronel: { abre: FECHA_SEG, minimos: { atendimento: [1, 0, 2, 2, 2, 2, 2], manipulacao: [1, 0, 1, 1, 1, 1, 1] } },
+    bingen: { abre: FECHA_SEG, minimos: { atendimento: [1, 0, 1, 1, 1, 1, 1], manipulacao: [1, 0, 1, 1, 1, 1, 1] } },
+    correas: { abre: FECHA_SEG, minimos: { atendimento: [1, 0, 1, 1, 1, 1, 1], manipulacao: [1, 0, 1, 1, 1, 1, 1] } } };
+  const gente = [P('bruno', 'coronel', 'atendimento'), P('leticia', 'coronel', 'atendimento'), P('carlos', 'coronel', 'manipulacao'), P('igor', 'coronel', 'manipulacao'), P('paulo', 'coronel', 'manipulacao'),
+    P('teste', 'bingen', 'atendimento'), P('gustavo', 'bingen', 'manipulacao'), { ...P('jef', 'bingen', 'atendimento'), funcoes: ['atendimento', 'manipulacao'] },
+    P('vand', 'correas', 'atendimento'), P('thais', 'correas', 'manipulacao')];
+  const r = C.gerar5x2({ weeks, pessoas: gente, unidades: un });
+  const sem = C.faltas5x2({ weeks, pessoas: gente, unidades: un, folgas: r.folgas }).length;
+  const cobre = C.cobrir5x2({ weeks, pessoas: gente, unidades: un, folgas: r.folgas });
+  const com = C.faltas5x2({ weeks, pessoas: gente, unidades: un, folgas: r.folgas, cobre });
+  // 5 pessoas fazem atendimento para 4 vagas de ter a sex: no maximo 1 dia com falta por semana
+  assert.ok(com.length <= weeks.length && com.length < sem, `faltas ${sem} -> ${com.length}`);
+  const origem = new Set(Object.keys(cobre).map((id) => gente.find((p) => p.id === id).unidade));
+  const destino = new Set(Object.values(cobre).flatMap((m) => Object.values(m)));
+  assert.ok(origem.size >= 2 && destino.size >= 2, `de ${[...origem]} para ${[...destino]}`);
+});
+
+test('carga horaria: turno menos intervalo, limite semanal da EC 141 e horas por semana', () => {
+  assert.equal(C.horasTurno('08:00', '17:00', 60), 8);
+  assert.equal(C.horasTurno('08:00', '13:00', 60), 4.75); // ate 6h: 15 min
+  assert.equal(C.horasTurno('08:00', '12:00', 60), 4);
+  assert.equal(C.fmtH(7.5), '7h30');
+  assert.equal(C.limiteSemanal('2026-12-14'), 44); assert.equal(C.limiteSemanal('2026-12-21'), 42); assert.equal(C.limiteSemanal('2027-12-20'), 40);
+  const weeks = C.semanasDoMes('2026-12');
+  const horario = { 0: ['08:00', '13:00'], 2: ['08:00', '18:00'], 3: ['08:00', '18:00'], 4: ['08:00', '18:00'], 5: ['08:00', '18:00'], 6: ['08:00', '18:00'] };
+  const un = { a: { abre: FECHA_SEG, minimos: {}, horario }, b: { abre: FECHA_SEG, minimos: {}, horario: { ...horario, 3: ['10:00', '14:00'] } } };
+  const ps = [P('x', 'a', 'atendimento')];
+  const folgas = { x: weeks.map((w) => w[1]) }; // folga toda terca
+  const c = C.carga5x2({ weeks, pessoas: ps, unidades: un, folgas, cobre: { x: { [weeks[1][2]]: 'b' } } });
+  assert.equal(c.x.semanas[0].horas, 4 * 9 + 4.75); // qua-sab 9h + domingo 4h45
+  assert.equal(c.x.semanas[1].horas, 3 * 9 + 4 + 4.75); // quarta cobrindo a outra loja (10-14)
+  assert.equal(c.x.dias[weeks[1][2]], 4);
+  const proprio = C.carga5x2({ weeks, pessoas: ps, unidades: un, folgas, horariosPessoa: { x: { 4: ['12:00', '18:00'] } } });
+  assert.equal(proprio.x.dias[weeks[0][3]], 5.75); // 6h de turno com 15 min de intervalo
+});

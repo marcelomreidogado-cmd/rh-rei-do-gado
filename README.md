@@ -69,8 +69,15 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   pessoas). Regras: dia em que a loja não abre (segunda) conta como folga; a
   outra folga é um dia fixo da semana e, a cada 3 semanas, vira domingo; nunca
   folga nos dias marcados (sábado); onde a folga deixa uma loja abaixo do
-  mínimo, alguém da mesma função de outra loja (que continua no mínimo) cobre
-  naquele dia, e quem cobriu menos vezes vai primeiro. A grade mostra F (folga), A (afastado), dias fechados, quantos
+  mínimo, alguém da mesma função (ou híbrido) de outra loja cobre naquele dia,
+  e quem cobriu menos vezes vai primeiro. As folgas são planejadas olhando as
+  lojas JUNTAS (já contando com essa troca de loja no dia), para sobrar o
+  mínimo de falta na rede. **Carga horária**: em Ajustes, horário de
+  funcionamento por loja e dia (abre/fecha) e intervalo de almoço; cada pessoa
+  soma as horas da loja onde trabalha no dia (ou de um horário próprio, clicando
+  no nome). A grade mostra o horário no cabeçalho, marca dia com mais de 10h e a
+  coluna h/sem (vermelho acima do limite da EC 141: 44h até 15/12/2026, 42h a
+  partir de 16/12/2026, 40h a partir de 16/12/2027). A grade mostra F (folga), A (afastado), dias fechados, quantos
   estão na loja por função (vermelho = abaixo do mínimo) e folgas/domingos por
   pessoa, quem vem cobrir; clicar num dia alterna trabalha → folga → cobre
   outra loja. Dados em rh_sundays
