@@ -127,7 +127,7 @@ export function render(el, month) {
     ${!isClosed && missing.length ? `<button class="chip add" data-act="addrow">＋ Incluir funcionário no mês (${missing.length})</button>` : ''}
   </div>
   ${groups.map((g) => `<section class="store"><h2>${esc(g.store.nome)} <small>cód ${g.store.cod} · ${g.rows.length} funcionário(s)</small></h2>
-    <div class="table-wrap folha"><table class="grid"><thead><tr>${vcols.map((c) => `<th data-col="${c.k}">${esc(c.k === 'consumo' && md.consumoPeriodo ? 'Consumo loja ' + md.consumoPeriodo : c.label)}${c.fixed || isClosed ? '' : ` <button class="th-x" data-act="hidecol" data-col="${c.k}" title="Excluir esta coluna do mês" aria-label="Excluir coluna ${esc(c.label)}">×</button>`}</th>`).join('')}<th class="act"></th></tr></thead>
+    <div class="table-wrap folha"><table class="grid"><thead><tr>${vcols.map((c) => `<th data-col="${c.k}">${esc(c.label)}${c.fixed || isClosed ? '' : ` <button class="th-x" data-act="hidecol" data-col="${c.k}" title="Excluir esta coluna do mês" aria-label="Excluir coluna ${esc(c.label)}">×</button>`}</th>`).join('')}<th class="act"></th></tr></thead>
     <tbody>${g.rows.map((r) => rowHtml(r, vcols, isClosed)).join('') || `<tr><td colspan="${vcols.length + 1}" class="muted">Nenhum funcionário nesta loja no mês.</td></tr>`}</tbody></table></div></section>`).join('')}
   ${md.note !== undefined ? `<label class="block">Observações do mês (vai no rodapé do e-mail)<textarea class="in" id="monthNote" rows="2" ${isClosed ? 'disabled' : ''}>${esc(md.note || '')}</textarea></label>` : ''}
   ${allRows.length ? '' : '<p class="muted">Nenhum lançamento neste mês.</p>'}`;
@@ -153,8 +153,12 @@ function rowHtml(r, vcols, isClosed) {
       case 'cod': return `<td class="c-cod">${C.storeById(emp.loja)?.cod || ''}</td>`;
       case 'nome': return `<td class="c-nome" title="${esc(emp.nome)}">${esc(emp.nome)}</td>`;
       case 'obs': return `<td class="c-obs"><input class="in obs" data-f="obs" data-emp="${esc(emp.id)}" value="${esc(e.obs || (e.descAdicNota && !/^[\d.,\s]+$/.test(e.descAdicNota) ? e.descAdicNota : ''))}" placeholder="observação" ${dis}></td>`;
-      case 'falta': return `<td><button class="leave-btn ${v.faltas ? 'has' : ''}" data-act="leave" data-kind="falta" data-emp="${esc(emp.id)}" data-cell="falta">${esc(v.faltas) || '＋'}</button></td>`;
-      case 'atestado': return `<td><button class="leave-btn ${v.atestado ? 'has' : ''}" data-act="leave" data-kind="atestado" data-emp="${esc(emp.id)}" data-cell="atestado">${esc(v.atestado) || '＋'}</button></td>`;
+      case 'falta': {
+        const nf = C.leavesOf(S.leaves, emp.id, mk, ['falta']).flatMap((l) => C.leaveDaysInMonth(l, mk)).length;
+        const curto = v.faltas && v.faltas.length > 16 ? `${nf} falta${nf > 1 ? 's' : ''}` : v.faltas; // muitas datas: mostra so a quantidade (as datas ficam no balao e no e-mail)
+        return `<td><button class="leave-btn ${v.faltas ? 'has' : ''}" data-act="leave" data-kind="falta" data-emp="${esc(emp.id)}" data-cell="falta" title="${esc(v.faltas || '')}">${esc(curto) || '＋'}</button></td>`;
+      }
+      case 'atestado': return `<td><button class="leave-btn ${v.atestado ? 'has' : ''}" data-act="leave" data-kind="atestado" data-emp="${esc(emp.id)}" data-cell="atestado" title="${esc(v.atestado || '')}">${esc(v.atestado) || '＋'}</button></td>`;
       case 'assiduidade': {
         const lost = v.assiduidade === 0 && C.num(e.assiduidade) > 0 && !e.assiduidadeManual;
         return `<td class="num"><input class="in money" inputmode="decimal" data-f="assiduidade" data-emp="${esc(emp.id)}" value="${C.money(v.assiduidade)}" ${dis} title="${lost ? 'Perdida por falta/atestado no mês (base: ' + C.money(e.assiduidade) + '). Digite um valor para ajustar só este mês.' : ''}">${lost ? '<span class="lost" title="Perdida por falta/atestado">↓</span>' : ''}</td>`;

@@ -93,6 +93,14 @@ test('E2E: faltas com varias datas e atestado de 7 dias (inicio + dias) virando 
   await page.click('.modal-foot button:has-text("Salvar faltas")');
   await page.waitForFunction(() => !document.querySelector('.overlay'));
   assert.equal(await txt(`${igor} [data-cell=falta]`), '10/09, 15/09');
+  // muitas faltas: datas seguidas viram faixa e a celula mostra so a quantidade
+  await page.click(`${igor} [data-cell=falta]`);
+  for (const d of ['2026-09-21', '2026-09-22', '2026-09-23', '2026-09-24', '2026-09-28']) { await page.fill('#fd', d); await page.click('#fadd'); }
+  await page.click('.modal-foot button:has-text("Salvar faltas")'); await page.waitForFunction(() => !document.querySelector('.overlay'));
+  assert.equal(await txt(`${igor} [data-cell=falta]`), '7 faltas');
+  assert.equal(await page.getAttribute(`${igor} [data-cell=falta]`, 'title'), '10/09, 15/09, 21/09 a 24/09, 28/09');
+  // nao aparece a data do periodo no cabecalho do consumo
+  assert.equal((await txt('th[data-col=consumo]')).replace('×', '').trim(), 'Consumo loja');
   assert.equal(await val(`${igor} [data-f=assiduidade]`), '');
   // atestado: comecou 25/09, 7 dias
   const jef = row('jeferson-soares');

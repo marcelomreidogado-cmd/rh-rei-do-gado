@@ -101,10 +101,19 @@ export function leaveDaysInMonth(leave, mk) {
 export const leavesOf = (leaves, empId, mk, types) =>
   leaves.filter((l) => l.empId === empId && (!types || types.includes(l.type)) && leaveDaysInMonth(l, mk).length > 0);
 
+/** Datas seguidas viram faixa: [18,19,20,25] -> "18/10 a 20/10, 25/10". */
+export function faixasDatas(days) {
+  const ds = [...new Set(days)].sort(), out = [];
+  for (let i = 0; i < ds.length; i++) {
+    let j = i; while (j + 1 < ds.length && isoAddDays(ds[j], 1) === ds[j + 1]) j++;
+    out.push(j > i ? `${fmtDM(ds[i])} a ${fmtDM(ds[j])}` : fmtDM(ds[i])); i = j;
+  }
+  return out.join(', ');
+}
 export function formatLeave(leave, mk) {
   const days = leaveDaysInMonth(leave, mk);
   if (!days.length) return '';
-  if (leave.type === 'falta') return days.map(fmtDM).join(', ');
+  if (leave.type === 'falta') return faixasDatas(days);
   const open = !leave.end;
   const tag = leave.type === 'atestado' ? '' : `${LEAVE_LABEL[leave.type]} `;
   const from = leave.start ? fmtDM(days[0]) : null;

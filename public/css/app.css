@@ -30,7 +30,7 @@ table{border-collapse:collapse;width:100%}.grid th{background:#f1f3f5;text-align
 .grid td .in{padding:4px 6px;min-width:84px}.grid td .in.dias{min-width:52px;width:56px;text-align:right}.grid td .in.money{text-align:right;min-width:110px}.grid td .in.note{font-size:11px;margin-top:2px;min-width:110px}
 .grid td.c-dt,.grid td.c-cod{white-space:nowrap;color:var(--muted)}.grid tr.off td{opacity:.55}.grid td.bad{color:var(--red)}
 .th-x,.row-x{border:0;background:transparent;cursor:pointer;color:var(--muted);border-radius:4px;padding:0 4px}.th-x:hover,.row-x:hover{background:#fee2e2;color:var(--red)}
-.lost{color:var(--red);font-size:11px;margin-left:2px}.leave-btn{border:1px dashed var(--line);background:transparent;border-radius:6px;padding:3px 8px;cursor:pointer;min-width:60px;font-size:12px;color:var(--muted);white-space:nowrap;text-align:left}.leave-btn.has{border-style:solid;color:var(--ink);background:#fef2f2}
+.lost{color:var(--red);font-size:11px;margin-left:2px}.leave-btn{max-width:170px;overflow:hidden;text-overflow:ellipsis;border:1px dashed var(--line);background:transparent;border-radius:6px;padding:3px 8px;cursor:pointer;min-width:60px;font-size:12px;color:var(--muted);white-space:nowrap;text-align:left}.leave-btn.has{border-style:solid;color:var(--ink);background:#fef2f2}
 .mini{font-size:13px}.mini th,.mini td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left}.mini .num{text-align:right}
 .review td{vertical-align:top}.review tr.bad td{background:#fff7ed}.thumb{width:150px;border:1px solid var(--line);border-radius:4px;cursor:zoom-in;display:block;margin-bottom:4px}.slipimg{max-width:100%;border:1px solid var(--line)}
 .acts{white-space:nowrap}.phone.bad{color:var(--red)}

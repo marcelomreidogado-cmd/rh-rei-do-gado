@@ -250,3 +250,9 @@ test('escala usa a loja onde trabalha e tira administrativo', () => {
   const all = Object.values(assignments).flatMap((d) => [...d.coronel.map((id) => ['coronel', id]), ...d.bingen.map((id) => ['bingen', id])]);
   assert.ok(all.every(([s, id]) => id !== 'x3' && (id !== 'x1' || s === 'coronel')));
 });
+
+test('faltas seguidas viram faixa de datas', () => {
+  assert.equal(C.faixasDatas(['2026-10-25', '2026-10-26', '2026-10-27', '2026-10-17', '2026-10-31']), '17/10, 25/10 a 27/10, 31/10');
+  assert.equal(C.faixasDatas(['2026-10-10']), '10/10');
+  assert.equal(C.faixasDatas([]), '');
+});
