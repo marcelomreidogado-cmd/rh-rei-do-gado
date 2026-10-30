@@ -14,7 +14,7 @@ export function render(el) {
     <label class="inline"><input type="checkbox" id="inact" ${showInactive ? 'checked' : ''}> mostrar desligados</label><button class="btn primary" data-act="new">＋ Novo funcionário</button></div>
     ${C.STORES.map((st) => `<section class="store"><h2>${esc(st.nome)} <small>registro / imposto · CNPJ ${esc(st.cnpj)}</small></h2><div class="table-wrap"><table class="grid"><thead><tr><th>Nome</th><th>Função</th><th>Entrada</th><th>Admissão</th><th>Salário</th><th>Trabalha em</th><th>Escala de domingo</th><th>CPF</th><th>Telefone</th><th></th></tr></thead><tbody>
     ${list.filter((e) => e.loja === st.id).map((e) => { const ph = C.normalizePhone(e.telefone, S.config.dddPadrao); const cpfOk = !e.cpf || C.cpfValid(e.cpf);
-      return `<tr class="${e.ativo === false ? 'off' : ''}" data-emp="${esc(e.id)}"><td class="c-nome">${esc(e.nome)}${e.ativo === false ? ' <span class="badge">desligado</span>' : ''}</td><td>${esc(e.funcao || '')}</td><td class="c-dt">${C.fmtDMY(e.entrada)}</td><td class="c-dt">${C.fmtDMY(e.admissao)}</td><td class="num">${C.brl(e.salarioBase)}</td>
+      return `<tr class="${e.ativo === false ? 'off' : ''}" data-emp="${esc(e.id)}"><td class="c-nome">${esc(e.nome)}${e.ativo === false ? ' <span class="badge">desligado</span>' : ''}</td><td>${esc(e.funcao || '')}${e.motoboy ? ' <span class="badge">motoboy</span>' : ''}</td><td class="c-dt">${C.fmtDMY(e.entrada)}</td><td class="c-dt">${C.fmtDMY(e.admissao)}</td><td class="num">${C.brl(e.salarioBase)}</td>
       <td>${sel(e, 'lojaTrabalho', C.WORK_PLACES.map((w) => [w.id, w.nome]), C.workStore(e))}</td><td>${sel(e, 'categoria', Object.entries(C.CATEGORIAS), e.categoria)}</td>
       <td>${mask(e.cpf)}${cpfOk ? '' : ' <span class="badge warn" title="Os dígitos verificadores não conferem: provável erro de digitação">CPF?</span>'}${e.cpf ? '' : ' <span class="badge warn">falta CPF</span>'}</td>
       <td class="${ph.ok ? '' : 'bad'}">${ph.ok ? esc(ph.display) : 'sem telefone'}</td><td><button class="btn sm" data-act="edit" data-id="${esc(e.id)}">Editar</button></td></tr>`; }).join('') || '<tr><td colspan="10" class="muted">Nenhum.</td></tr>'}
@@ -47,7 +47,8 @@ function openForm(e) {
       <label>CPF<input class="in" id="f_cpf" inputmode="numeric" value="${esc(C.cpfFmt(n.cpf))}"><small id="cpfmsg"></small></label>
       <label>Telefone (WhatsApp)<input class="in" id="f_tel" inputmode="tel" value="${esc(n.telefone || '')}"><small id="telmsg"></small></label>
       <label>Situação<select class="in" id="f_ativo"><option value="1" ${n.ativo !== false ? 'selected' : ''}>Ativo</option><option value="0" ${n.ativo === false ? 'selected' : ''}>Desligado</option></select></label>
-      <label>Data de desligamento<input class="in" type="date" id="f_dem" value="${n.demissao || ''}"></label></div>
+      <label>Data de desligamento<input class="in" type="date" id="f_dem" value="${n.demissao || ''}"></label>
+      <label class="inline span2"><input type="checkbox" id="f_moto" ${n.motoboy ? 'checked' : ''}> Motoboy — periculosidade de <input class="in" id="f_peric" type="number" min="0" max="100" style="width:64px" value="${n.periculosidadePct ?? 30}">% e campo de aluguel de moto na folha</label></div>
       <p class="muted">Funcionário novo entra sozinho na folha do mês aberto, na loja do registro. Desligados deixam de aparecer nos meses novos; os meses antigos continuam intactos.</p>`,
     actions: [{ label: 'Cancelar' }, { label: 'Salvar', kind: 'primary', onClick: async (m) => {
       const nome = m.$('#f_nome').value.trim().toUpperCase();
@@ -56,7 +57,7 @@ function openForm(e) {
       if (cpf && cpf.length !== 11) { toast('CPF deve ter 11 dígitos.', 'err'); return false; }
       const tel = m.$('#f_tel').value.trim();
       if (tel && !C.normalizePhone(tel, S.config.dddPadrao).ok) { toast('Telefone inválido. Use DDD + número.', 'err'); return false; }
-      await D.saveEmployee({ ...(e || {}), id: e?.id, nome, loja: m.$('#f_loja').value, lojaTrabalho: m.$('#f_lt').value, funcao: m.$('#f_funcao').value.trim(), categoria: m.$('#f_cat').value, salarioBase: C.num(m.$('#f_sal').value), entrada: m.$('#f_ent').value || null, admissao: m.$('#f_adm').value || null, nascimento: m.$('#f_nasc').value || null, cpf, telefone: tel, ativo: m.$('#f_ativo').value === '1', demissao: m.$('#f_dem').value || null });
+      await D.saveEmployee({ ...(e || {}), id: e?.id, nome, loja: m.$('#f_loja').value, lojaTrabalho: m.$('#f_lt').value, funcao: m.$('#f_funcao').value.trim(), categoria: m.$('#f_cat').value, salarioBase: C.num(m.$('#f_sal').value), entrada: m.$('#f_ent').value || null, admissao: m.$('#f_adm').value || null, nascimento: m.$('#f_nasc').value || null, cpf, telefone: tel, ativo: m.$('#f_ativo').value === '1', demissao: m.$('#f_dem').value || null, motoboy: m.$('#f_moto').checked, periculosidadePct: Math.max(0, Math.min(100, C.num(m.$('#f_peric').value) || 30)) });
       render(root); toast('Funcionário salvo.');
     } }],
     onMount: (m) => {

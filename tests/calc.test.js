@@ -279,3 +279,11 @@ test('Consumo Nota Facil: cada pessoa tem R$ 850; o que passar e devido no mes',
   assert.equal(r.total.consumo, 2450.5); assert.equal(r.total.devido, 150);
   assert.equal(C.notaFacil(cfg, { limite: 1000, valores: { marcelo: 1200 } }).linhas[0].devido, 200, 'limite do mes vale sobre a config');
 });
+
+test('motoboy: periculosidade de 30% sobre o salario base e aluguel de moto recorrente', () => {
+  assert.equal(C.periculosidade({ motoboy: true, salarioBase: 1690 }), 507);
+  assert.equal(C.periculosidade({ motoboy: true, salarioBase: 1690, periculosidadePct: 20 }), 338);
+  assert.equal(C.periculosidade({ salarioBase: 1690 }), 0);
+  assert.ok(C.RECURRING.includes('aluguelMoto'));
+  assert.equal(C.carryOver({ aluguelMoto: 400, vale: 50 }, '2026-11', 'x').aluguelMoto, 400);
+});

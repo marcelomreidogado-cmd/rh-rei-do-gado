@@ -42,7 +42,16 @@ export const workPlaceName = (id) => WORK_PLACES.find((w) => w.id === id)?.nome 
 export const inEscala = (e) => !!e && e.ativo !== false && workStore(e) !== ADM && ['atendimento', 'manipulacao', HIBRIDO].includes(e.categoria);
 
 // Campos que se repetem para os meses seguintes quando alterados
-export const RECURRING = ['salario', 'premio', 'adiantamento', 'assiduidade'];
+export const RECURRING = ['salario', 'premio', 'adiantamento', 'assiduidade', 'aluguelMoto'];
+
+// ---------- motoboy ----------
+export const ehMotoboy = (emp) => !!emp && emp.motoboy === true;
+/** Adicional de periculosidade do motoboy (CLT art. 193, §4º): % (padrao 30) sobre o salario base. */
+export function periculosidade(emp, entry = {}) {
+  if (!ehMotoboy(emp)) return 0;
+  const base = num(emp.salarioBase) || num(entry.salario);
+  return round2(base * (emp.periculosidadePct ?? 30) / 100);
+}
 
 // ---------- numeros ----------
 export const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -162,7 +171,7 @@ export function assiduidadeEfetiva(entry, leaves, mk) {
 
 // ---------- lancamento do mes ----------
 export const emptyEntry = (month, empId, salario = 0) => ({
-  month, empId, salario, consumo: 0, horaExtra: 0, feriado: 0, assiduidade: 0, adiantamento: 0, vale: 0, vales: [], premio: 0,
+  month, empId, salario, consumo: 0, horaExtra: 0, feriado: 0, assiduidade: 0, adiantamento: 0, vale: 0, vales: [], premio: 0, aluguelMoto: 0,
   descAdic: 0, descAdicNota: '', dias: 0, vt: VT_DIARIO, faltaTxt: '', atestadoTxt: '', obs: '', excluded: false,
 });
 

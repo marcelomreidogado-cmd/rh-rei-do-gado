@@ -217,6 +217,23 @@ test('E2E: vale com dia e valor (varios no mes) entra na folha e no e-mail', { s
   await page.waitForFunction(() => document.querySelector('tr[data-row="bruno-jose"] [data-act=vale]')?.textContent.trim() === 'R$ 50,00');
 });
 
+test('E2E: motoboy (Marcio) tem periculosidade 30% e aluguel de moto so na linha dele', { skip, timeout: 60000 }, async () => {
+  const marcio = row('marcio-goncalves');
+  await page.waitForSelector(`${marcio} [data-f=aluguelMoto]`);
+  const cor = 'section.store:has(h2:has-text("Correas"))', bin = 'section.store:has(h2:has-text("Bingen"))';
+  assert.equal(await page.locator(`${cor} th[data-col=periculosidade]`).count(), 1);
+  assert.equal(await page.locator(`${bin} th[data-col=aluguelMoto]`).count(), 0, 'loja sem motoboy nao mostra as colunas');
+  assert.match(await txt(`${marcio} td[title*="30%"]`), /R\$ 507,00/);
+  assert.equal(await page.locator(`${cor} [data-f=aluguelMoto]`).count(), 1, 'campo so para ele');
+  await edit(`${marcio} [data-f=aluguelMoto]`, '450');
+  assert.equal(await val(`${marcio} [data-f=aluguelMoto]`), 'R$ 450,00');
+  if (process.env.SHOT_DIR) await page.locator('section.store:has(h2:has-text("Correas"))').screenshot({ path: path.join(process.env.SHOT_DIR, 'motoboy.png') });
+  await page.click('[data-act=send]'); await page.waitForSelector('.preview table');
+  const html = await page.locator('.preview').innerHTML();
+  assert.ok(html.includes('>Aluguel moto<') && html.includes('R$ 450,00') && html.includes('R$ 507,00'), 'vai no e-mail da contabilidade');
+  await page.locator('.modal-foot button', { hasText: /^Fechar$/ }).click();
+});
+
 test('E2E: Consumo Nota Facil depois da Coronel: R$ 850 por pessoa, devido no mes e fora do e-mail', { skip, timeout: 60000 }, async () => {
   await page.waitForSelector('section.nf');
   const ordem = await page.$$eval('section.store h2', (hs) => hs.map((h) => h.childNodes[0].textContent.trim()));

@@ -12,6 +12,8 @@ export const COLS = [
   { k: 'assiduidade', label: 'Assiduidade', money: true, rec: true }, { k: 'adiantamento', label: 'Adiantamento', money: true, rec: true },
   { k: 'vale', label: 'Vale', money: true },
   { k: 'premio', label: 'Prêmio', money: true, rec: true }, { k: 'descAdic', label: 'Descontos Adicionais', money: true },
+  // so aparecem na tabela da loja que tem motoboy (e so na linha dele)
+  { k: 'periculosidade', label: 'Periculosidade', money: true, soMoto: true }, { k: 'aluguelMoto', label: 'Aluguel moto', money: true, rec: true, soMoto: true },
   { k: 'passagem', label: 'Passagem' }, { k: 'dias', label: 'Dias' },
   { k: 'obs', label: 'Observação', fixed: true },
 ];
@@ -22,6 +24,8 @@ let root = null;
 const hidden = () => new Set(D.monthDoc(mk)?.hiddenCols || []);
 const closed = () => D.monthClosed(mk);
 const visibleCols = (forMail = false) => COLS.filter((c) => (forMail ? true : !c.mailOnly) && !hidden().has(c.k));
+/** Colunas de uma loja: as de motoboy so entram se a loja tem motoboy no mes. */
+const colsDoGrupo = (cols, rows) => (rows.some((r) => C.ehMotoboy(r.emp)) ? cols : cols.filter((c) => !c.soMoto));
 
 // valor textual de uma celula (usado no e-mail e na conferencia de colunas vazias)
 function cellValue(col, { entry: e, emp }) {
@@ -38,6 +42,8 @@ function cellValue(col, { entry: e, emp }) {
     case 'dias': return e.dias ? String(e.dias) : '';
     case 'descAdic': return C.money(e.descAdic);
     case 'vale': return C.valeTexto(e);
+    case 'periculosidade': return C.money(C.periculosidade(emp, e));
+    case 'aluguelMoto': return C.ehMotoboy(emp) ? C.money(e.aluguelMoto) : '';
     default: return col.money ? C.money(e[col.k]) : '';
   }
 }
@@ -46,7 +52,7 @@ const isEmptyCol = (col, rows) => rows.every((r) => !cellValue(col, r));
 // ---------- e-mail para a contabilidade ----------
 export function buildEmail() {
   const all = D.rowsByStore(mk).flatMap((g) => g.rows);
-  const cols = visibleCols(true).filter((c) => c.k !== 'obs' || all.some((r) => r.entry.obs));
+  const colsAll = visibleCols(true).filter((c) => c.k !== 'obs' || all.some((r) => r.entry.obs));
   const md = D.monthDoc(mk) || {};
   const groups = D.rowsByStore(mk).filter((g) => g.rows.length);
   const th = 'border:1px solid #9aa0a6;background:#e8eaed;padding:4px 6px;font:bold 12px Arial,sans-serif;text-align:center;white-space:nowrap';
@@ -54,6 +60,7 @@ export function buildEmail() {
   let html = `<div style="font-family:Arial,sans-serif"><p style="font:bold 15px Arial,sans-serif;margin:0 0 6px">REI DO GADO - ${esc(C.monthLabel(mk).toUpperCase())}</p>`;
   let text = `REI DO GADO - ${C.monthLabel(mk).toUpperCase()}\n`;
   for (const g of groups) {
+    const cols = colsDoGrupo(colsAll, g.rows);
     const head = cols.map((c) => (c.k === 'consumo' && md.consumoPeriodo ? `Consumo loja ${md.consumoPeriodo}` : c.label));
     html += `<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 14px"><tr><td colspan="${cols.length}" style="${th};text-align:left;background:#f1f3f4">${esc(g.store.nome.toUpperCase())} - CNPJ ${esc(g.store.cnpj)}</td></tr><tr>${head.map((h) => `<th style="${th}">${esc(h)}</th>`).join('')}</tr>`;
     text += `\n${g.store.nome.toUpperCase()} - CNPJ ${g.store.cnpj}\n${head.join('\t')}\n`;
@@ -98,7 +105,7 @@ export function render(el, month) {
       return;
     }
   }
-  const vcols = visibleCols();
+  const vcolsAll = visibleCols();
   const groups = D.rowsByStore(mk);
   const allRows = groups.flatMap((g) => g.rows);
   const excluded = D.entriesOf(mk).filter((e) => e.excluded);
@@ -126,9 +133,9 @@ export function render(el, month) {
     ${excluded.length ? `<span class="muted">Linhas excluídas:</span> ${excluded.map((e) => `<button class="chip" data-act="restorerow" data-emp="${esc(e.empId)}" title="Restaurar linha">${esc(D.emp(e.empId)?.nome.split(' ').slice(0, 2).join(' '))} ↩</button>`).join('')}` : ''}
     ${!isClosed && missing.length ? `<button class="chip add" data-act="addrow">＋ Incluir funcionário no mês (${missing.length})</button>` : ''}
   </div>
-  ${groups.map((g) => `<section class="store"><h2>${esc(g.store.nome)} <small>cód ${g.store.cod} · ${g.rows.length} funcionário(s)</small></h2>
+  ${groups.map((g) => { const vcols = colsDoGrupo(vcolsAll, g.rows); return `<section class="store"><h2>${esc(g.store.nome)} <small>cód ${g.store.cod} · ${g.rows.length} funcionário(s)</small></h2>
     <div class="table-wrap folha"><table class="grid"><thead><tr>${vcols.map((c) => `<th data-col="${c.k}">${esc(c.label)}${c.fixed || isClosed ? '' : ` <button class="th-x" data-act="hidecol" data-col="${c.k}" title="Excluir esta coluna do mês" aria-label="Excluir coluna ${esc(c.label)}">×</button>`}</th>`).join('')}<th class="act"></th></tr></thead>
-    <tbody>${g.rows.map((r) => rowHtml(r, vcols, isClosed)).join('') || `<tr><td colspan="${vcols.length + 1}" class="muted">Nenhum funcionário nesta loja no mês.</td></tr>`}</tbody></table></div></section>${g.store.id === 'coronel' ? notaFacilHtml(md, isClosed) : ''}`).join('')}
+    <tbody>${g.rows.map((r) => rowHtml(r, vcols, isClosed)).join('') || `<tr><td colspan="${vcols.length + 1}" class="muted">Nenhum funcionário nesta loja no mês.</td></tr>`}</tbody></table></div></section>${g.store.id === 'coronel' ? notaFacilHtml(md, isClosed) : ''}`; }).join('')}
   ${groups.some((g) => g.store.id === 'coronel') ? '' : notaFacilHtml(md, isClosed)}
   ${md.note !== undefined ? `<label class="block">Observações do mês (vai no rodapé do e-mail)<textarea class="in" id="monthNote" rows="2" ${isClosed ? 'disabled' : ''}>${esc(md.note || '')}</textarea></label>` : ''}
   ${allRows.length ? '' : '<p class="muted">Nenhum lançamento neste mês.</p>'}`;
@@ -215,6 +222,8 @@ function rowHtml(r, vcols, isClosed) {
       case 'passagem': return `<td class="num" data-cell="passagem">${C.money(v.passagem)}</td>`;
       case 'dias': return `<td class="num"><input class="in dias" inputmode="numeric" data-f="dias" data-emp="${esc(emp.id)}" value="${e.dias || ''}" ${dis}></td>`;
       case 'vale': return `<td class="num">${valeBtn(e, emp)}</td>`;
+      case 'periculosidade': { const p = C.periculosidade(emp, e); return `<td class="num" title="${p ? `${emp.periculosidadePct ?? 30}% de ${esc(C.money(C.num(emp.salarioBase) || C.num(e.salario)))}` : ''}">${C.money(p)}</td>`; }
+      case 'aluguelMoto': return C.ehMotoboy(emp) ? `<td class="num"><input class="in money" inputmode="decimal" data-f="aluguelMoto" data-emp="${esc(emp.id)}" value="${C.money(e.aluguelMoto)}" ${dis}></td>` : '<td class="na"></td>';
       case 'descAdic': return `<td class="num"><input class="in money" inputmode="decimal" data-f="descAdic" data-emp="${esc(emp.id)}" value="${C.money(e.descAdic)}" ${dis}></td>`;
       default: return `<td class="num"><input class="in money" inputmode="decimal" data-f="${c.k}" data-emp="${esc(emp.id)}" value="${C.money(e[c.k])}" ${dis}></td>`;
     }

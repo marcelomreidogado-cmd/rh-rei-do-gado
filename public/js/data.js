@@ -71,7 +71,13 @@ async function migrar() {
     // 29/10/2026: Jeferson entra nas escalas como hibrido (atendimento ou manipulacao)
     const j = S.employees.find((e) => e.id === 'jeferson-soares') || S.employees.find((e) => /^JEFERSON\b/i.test(e.nome || ''));
     if (j && j.categoria !== C.HIBRIDO) await saveEmployee({ ...j, categoria: C.HIBRIDO });
-    await saveConfig({ migracoes: { ...feitas, jefersonHibrido: true } });
+    await saveConfig({ migracoes: { ...(S.config.migracoes || feitas), jefersonHibrido: true } });
+  }
+  if (!(S.config.migracoes || {}).marcioMotoboy) {
+    // 30/10/2026: Marcio e motoboy (periculosidade 30% + aluguel de moto na folha)
+    const m = S.employees.find((e) => e.id === 'marcio-goncalves') || S.employees.find((e) => /^MARCIO\b/i.test(e.nome || '') && /moto/i.test(e.funcao || ''));
+    if (m && !m.motoboy) await saveEmployee({ ...m, motoboy: true, periculosidadePct: m.periculosidadePct ?? 30 });
+    await saveConfig({ migracoes: { ...(S.config.migracoes || {}), marcioMotoboy: true } });
   }
 }
 
@@ -155,7 +161,7 @@ export async function setMonthStatus(mk, status) {
 }
 
 // ---------- lancamentos ----------
-const MONEY = ['salario', 'consumo', 'horaExtra', 'feriado', 'assiduidade', 'adiantamento', 'vale', 'premio', 'descAdic'];
+const MONEY = ['salario', 'consumo', 'horaExtra', 'feriado', 'assiduidade', 'adiantamento', 'vale', 'premio', 'descAdic', 'aluguelMoto'];
 export const hasAbsence = (empId, mk, entry) => C.leavesOf(S.leaves, empId, mk).length > 0 || !!(entry && (entry.faltaTxt || entry.atestadoTxt));
 
 /**

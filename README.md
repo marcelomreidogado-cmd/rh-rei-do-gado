@@ -93,6 +93,10 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   loja ou cobrindo outra). Na 5x2 aparece como "Atend./Manip." com a/m no dia;
   no domingo, com contorno lilás. Jeferson foi marcado como híbrido
   (29/10/2026). No *Outro negócio* existe "Qualquer função (híbrido)".
+- **Motoboy** (Funcionários → marcar "Motoboy"; Márcio já marcado): na folha
+  da loja dele aparecem as colunas *Periculosidade* (30% do salário base,
+  percentual editável no cadastro) e *Aluguel moto* (campo só na linha dele,
+  repete nos meses seguintes); as duas vão no e-mail da contabilidade.
 - **Consumo Nota Fácil** (folha, depois da Coronel): Marcelo, Igor e Ary têm
   R$ 850,00 disponíveis por pessoa no mês; digita o consumo e o sistema mostra o
   devido no mês (consumo − 850) e os totais. Pessoas e valor editáveis no ✏️.
