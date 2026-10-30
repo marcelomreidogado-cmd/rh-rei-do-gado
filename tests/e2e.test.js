@@ -37,7 +37,7 @@ test('E2E: prepara navegador e faz login', { skip, timeout: 120000 }, async () =
 
 test('E2E: folha de setembro mostra os 13 funcionarios e passagem = dias x 11,80', { skip, timeout: 60000 }, async () => {
   assert.equal(await page.locator('tr[data-row]').count(), 13);
-  assert.equal(await page.locator('section.store').count(), 3);
+  assert.equal(await page.locator('section.store:not(.nf)').count(), 3);
   assert.equal(await txt(`${row('bruno-jose')} [data-cell=passagem]`), 'R$ 295,00');
   assert.equal(await txt(`${row('thais-carmo')} [data-cell=passagem]`), 'R$ 200,60'); // 17 dias
   assert.equal(await txt(`${row('carlos-rodrigo')} [data-cell=passagem]`), 'R$ 106,20'); // 9 dias
@@ -215,6 +215,22 @@ test('E2E: vale com dia e valor (varios no mes) entra na folha e no e-mail', { s
   await page.click('#vlist [data-del="1"]');
   await page.click('.modal-foot button:has-text("Salvar vales")');
   await page.waitForFunction(() => document.querySelector('tr[data-row="bruno-jose"] [data-act=vale]')?.textContent.trim() === 'R$ 50,00');
+});
+
+test('E2E: Consumo Nota Facil depois da Coronel: R$ 850 por pessoa, devido no mes e fora do e-mail', { skip, timeout: 60000 }, async () => {
+  await page.waitForSelector('section.nf');
+  const ordem = await page.$$eval('section.store h2', (hs) => hs.map((h) => h.childNodes[0].textContent.trim()));
+  assert.deepEqual(ordem.slice(-2), ['Coronel', 'Consumo Nota Fácil']);
+  assert.match(await txt('section.nf'), /Marcelo[\s\S]*Igor[\s\S]*Ary/);
+  await page.fill('input[data-nf=igor]', '1000'); await page.press('input[data-nf=igor]', 'Tab');
+  await page.waitForFunction(() => document.querySelector('[data-nfdev=igor]')?.textContent.includes('150,00'));
+  await page.fill('input[data-nf=ary]', '300'); await page.press('input[data-nf=ary]', 'Tab');
+  await page.waitForFunction(() => document.querySelector('[data-nftot=consumo]')?.textContent.includes('1.300,00'));
+  assert.match(await txt('[data-nftot=devido]'), /150,00/);
+  if (process.env.SHOT_DIR) await page.locator('section.nf').screenshot({ path: path.join(process.env.SHOT_DIR, 'notafacil.png') });
+  await page.click('[data-act=send]'); await page.waitForSelector('.preview table');
+  assert.ok(!(await page.locator('.preview').innerText()).includes('Nota Fácil'), 'nao vai no e-mail');
+  await page.locator('.modal-foot button', { hasText: /^Fechar$/ }).click();
 });
 
 test('E2E: escala de domingo sugere rodizio e respeita quantidades', { skip, timeout: 90000 }, async () => {

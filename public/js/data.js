@@ -19,6 +19,8 @@ export const DEFAULT_CONFIG = {
   vt: C.VT_DIARIO, dddPadrao: '24', required: C.DEFAULT_REQUIRED,
   waTemplate: 'Olá, {nome}! Segue o seu contracheque de {mes}. Qualquer dúvida é só falar com a gente. 🙂',
   emailAssunto: 'Folha de pagamento Rei do Gado - {mes}',
+  // Consumo Nota Facil (controle interno, nao vai no e-mail): cada pessoa tem um valor disponivel por mes
+  notaFacil: { limite: 850, pessoas: [{ id: 'marcelo', nome: 'Marcelo' }, { id: 'igor', nome: 'Igor' }, { id: 'ary', nome: 'Ary' }] },
 };
 
 export const S = {

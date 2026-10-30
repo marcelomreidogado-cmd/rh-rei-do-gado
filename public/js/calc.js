@@ -767,3 +767,18 @@ export function carga5x2({ weeks, pessoas, unidades, folgas, cobre = {}, unavail
   }
   return out;
 }
+
+// ---------- Consumo Nota Facil (controle interno da folha) ----------
+/**
+ * Cada pessoa tem um valor disponivel no mes (limite); o que passar disso e pago a loja (devido no mes).
+ * cfg = {limite, pessoas:[{id, nome}]}; mes = {limite?, valores:{id: consumo}} (o limite do mes vale sobre o da config).
+ */
+export function notaFacil(cfg = {}, mes = {}) {
+  const limite = round2(num(mes.limite ?? cfg.limite ?? 0));
+  const linhas = (cfg.pessoas || []).map((p) => {
+    const consumo = round2(num((mes.valores || {})[p.id] || 0));
+    return { id: p.id, nome: p.nome, consumo, limite, devido: round2(Math.max(0, consumo - limite)), sobra: round2(Math.max(0, limite - consumo)) };
+  });
+  const soma = (k) => round2(linhas.reduce((a, l) => a + l[k], 0));
+  return { limite, linhas, total: { consumo: soma('consumo'), devido: soma('devido') } };
+}

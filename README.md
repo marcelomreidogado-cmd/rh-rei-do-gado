@@ -93,6 +93,10 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   loja ou cobrindo outra). Na 5x2 aparece como "Atend./Manip." com a/m no dia;
   no domingo, com contorno lilás. Jeferson foi marcado como híbrido
   (29/10/2026). No *Outro negócio* existe "Qualquer função (híbrido)".
+- **Consumo Nota Fácil** (folha, depois da Coronel): Marcelo, Igor e Ary têm
+  R$ 850,00 disponíveis por pessoa no mês; digita o consumo e o sistema mostra o
+  devido no mês (consumo − 850) e os totais. Pessoas e valor editáveis no ✏️.
+  Controle interno: não vai no e-mail da contabilidade.
 - **Valores da folha** aparecem em reais (R$ 1.234,56), na tela e no e-mail.
 - **Usuários do sistema**: em Configurações → Usuários do sistema, um
   administrador inclui (ID + senha) ou remove o acesso de outras pessoas.

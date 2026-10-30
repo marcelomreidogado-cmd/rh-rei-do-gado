@@ -271,3 +271,11 @@ test('escala de domingo: hibrido conta como atendimento ou manipulacao e cobre a
   assert.deepEqual(shortages, []);
   assert.equal(Object.values(folgas).flat().length, 3);
 });
+
+test('Consumo Nota Facil: cada pessoa tem R$ 850; o que passar e devido no mes', () => {
+  const cfg = { limite: 850, pessoas: [{ id: 'marcelo', nome: 'Marcelo' }, { id: 'igor', nome: 'Igor' }, { id: 'ary', nome: 'Ary' }] };
+  const r = C.notaFacil(cfg, { valores: { marcelo: 1000, igor: '600,50', ary: 850 } });
+  assert.deepEqual(r.linhas.map((l) => l.devido), [150, 0, 0]);
+  assert.equal(r.total.consumo, 2450.5); assert.equal(r.total.devido, 150);
+  assert.equal(C.notaFacil(cfg, { limite: 1000, valores: { marcelo: 1200 } }).linhas[0].devido, 200, 'limite do mes vale sobre a config');
+});

@@ -128,10 +128,59 @@ export function render(el, month) {
   </div>
   ${groups.map((g) => `<section class="store"><h2>${esc(g.store.nome)} <small>cód ${g.store.cod} · ${g.rows.length} funcionário(s)</small></h2>
     <div class="table-wrap folha"><table class="grid"><thead><tr>${vcols.map((c) => `<th data-col="${c.k}">${esc(c.label)}${c.fixed || isClosed ? '' : ` <button class="th-x" data-act="hidecol" data-col="${c.k}" title="Excluir esta coluna do mês" aria-label="Excluir coluna ${esc(c.label)}">×</button>`}</th>`).join('')}<th class="act"></th></tr></thead>
-    <tbody>${g.rows.map((r) => rowHtml(r, vcols, isClosed)).join('') || `<tr><td colspan="${vcols.length + 1}" class="muted">Nenhum funcionário nesta loja no mês.</td></tr>`}</tbody></table></div></section>`).join('')}
+    <tbody>${g.rows.map((r) => rowHtml(r, vcols, isClosed)).join('') || `<tr><td colspan="${vcols.length + 1}" class="muted">Nenhum funcionário nesta loja no mês.</td></tr>`}</tbody></table></div></section>${g.store.id === 'coronel' ? notaFacilHtml(md, isClosed) : ''}`).join('')}
+  ${groups.some((g) => g.store.id === 'coronel') ? '' : notaFacilHtml(md, isClosed)}
   ${md.note !== undefined ? `<label class="block">Observações do mês (vai no rodapé do e-mail)<textarea class="in" id="monthNote" rows="2" ${isClosed ? 'disabled' : ''}>${esc(md.note || '')}</textarea></label>` : ''}
   ${allRows.length ? '' : '<p class="muted">Nenhum lançamento neste mês.</p>'}`;
   wire();
+}
+
+// ---------- Consumo Nota Facil (controle interno; nao vai no e-mail da contabilidade) ----------
+function notaFacilHtml(md, isClosed) {
+  const nf = C.notaFacil(S.config.notaFacil, md.notaFacil);
+  if (!nf.linhas.length) return '';
+  const dis = isClosed ? 'disabled' : '';
+  return `<section class="store nf"><h2>Consumo Nota Fácil <small>${esc(C.money(nf.limite))} por pessoa</small>${isClosed ? '' : ' <button class="btn sm" data-act="nfcfg" title="Pessoas e valor disponível">✏️</button>'}</h2>
+    <div class="table-wrap nf-wrap"><table class="grid nf-tab"><thead><tr><th>Nome</th><th>Consumo</th><th>Disponível</th><th>Devido no mês</th></tr></thead><tbody>
+    ${nf.linhas.map((l) => `<tr data-nf="${esc(l.id)}"><td class="c-nome">${esc(l.nome)}</td><td class="num"><input class="in money" inputmode="decimal" data-nf="${esc(l.id)}" value="${C.money(l.consumo)}" ${dis}></td><td class="num">${C.money(l.limite)}</td><td class="num nf-dev ${l.devido ? 'deve' : ''}" data-nfdev="${esc(l.id)}">${C.money(l.devido) || '—'}</td></tr>`).join('')}
+    </tbody><tfoot><tr><th>Total</th><th class="num" data-nftot="consumo">${C.money(nf.total.consumo)}</th><th></th><th class="num" data-nftot="devido">${C.money(nf.total.devido) || '—'}</th></tr></tfoot></table></div></section>`;
+}
+async function salvarNotaFacil(id, valor) {
+  const md = D.monthDoc(mk) || {};
+  const atual = md.notaFacil || {};
+  const valores = { ...(atual.valores || {}), [id]: C.round2(C.num(valor)) };
+  await D.updateMonth(mk, { notaFacil: { ...atual, limite: atual.limite ?? S.config.notaFacil?.limite ?? 850, valores } });
+  const nf = C.notaFacil(S.config.notaFacil, D.monthDoc(mk).notaFacil);
+  for (const l of nf.linhas) { const c = $(`[data-nfdev="${CSS.escape(l.id)}"]`, root); if (c) { c.textContent = C.money(l.devido) || '—'; c.classList.toggle('deve', !!l.devido); } }
+  const tc = $('[data-nftot=consumo]', root), td = $('[data-nftot=devido]', root);
+  if (tc) tc.textContent = C.money(nf.total.consumo); if (td) td.textContent = C.money(nf.total.devido) || '—';
+  return nf.linhas.find((l) => l.id === id);
+}
+function openNotaFacilCfg() {
+  const md = D.monthDoc(mk) || {};
+  const cfg = S.config.notaFacil || { limite: 850, pessoas: [] };
+  let pessoas = cfg.pessoas.map((p) => ({ ...p }));
+  const lim = md.notaFacil?.limite ?? cfg.limite;
+  const lista = () => pessoas.map((p, i) => `<div class="row"><input class="in" data-pn="${i}" value="${esc(p.nome)}" placeholder="Nome"><button class="icon-btn" type="button" data-pdel="${i}" title="Remover">✕</button></div>`).join('');
+  openModal({
+    title: 'Consumo Nota Fácil',
+    body: `<label>Valor disponível por pessoa (a partir de ${esc(C.monthLabel(mk))})<input class="in money" id="nf_lim" inputmode="decimal" value="${C.money(lim)}" style="width:140px"></label>
+      <p class="muted small">Pessoas</p><div id="nf_p">${lista()}</div><button class="btn sm" type="button" id="nf_add">＋ pessoa</button>`,
+    onMount: (m) => {
+      const ler = () => { m.$$('[data-pn]').forEach((i) => { pessoas[+i.dataset.pn].nome = i.value.trim(); }); };
+      m.$('#nf_add').onclick = () => { ler(); pessoas.push({ id: 'p' + Math.random().toString(36).slice(2, 8), nome: '' }); m.$('#nf_p').innerHTML = lista(); m.$$('[data-pn]').pop()?.focus(); };
+      m.$('#nf_p').onclick = (ev) => { const b = ev.target.closest('[data-pdel]'); if (b) { ler(); pessoas.splice(+b.dataset.pdel, 1); m.$('#nf_p').innerHTML = lista(); } };
+      m.el.__ler = ler;
+    },
+    actions: [{ label: 'Cancelar' }, { label: 'Salvar', kind: 'primary', onClick: async (m) => {
+      m.el.__ler(); pessoas = pessoas.filter((p) => p.nome);
+      const limite = C.round2(C.num(m.$('#nf_lim').value));
+      await D.saveConfig({ notaFacil: { limite, pessoas } });
+      // o limite novo vale deste mes em diante (meses abertos seguintes tambem)
+      for (const k of D.monthsKnown().filter((x) => x >= mk && !D.monthClosed(x))) { const d = D.monthDoc(k); if (d) await D.updateMonth(k, { notaFacil: { ...(d.notaFacil || {}), limite } }); }
+      render(root, mk); toast('Consumo Nota Fácil atualizado.');
+    } }],
+  });
 }
 
 function renderNoMonth() {
@@ -195,6 +244,7 @@ function wire() {
     const t = ev.target;
     if (t.id === 'consumoPeriodo') { await D.updateMonth(mk, { consumoPeriodo: t.value.trim() }); render(root, mk); return; }
     if (t.id === 'monthNote') { await D.updateMonth(mk, { note: t.value.trim() }); return; }
+    if (t.dataset.nf) { try { const l = await salvarNotaFacil(t.dataset.nf, t.value); t.value = C.money(l?.consumo); } catch (e) { toast(e.message, 'err'); } return; }
     const f = t.dataset.f; if (!f) return;
     const empId = t.dataset.emp;
     try {
@@ -234,6 +284,7 @@ function wire() {
         await D.setHiddenCols(mk, [...hidden(), ...empty.map((c) => c.k)]); render(root, mk); toast(`Colunas ocultadas: ${empty.map((c) => c.label).join(', ')}.`);
       } else if (act === 'send') openSend();
       else if (act === 'reopen') await reabrirMes();
+      else if (act === 'nfcfg') openNotaFacilCfg();
       else if (act === 'closemonth') await fecharMes();
     } catch (e) { toast(e.message, 'err'); }
   });
