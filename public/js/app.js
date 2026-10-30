@@ -54,7 +54,7 @@ async function onUser(user) {
   if (!user) { S.user = null; clearTimeout(idleTimer); showLogin(); return; }
   try {
     const adm = await S.store.get(COL.admins, user.uid);
-    if (!adm) { await auth.signOut(); showLogin('Este usuário não tem permissão de administrador do RH.'); return; }
+    if (!adm) { await auth.signOut(); showLogin(`A senha está certa, mas o ID "${user.id}" não tem acesso liberado ao RH (foi removido ou a inclusão não terminou). Peça para incluir de novo em Configurações → Usuários do sistema.`); return; }
     S.user = user;
     S.perfil = D.PERFIS[adm.perfil] ? adm.perfil : 'total';
     await D.loadAll();
@@ -65,7 +65,7 @@ async function onUser(user) {
   } catch (e) {
     console.error(e);
     await auth.signOut();
-    showLogin(e.code === 'permission-denied' ? 'Sem permissão para ler os dados. Confira as regras do Firestore (README).' : 'Erro ao carregar dados: ' + e.message);
+    showLogin(e.code === 'permission-denied' ? `Login certo, mas o banco não liberou a leitura${e.col ? ` de ${e.col}` : ''} para o ID "${user.id}". Confira as regras do Firestore (README).` : 'Erro ao carregar dados: ' + e.message);
   }
 }
 

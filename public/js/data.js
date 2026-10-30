@@ -380,7 +380,14 @@ export async function addAdmin(auth, id, pass, perfil = 'total') {
   if (perfil !== 'total' && !S.rulesV2) throw new Error('Para criar usuário só de Escala e Férias, atualize antes as regras do Firestore (veja o aviso nesta tela). Sem isso o banco não consegue limitar o acesso.');
   const login = String(id).trim().toLowerCase();
   if (!/^[a-z0-9._-]{3,30}$/.test(login)) throw new Error('ID deve ter 3 a 30 caracteres: letras, números, ponto, traço ou _ (sem espaço e sem acento).');
-  const uid = await auth.createUser(login, pass);
+  let uid;
+  try { uid = await auth.createUser(login, pass); }
+  catch (e) {
+    if (e.code === 'existe') throw new Error(`O ID "${login}" já foi usado antes e continua cadastrado no Firebase (remover o acesso não apaga o login). Para liberar de novo, inclua com a MESMA senha que ele tinha. Se ninguém lembra a senha, use outro ID (ex.: ${login}2) ou apague "${login}" em Firebase → Authentication → Users.`);
+    throw e;
+  }
+  const ja = await S.store.get(COL.admins, uid).catch(() => null);
+  if (ja) throw new Error(`O ID "${login}" já está na lista de usuários.`);
   try { await S.store.set(COL.admins, uid, { id: login, uid, perfil, criadoEm: nowIso(), criadoPor: S.user?.id || '' }); }
   catch (e) { throw new Error(e.code === 'permission-denied' ? 'O login foi criado, mas as regras do Firestore ainda não permitem liberar o acesso. Atualize as regras (README → “Regras do Firestore”) e clique em Incluir de novo com o mesmo ID.' : e.message); }
   await log('usuario_incluido', `${login} (${PERFIS[perfil]})`);

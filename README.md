@@ -91,6 +91,11 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
 - **Valores da folha** aparecem em reais (R$ 1.234,56), na tela e no e-mail.
 - **Usuários do sistema**: em Configurações → Usuários do sistema, um
   administrador inclui (ID + senha) ou remove o acesso de outras pessoas.
+  Remover tira o acesso, mas o login continua no Firebase: para liberar o
+  mesmo ID de novo, inclua com a mesma senha (o sistema reativa); com outra
+  senha, use outro ID ou apague o login em Firebase → Authentication → Users.
+  A tela de login diz exatamente o que falhou (senha, acesso não liberado ou
+  regra do banco).
   Requer as regras atualizadas do `firestore.rules.rh` (bloco `rh_admins`).
   Cada usuário tem um **acesso**: *Acesso total* ou *Só Escala e Férias*. O
   segundo só vê as abas Escala de domingo e Férias e, pelas regras do banco,

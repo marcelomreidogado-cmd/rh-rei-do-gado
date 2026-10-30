@@ -9,16 +9,16 @@ export function firestoreStore(fb) {
   return {
     kind: 'firestore',
     async list(col) {
-      const s = await db.collection(col).get();
-      return s.docs.map((d) => ({ id: d.id, ...d.data() }));
+      try { const s = await db.collection(col).get(); return s.docs.map((d) => ({ id: d.id, ...d.data() })); }
+      catch (e) { e.col = col; throw e; }
     },
     async listWhere(col, field, val) {
       const s = await db.collection(col).where(field, '==', val).get();
       return s.docs.map((d) => ({ id: d.id, ...d.data() }));
     },
     async get(col, id) {
-      const d = await ref(col, id).get();
-      return d.exists ? { id: d.id, ...d.data() } : null;
+      try { const d = await ref(col, id).get(); return d.exists ? { id: d.id, ...d.data() } : null; }
+      catch (e) { e.col = col; throw e; }
     },
     async set(col, id, data, merge = false) { await ref(col, id).set(clean(data), { merge }); },
     async del(col, id) { await ref(col, id).delete(); },
@@ -63,13 +63,15 @@ export function firebaseAuth(fb) {
     async signIn(id, pass) {
       try { const r = await auth.signInWithEmailAndPassword(idToEmail(id), pass); return { uid: r.user.uid, id: String(id).trim().toLowerCase() }; }
       catch (e) {
-        const m = { 'auth/wrong-password': 'ID ou senha incorretos.', 'auth/user-not-found': 'ID ou senha incorretos.', 'auth/invalid-credential': 'ID ou senha incorretos.', 'auth/invalid-email': 'ID inválido.', 'auth/too-many-requests': 'Muitas tentativas. Aguarde alguns minutos e tente de novo.', 'auth/network-request-failed': 'Sem conexão com a internet.', 'auth/user-disabled': 'Usuário desativado.' };
+        const m = { 'auth/wrong-password': 'ID ou senha incorretos.', 'auth/user-not-found': 'ID ou senha incorretos.', 'auth/invalid-credential': 'ID ou senha incorretos.', 'auth/invalid-login-credentials': 'ID ou senha incorretos.', 'auth/invalid-email': 'ID inválido.', 'auth/too-many-requests': 'Muitas tentativas. Aguarde alguns minutos e tente de novo.', 'auth/network-request-failed': 'Sem conexão com a internet.', 'auth/user-disabled': 'Usuário desativado.' };
         throw new Error(m[e.code] || 'Não foi possível entrar (' + (e.code || e.message) + ').');
       }
     },
     signOut() { return auth.signOut(); },
     onChange(cb) { return auth.onAuthStateChanged((u) => cb(u ? { uid: u.uid, id: (u.email || '').split('@')[0] } : null)); },
-    /** Cria um login novo SEM derrubar a sessao atual (usa uma segunda instancia do app). Devolve o uid. */
+    /** Cria um login novo SEM derrubar a sessao atual (usa uma segunda instancia do app). Devolve o uid.
+     *  Se o ID ja existe no Firebase (ex.: acesso removido antes), tenta entrar com a senha informada e devolve o uid
+     *  dele (reativacao). Erro com code 'existe' quando a senha nao confere. */
     async createUser(id, pass) {
       const app2 = fb.apps.find((a) => a.name === 'cadastro') || fb.initializeApp(fb.app().options, 'cadastro');
       const a2 = app2.auth();
@@ -78,7 +80,11 @@ export function firebaseAuth(fb) {
         const r = await a2.createUserWithEmailAndPassword(idToEmail(id), pass);
         const uid = r.user.uid; await a2.signOut(); return uid;
       } catch (e) {
-        const m = { 'auth/email-already-in-use': 'Já existe um usuário com esse ID.', 'auth/weak-password': 'Senha fraca: use pelo menos 6 caracteres.', 'auth/invalid-email': 'ID inválido (use letras, números, ponto ou traço).', 'auth/operation-not-allowed': 'Login por e-mail/senha desativado no Firebase (Authentication → Sign-in method).' };
+        if (e.code === 'auth/email-already-in-use') {
+          try { const r = await a2.signInWithEmailAndPassword(idToEmail(id), pass); const uid = r.user.uid; await a2.signOut(); return uid; }
+          catch (e2) { const err = new Error('existe'); err.code = 'existe'; throw err; }
+        }
+        const m = { 'auth/weak-password': 'Senha fraca: use pelo menos 6 caracteres.', 'auth/invalid-email': 'ID inválido (use letras, números, ponto ou traço).', 'auth/operation-not-allowed': 'Login por e-mail/senha desativado no Firebase (Authentication → Sign-in method).', 'auth/too-many-requests': 'Muitas tentativas seguidas. Aguarde alguns minutos.' };
         throw new Error(m[e.code] || 'Não foi possível criar o usuário (' + (e.code || e.message) + ').');
       }
     },
@@ -91,7 +97,7 @@ export function memoryAuth() {
   return {
     async init() {},
     async signIn(id, pass) { const u = users[String(id).trim().toLowerCase()]; if (u && u.pass === pass) { cur = { uid: u.uid, id: String(id).trim().toLowerCase() }; cb(cur); return cur; } throw new Error('ID ou senha incorretos.'); },
-    async createUser(id, pass) { const k = String(id).trim().toLowerCase(); if (users[k]) throw new Error('Já existe um usuário com esse ID.'); if (String(pass).length < 6) throw new Error('Senha fraca: use pelo menos 6 caracteres.'); users[k] = { pass, uid: 'demo-' + k }; return users[k].uid; },
+    async createUser(id, pass) { const k = String(id).trim().toLowerCase(); if (users[k]) { if (users[k].pass === pass) return users[k].uid; const err = new Error('existe'); err.code = 'existe'; throw err; } if (String(pass).length < 6) throw new Error('Senha fraca: use pelo menos 6 caracteres.'); users[k] = { pass, uid: 'demo-' + k }; return users[k].uid; },
     async signOut() { cur = null; cb(null); },
     onChange(f) { cb = f; setTimeout(() => f(cur), 0); },
   };

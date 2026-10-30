@@ -342,6 +342,13 @@ test('E2E: configuracoes — incluir e remover usuario do sistema', { skip, time
   assert.match(await txt('#users'), /admin[\s\S]*você/);
   await page.click('#users tr:has-text("joana") [data-rmu]'); await page.click('.modal-foot button:has-text("Remover")');
   await page.waitForFunction(() => !document.querySelector('#users')?.innerText.includes('joana'));
+  // incluir de novo o mesmo ID: com outra senha explica o motivo; com a mesma senha reativa
+  await page.fill('#u_id', 'joana'); await page.fill('#u_pw', 'outra99'); await page.fill('#u_pw2', 'outra99');
+  await page.click('#u_add'); await page.waitForFunction(() => document.querySelector('#toast')?.textContent.includes('MESMA senha'));
+  await page.fill('#u_id', 'joana'); await page.fill('#u_pw', '123456'); await page.fill('#u_pw2', '123456');
+  await page.click('#u_add'); await page.waitForSelector('#users tr:has-text("joana")');
+  await page.click('#users tr:has-text("joana") [data-rmu]'); await page.click('.modal-foot button:has-text("Remover")');
+  await page.waitForFunction(() => !document.querySelector('#users')?.innerText.includes('joana'));
 });
 
 test('E2E: usuario so de Escala e Ferias ve apenas essas abas e nao carrega dados sensiveis', { skip, timeout: 90000 }, async () => {

@@ -50,7 +50,7 @@ export function renderConfig(root, auth) {
         const b = ev.target.closest('[data-rmu]'); if (!b) return;
         const u = list.find((x) => x.id === b.dataset.rmu);
         if (!(await confirmBox(`Remover o acesso de "${u.id}"? A pessoa não consegue mais entrar no sistema.`, { okLabel: 'Remover', danger: true }))) return;
-        try { await D.removeAdmin(u.uid); toast('Acesso removido.'); loadUsers(); } catch (e) { toast(e.code === 'permission-denied' ? 'As regras do Firestore ainda não permitem remover usuários — atualize as regras (README).' : e.message, 'err', 8000); }
+        try { await D.removeAdmin(u.uid); toast(`Acesso de "${u.id}" removido. Para liberar de novo depois, inclua o mesmo ID com a mesma senha.`, 'ok', 7000); loadUsers(); } catch (e) { toast(e.code === 'permission-denied' ? 'As regras do Firestore ainda não permitem remover usuários — atualize as regras (README).' : e.message, 'err', 8000); }
       };
     } catch (e) {
       box.innerHTML = `<div class="warn-box">Para listar e incluir usuários por aqui, atualize as <b>regras do Firestore</b> uma vez (arquivo <code>firestore.rules.rh</code>, bloco <code>rh_admins</code> — passo a passo no README). Até lá, os usuários continuam sendo criados no console do Firebase.</div>`;
@@ -63,7 +63,7 @@ export function renderConfig(root, auth) {
     if (pw.length < 6) return toast('A senha precisa ter pelo menos 6 caracteres.', 'err');
     const b = $('#u_add', root); b.disabled = true;
     const perfil = $('#u_perfil', root).value;
-    try { await D.addAdmin(auth, id, pw, perfil); toast(`Usuário "${id.trim().toLowerCase()}" incluído (${D.PERFIS[perfil]}). Já pode entrar com esse ID e senha.`); ['#u_id', '#u_pw', '#u_pw2'].forEach((s) => { $(s, root).value = ''; }); loadUsers(); }
+    try { await D.addAdmin(auth, id, pw, perfil); toast(`Usuário "${id.trim().toLowerCase()}" liberado (${D.PERFIS[perfil]}). Já pode entrar com esse ID e senha.`); ['#u_id', '#u_pw', '#u_pw2'].forEach((s) => { $(s, root).value = ''; }); loadUsers(); }
     catch (e) { toast(e.message, 'err', 9000); }
     b.disabled = false;
   };
