@@ -19,6 +19,8 @@ const val = async (sel) => page.locator(sel).first().inputValue();
 const edit = async (sel, v) => { await page.fill(sel, v); await page.press(sel, 'Tab'); await page.waitForTimeout(150); };
 const row = (id) => `tr[data-row="${id}"]`;
 
+const C_num = (t) => Number(String(t || '').replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+
 test('E2E: prepara navegador e faz login', { skip, timeout: 120000 }, async () => {
   ({ srv, url: base } = await startServer(SEED));
   browser = await chromium.launch({ executablePath: CHROME, args: ['--no-sandbox'] });
@@ -37,7 +39,7 @@ test('E2E: prepara navegador e faz login', { skip, timeout: 120000 }, async () =
 
 test('E2E: folha de setembro mostra os 13 funcionarios e passagem = dias x 11,80', { skip, timeout: 60000 }, async () => {
   assert.equal(await page.locator('tr[data-row]').count(), 13);
-  assert.equal(await page.locator('section.store:not(.nf)').count(), 3);
+  assert.equal(await page.locator('section.store:not(.nf):not(.tg)').count(), 3);
   assert.equal(await txt(`${row('bruno-jose')} [data-cell=passagem]`), 'R$ 295,00');
   assert.equal(await txt(`${row('thais-carmo')} [data-cell=passagem]`), 'R$ 200,60'); // 17 dias
   assert.equal(await txt(`${row('carlos-rodrigo')} [data-cell=passagem]`), 'R$ 106,20'); // 9 dias
@@ -57,8 +59,10 @@ test('E2E: mes novo herda salario/premio/adiantamento/assiduidade e alteracao pr
   await page.click('[data-act=createmonth]');
   await page.waitForSelector('table.grid');
   const bruno = row('bruno-jose');
-  // entrada/admissao/funcao/salario sairam da folha (ficam no cadastro); observacao no fim da linha
-  for (const c of ['salario', 'entrada', 'admissao', 'funcao', 'cod']) assert.equal(await page.locator(`th[data-col=${c}]`).count(), 0, c);
+  // entrada/admissao/funcao sairam da folha (ficam no cadastro); salario volta (so leitura, do cadastro); observacao no fim da linha
+  for (const c of ['entrada', 'admissao', 'funcao', 'cod']) assert.equal(await page.locator(`th[data-col=${c}]`).count(), 0, c);
+  assert.equal(await page.locator('th[data-col=salario]').count(), 3);
+  assert.match(await txt(`${bruno} td[title*="Funcionários"]`), /^R\$ [\d.]+,\d{2}$/);
   assert.equal(await page.locator('table.grid thead th[data-col]').last().getAttribute('data-col'), 'obs');
   assert.equal(await page.locator('[data-f=descAdicNota]').count(), 0);
   assert.equal(await val(`${bruno} [data-f=premio]`), 'R$ 500,00');
@@ -217,6 +221,32 @@ test('E2E: vale com dia e valor (varios no mes) entra na folha e no e-mail', { s
   await page.waitForFunction(() => document.querySelector('tr[data-row="bruno-jose"] [data-act=vale]')?.textContent.trim() === 'R$ 50,00');
 });
 
+test('E2E: total por loja e total geral (assiduidade, premio, vale, passagem) e liquido de cada um', { skip, timeout: 60000 }, async () => {
+  await page.waitForSelector('section.tg');
+  const bruno = row('bruno-jose');
+  const tg = async (k) => C_num(await txt(`[data-tg=${k}]`));
+  const antes = await tg('premio');
+  await edit(`${bruno} [data-f=premio]`, String(C_num(await val(`${bruno} [data-f=premio]`)) + 100).replace('.', ','));
+  await page.waitForFunction((v) => { const t = document.querySelector('[data-tg=premio]')?.textContent || ''; return Number(t.replace(/[^\d,]/g, '').replace(',', '.')) === v; }, antes + 100);
+  // liquido digitado entra no total da loja e no geral
+  await edit(`${bruno} [data-f=liquido]`, '2.000,00');
+  assert.equal(await val(`${bruno} [data-f=liquido]`), 'R$ 2.000,00');
+  assert.ok((await tg('liquido')) >= 2000);
+  const lojas = await page.$$eval('section.tg tbody tr td.c-nome', (t) => t.map((x) => x.textContent));
+  assert.deepEqual(lojas, ['Bingen', 'Correas', 'Coronel']);
+  // soma das lojas = total geral
+  for (const k of ['assiduidade', 'vale', 'passagem']) {
+    const parc = await page.$$eval(`[data-tgl$="|${k}"]`, (t) => t.map((x) => Number((x.textContent.replace(/[^\d,]/g, '').replace(',', '.')) || 0)));
+    assert.equal(Math.round(parc.reduce((a, b) => a + b, 0) * 100), Math.round((await tg(k)) * 100), k);
+  }
+  assert.equal(await page.locator('section.store:has(h2:has-text("Coronel")) tfoot th[data-tot="coronel|premio"]').count(), 1, 'total da loja');
+  await page.click('[data-act=send]'); await page.waitForSelector('.preview table');
+  const html = await page.locator('.preview').innerHTML();
+  assert.ok(!html.includes('>Líquido<') && !html.includes('>Salário<'), 'salario e liquido ficam fora do e-mail');
+  await page.locator('.modal-foot button', { hasText: /^Fechar$/ }).click();
+  if (process.env.SHOT_DIR) await page.locator('section.tg').screenshot({ path: path.join(process.env.SHOT_DIR, 'totalgeral.png') });
+});
+
 test('E2E: motoboy (Marcio) tem periculosidade 30% e aluguel de moto so na linha dele', { skip, timeout: 60000 }, async () => {
   const marcio = row('marcio-goncalves');
   await page.waitForSelector(`${marcio} [data-f=aluguelMoto]`);
@@ -237,7 +267,7 @@ test('E2E: motoboy (Marcio) tem periculosidade 30% e aluguel de moto so na linha
 test('E2E: Consumo Nota Facil depois da Coronel: R$ 850 por pessoa, devido no mes e fora do e-mail', { skip, timeout: 60000 }, async () => {
   await page.waitForSelector('section.nf');
   const ordem = await page.$$eval('section.store h2', (hs) => hs.map((h) => h.childNodes[0].textContent.trim()));
-  assert.deepEqual(ordem.slice(-2), ['Coronel', 'Consumo Nota Fácil']);
+  assert.deepEqual(ordem.slice(-3), ['Coronel', 'Consumo Nota Fácil', 'Total geral']);
   assert.match(await txt('section.nf'), /Marcelo[\s\S]*Igor[\s\S]*Ary/);
   await page.fill('input[data-nf=igor]', '1000'); await page.press('input[data-nf=igor]', 'Tab');
   await page.waitForFunction(() => document.querySelector('[data-nfdev=igor]')?.textContent.includes('150,00'));
@@ -286,6 +316,9 @@ test('E2E: funcionarios (CPF/telefone) e configuracoes', { skip, timeout: 60000 
   assert.match(await bruno.innerText(), /CPF\?/); // digito verificador nao confere
   assert.match(await bruno.innerText(), /\(24\) 99293-2577/);
   assert.match(await page.locator('tr', { hasText: 'MARCIO GONCALVES' }).innerText(), /falta CPF/);
+  // salario, premio do ultimo mes fechado e a soma dos dois
+  assert.equal(await page.locator('th:has-text("Salário + prêmio")').count(), 3);
+  assert.match(await bruno.innerText(), /\d,\d{2}\s+[\d.]+,\d{2}\s+[\d.]+,\d{2}/);
   await page.click('#nav a[data-v=config]'); await page.waitForSelector('#c_vt');
   assert.equal(await val('#c_vt'), '11,80');
   await page.click('#nav a[data-v=historico]'); await page.waitForSelector('table.grid');

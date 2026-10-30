@@ -99,6 +99,14 @@ export const monthClosed = (mk) => monthDoc(mk)?.status === 'closed';
 export const closedSet = () => new Set([...S.months.values()].filter((m) => m.status === 'closed').map((m) => m.id));
 export const entriesOf = (mk) => [...S.entries.values()].filter((e) => e.month === mk);
 export const entryFor = (mk, empId) => S.entries.get(C.entryId(mk, empId)) || null;
+/** Ultimo mes com a folha fechada (ou null). */
+export const ultimoMesFechado = () => [...closedSet()].sort().pop() || null;
+/** Premio do funcionario no ultimo mes fechado: { valor, mes } */
+export function premioUltimoFechado(empId) {
+  const fechados = [...closedSet()].sort().reverse();
+  for (const m of fechados) { const e = entryFor(m, empId); if (e && !e.excluded) return { valor: C.num(e.premio), mes: m }; }
+  return { valor: 0, mes: fechados[0] || null };
+}
 export const monthsKnown = () => [...S.months.keys()].sort();
 export const leavesOfEmp = (empId) => S.leaves.filter((l) => l.empId === empId);
 
@@ -161,7 +169,7 @@ export async function setMonthStatus(mk, status) {
 }
 
 // ---------- lancamentos ----------
-const MONEY = ['salario', 'consumo', 'horaExtra', 'feriado', 'assiduidade', 'adiantamento', 'vale', 'premio', 'descAdic', 'aluguelMoto'];
+const MONEY = ['salario', 'consumo', 'horaExtra', 'feriado', 'assiduidade', 'adiantamento', 'vale', 'premio', 'descAdic', 'aluguelMoto', 'liquido'];
 export const hasAbsence = (empId, mk, entry) => C.leavesOf(S.leaves, empId, mk).length > 0 || !!(entry && (entry.faltaTxt || entry.atestadoTxt));
 
 /**
@@ -174,7 +182,8 @@ export async function setEntryField(mk, empId, field, raw) {
   const e = S.entries.get(id);
   if (!e) throw new Error('Lançamento não encontrado.');
   let value = raw;
-  if (MONEY.includes(field)) value = C.round2(C.num(raw));
+  if (field === 'liquido' && String(raw ?? '').trim() === '') value = null; // vazio = usa o do contracheque, se houver
+  else if (MONEY.includes(field)) value = C.round2(C.num(raw));
   else if (field === 'dias') value = Math.max(0, Math.min(31, Math.floor(C.num(raw))));
   else value = String(raw ?? '').trim();
   const patch = { [field]: value };

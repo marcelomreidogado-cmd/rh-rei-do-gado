@@ -93,6 +93,13 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   loja ou cobrindo outra). Na 5x2 aparece como "Atend./Manip." com a/m no dia;
   no domingo, com contorno lilás. Jeferson foi marcado como híbrido
   (29/10/2026). No *Outro negócio* existe "Qualquer função (híbrido)".
+- **Salário, totais e líquido na folha**: coluna Salário (só leitura, vem do
+  cadastro), linha de total em cada loja e o bloco *Total geral* (por loja e
+  somado: salários, assiduidade, prêmio, vale, adiantamento, passagem e
+  líquido). Depois de Passagem/Dias, o campo *Líquido* de cada um (valor
+  recebido no mês; se vazio, usa o do contracheque importado, em azul).
+  Salário e líquido não vão no e-mail. Em **Funcionários**, ao lado do salário:
+  o prêmio do último mês fechado e a soma salário + prêmio.
 - **Motoboy** (Funcionários → marcar "Motoboy"; Márcio já marcado): na folha
   da loja dele aparecem as colunas *Periculosidade* (30% do salário base,
   percentual editável no cadastro) e *Aluguel moto* (campo só na linha dele,

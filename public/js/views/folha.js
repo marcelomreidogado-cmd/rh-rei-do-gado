@@ -6,6 +6,8 @@ import { esc, $, $$, toast, openModal, confirmBox, copyRich } from '../ui.js';
 export const COLS = [
   // entrada, admissao, funcao e salario ficam so no cadastro (aba Funcionarios)
   { k: 'cod', label: 'Cód', fixed: true, mailOnly: true }, { k: 'loja', label: 'Loja', mailOnly: true }, { k: 'nome', label: 'Funcionário', fixed: true },
+  // salario: so leitura, vem do cadastro (Funcionarios); telaOnly = nao vai no e-mail da contabilidade
+  { k: 'salario', label: 'Salário', money: true, telaOnly: true },
   { k: 'consumo', label: 'Consumo loja', money: true },
   { k: 'falta', label: 'Falta' }, { k: 'atestado', label: 'Atestado' },
   { k: 'horaExtra', label: 'Hora Extra 50%', money: true }, { k: 'feriado', label: 'Feriado', money: true },
@@ -15,6 +17,8 @@ export const COLS = [
   // so aparecem na tabela da loja que tem motoboy (e so na linha dele)
   { k: 'periculosidade', label: 'Periculosidade', money: true, soMoto: true }, { k: 'aluguelMoto', label: 'Aluguel moto', money: true, rec: true, soMoto: true },
   { k: 'passagem', label: 'Passagem' }, { k: 'dias', label: 'Dias' },
+  // valor liquido recebido no mes (digitado; se vazio usa o do contracheque importado)
+  { k: 'liquido', label: 'Líquido', money: true, telaOnly: true },
   { k: 'obs', label: 'Observação', fixed: true },
 ];
 
@@ -23,7 +27,24 @@ let root = null;
 
 const hidden = () => new Set(D.monthDoc(mk)?.hiddenCols || []);
 const closed = () => D.monthClosed(mk);
-const visibleCols = (forMail = false) => COLS.filter((c) => (forMail ? true : !c.mailOnly) && !hidden().has(c.k));
+const visibleCols = (forMail = false) => COLS.filter((c) => (forMail ? !c.telaOnly : !c.mailOnly) && !hidden().has(c.k));
+const salarioDe = (emp, e) => C.num(emp.salarioBase) || C.num(e.salario);
+/** Liquido do mes: o digitado na folha; se vazio, o do contracheque importado. */
+const liquidoDe = (emp, e) => (e.liquido != null && e.liquido !== '' ? C.num(e.liquido) : C.num(D.payslipOf(mk, emp.id)?.liquido));
+// colunas que somam no total da loja e no total geral
+const SOMA = ['salario', 'consumo', 'horaExtra', 'feriado', 'assiduidade', 'adiantamento', 'vale', 'premio', 'descAdic', 'periculosidade', 'aluguelMoto', 'passagem', 'liquido'];
+function valorNum(k, { entry: e, emp }) {
+  const v = C.rowView(e, S.leaves, mk, S.config.vt);
+  switch (k) {
+    case 'salario': return salarioDe(emp, e);
+    case 'assiduidade': return C.num(v.assiduidade);
+    case 'passagem': return C.num(v.passagem);
+    case 'periculosidade': return C.periculosidade(emp, e);
+    case 'liquido': return liquidoDe(emp, e);
+    default: return C.num(e[k]);
+  }
+}
+const somaRows = (k, rows) => C.round2(rows.reduce((a, r) => a + valorNum(k, r), 0));
 /** Colunas de uma loja: as de motoboy so entram se a loja tem motoboy no mes. */
 const colsDoGrupo = (cols, rows) => (rows.some((r) => C.ehMotoboy(r.emp)) ? cols : cols.filter((c) => !c.soMoto));
 
@@ -43,6 +64,8 @@ function cellValue(col, { entry: e, emp }) {
     case 'descAdic': return C.money(e.descAdic);
     case 'vale': return C.valeTexto(e);
     case 'periculosidade': return C.money(C.periculosidade(emp, e));
+    case 'salario': return C.money(salarioDe(emp, e));
+    case 'liquido': return C.money(liquidoDe(emp, e));
     case 'aluguelMoto': return C.ehMotoboy(emp) ? C.money(e.aluguelMoto) : '';
     default: return col.money ? C.money(e[col.k]) : '';
   }
@@ -105,6 +128,8 @@ export function render(el, month) {
       return;
     }
   }
+  // contracheques do mes (liquido importado) — carrega uma vez e redesenha
+  if (!S.payslips.has(mk) && !root.__psLoading) { root.__psLoading = true; D.loadPayslips(mk).then(() => { root.__psLoading = false; if (mk === month) render(root, mk); }).catch(() => { root.__psLoading = false; S.payslips.set(mk, new Map()); }); }
   const vcolsAll = visibleCols();
   const groups = D.rowsByStore(mk);
   const allRows = groups.flatMap((g) => g.rows);
@@ -135,11 +160,33 @@ export function render(el, month) {
   </div>
   ${groups.map((g) => { const vcols = colsDoGrupo(vcolsAll, g.rows); return `<section class="store"><h2>${esc(g.store.nome)} <small>cód ${g.store.cod} · ${g.rows.length} funcionário(s)</small></h2>
     <div class="table-wrap folha"><table class="grid"><thead><tr>${vcols.map((c) => `<th data-col="${c.k}">${esc(c.label)}${c.fixed || isClosed ? '' : ` <button class="th-x" data-act="hidecol" data-col="${c.k}" title="Excluir esta coluna do mês" aria-label="Excluir coluna ${esc(c.label)}">×</button>`}</th>`).join('')}<th class="act"></th></tr></thead>
-    <tbody>${g.rows.map((r) => rowHtml(r, vcols, isClosed)).join('') || `<tr><td colspan="${vcols.length + 1}" class="muted">Nenhum funcionário nesta loja no mês.</td></tr>`}</tbody></table></div></section>${g.store.id === 'coronel' ? notaFacilHtml(md, isClosed) : ''}`; }).join('')}
+    <tbody>${g.rows.map((r) => rowHtml(r, vcols, isClosed)).join('') || `<tr><td colspan="${vcols.length + 1}" class="muted">Nenhum funcionário nesta loja no mês.</td></tr>`}</tbody>${g.rows.length ? `<tfoot><tr class="tot">${vcols.map((c) => (c.k === 'nome' ? '<th class="c-nome">Total da loja</th>' : SOMA.includes(c.k) ? `<th class="num" data-tot="${g.store.id}|${c.k}">${C.money(somaRows(c.k, g.rows))}</th>` : '<th></th>')).join('')}<th></th></tr></tfoot>` : ''}</table></div></section>${g.store.id === 'coronel' ? notaFacilHtml(md, isClosed) : ''}`; }).join('')}
   ${groups.some((g) => g.store.id === 'coronel') ? '' : notaFacilHtml(md, isClosed)}
+  ${allRows.length ? totalGeralHtml(groups) : ''}
   ${md.note !== undefined ? `<label class="block">Observações do mês (vai no rodapé do e-mail)<textarea class="in" id="monthNote" rows="2" ${isClosed ? 'disabled' : ''}>${esc(md.note || '')}</textarea></label>` : ''}
   ${allRows.length ? '' : '<p class="muted">Nenhum lançamento neste mês.</p>'}`;
   wire();
+}
+
+// ---------- total geral de todas as lojas ----------
+const TOTAL_GERAL = [['salario', 'Salários'], ['assiduidade', 'Assiduidade'], ['premio', 'Prêmio'], ['vale', 'Vale'], ['adiantamento', 'Adiantamento'], ['passagem', 'Passagem'], ['liquido', 'Líquido']];
+function totalGeralHtml(groups) {
+  const lojas = groups.filter((g) => g.rows.length);
+  const all = lojas.flatMap((g) => g.rows);
+  return `<section class="store tg"><h2>Total geral <small>todas as lojas · ${all.length} funcionário(s)</small></h2>
+    <div class="table-wrap tg-wrap"><table class="grid tg-tab"><thead><tr><th></th>${TOTAL_GERAL.map(([, l]) => `<th>${l}</th>`).join('')}</tr></thead><tbody>
+    ${lojas.map((g) => `<tr><td class="c-nome">${esc(g.store.nome)}</td>${TOTAL_GERAL.map(([k]) => `<td class="num" data-tgl="${g.store.id}|${k}">${C.money(somaRows(k, g.rows)) || '—'}</td>`).join('')}</tr>`).join('')}
+    </tbody><tfoot><tr><th class="c-nome">Total</th>${TOTAL_GERAL.map(([k]) => `<th class="num" data-tg="${k}">${C.money(somaRows(k, all)) || '—'}</th>`).join('')}</tr></tfoot></table></div></section>`;
+}
+/** Atualiza os totais (da loja e geral) depois de editar um valor, sem redesenhar a tela. */
+function patchTotais() {
+  const groups = D.rowsByStore(mk);
+  for (const g of groups) for (const k of SOMA) {
+    const c = $(`[data-tot="${g.store.id}|${k}"]`, root); if (c) c.textContent = C.money(somaRows(k, g.rows));
+    const l = $(`[data-tgl="${g.store.id}|${k}"]`, root); if (l) l.textContent = C.money(somaRows(k, g.rows)) || '—';
+  }
+  const all = groups.flatMap((g) => g.rows);
+  for (const [k] of TOTAL_GERAL) { const c = $(`[data-tg="${k}"]`, root); if (c) c.textContent = C.money(somaRows(k, all)) || '—'; }
 }
 
 // ---------- Consumo Nota Facil (controle interno; nao vai no e-mail da contabilidade) ----------
@@ -222,6 +269,9 @@ function rowHtml(r, vcols, isClosed) {
       case 'passagem': return `<td class="num" data-cell="passagem">${C.money(v.passagem)}</td>`;
       case 'dias': return `<td class="num"><input class="in dias" inputmode="numeric" data-f="dias" data-emp="${esc(emp.id)}" value="${e.dias || ''}" ${dis}></td>`;
       case 'vale': return `<td class="num">${valeBtn(e, emp)}</td>`;
+      case 'salario': return `<td class="num" title="Altere o salário na aba Funcionários">${C.money(salarioDe(emp, e))}</td>`;
+      case 'liquido': { const ps = D.payslipOf(mk, emp.id); const dig = e.liquido != null && e.liquido !== '';
+        return `<td class="num"><input class="in money ${!dig && ps?.liquido != null ? 'auto' : ''}" inputmode="decimal" data-f="liquido" data-emp="${esc(emp.id)}" value="${C.money(liquidoDe(emp, e))}" ${dis} title="${!dig && ps?.liquido != null ? 'Valor do contracheque importado — digite para trocar' : 'Valor líquido recebido no mês'}"></td>`; }
       case 'periculosidade': { const p = C.periculosidade(emp, e); return `<td class="num" title="${p ? `${emp.periculosidadePct ?? 30}% de ${esc(C.money(C.num(emp.salarioBase) || C.num(e.salario)))}` : ''}">${C.money(p)}</td>`; }
       case 'aluguelMoto': return C.ehMotoboy(emp) ? `<td class="num"><input class="in money" inputmode="decimal" data-f="aluguelMoto" data-emp="${esc(emp.id)}" value="${C.money(e.aluguelMoto)}" ${dis}></td>` : '<td class="na"></td>';
       case 'descAdic': return `<td class="num"><input class="in money" inputmode="decimal" data-f="descAdic" data-emp="${esc(emp.id)}" value="${C.money(e.descAdic)}" ${dis}></td>`;
@@ -260,8 +310,9 @@ function wire() {
       const months = await D.setEntryField(mk, empId, f, t.value);
       const e = D.entryFor(mk, empId);
       if (f === 'dias') t.value = e.dias || '';
+      else if (f === 'liquido') { t.value = C.money(liquidoDe(D.emp(empId), e)); t.classList.toggle('auto', e.liquido == null && D.payslipOf(mk, empId)?.liquido != null); }
       else if (f !== 'descAdicNota' && f !== 'obs') t.value = C.money(f === 'assiduidade' ? C.rowView(e, S.leaves, mk, S.config.vt).assiduidade : e[f]);
-      patchRow(empId);
+      patchRow(empId); patchTotais();
       if (months.length) toast(`${COLS.find((c) => c.k === f).label} de ${D.emp(empId).nome.split(' ')[0]} também atualizado em: ${months.map((m) => C.monthLabel(m)).join(', ')}.`, 'ok', 6000);
     } catch (e) { toast(e.message, 'err'); render(root, mk); }
   });
