@@ -73,7 +73,12 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   e quem cobriu menos vezes vai primeiro. As folgas são planejadas olhando as
   lojas JUNTAS (já contando com essa troca de loja no dia), para sobrar o
   mínimo de falta na rede. **Carga horária**: em Ajustes, horário de
-  funcionamento por loja e dia (abre/fecha) e intervalo de almoço; cada pessoa
+  funcionamento por dia (um só para todas as lojas do Rei do Gado; no Outro
+  negócio, por unidade) e intervalo de almoço. **Abrir dia extra**: num dia em
+  que a loja normalmente fecha (ex.: uma segunda), escolhe dia, lojas, horário
+  e observação; trabalha só o mínimo (o da terça), o resto fica de folga, e quem
+  trabalhou ganha folga de compensação na semana quando a rede continua
+  coberta; cada pessoa
   soma as horas da loja onde trabalha no dia (ou de um horário próprio, clicando
   no nome). A grade mostra o horário no cabeçalho, marca dia com mais de 10h e a
   coluna h/sem (vermelho acima do limite da EC 141: 44h até 15/12/2026, 42h a

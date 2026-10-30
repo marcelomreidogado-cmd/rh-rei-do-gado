@@ -509,6 +509,24 @@ export const semanaCorrida = (seg) => Math.floor(isoDiffDays('2024-01-01', seg) 
 export const funcoesP = (p) => (p.funcoes && p.funcoes.length ? p.funcoes : [p.funcao]);
 const minimosDia = (u, dow) => { const o = {}; for (const [f, arr] of Object.entries((u && u.minimos) || {})) o[f] = (arr || [])[dow] || 0; return o; };
 const abreNo = (u, dow) => !!u && (u.abre || []).includes(dow);
+/**
+ * Unidades como ficam numa data: abertura extra (ex.: uma segunda que a loja abre) vira dia aberto, com o horario
+ * informado e o minimo de pessoas da terca (ou o primeiro dia aberto). extras: {data: {ini, fim, obs}}.
+ */
+export function unidadesNoDia(unidades, d) {
+  if (!Object.values(unidades).some((u) => u.extras && u.extras[d])) return unidades;
+  const dow = weekday(d), out = {};
+  for (const [id, u] of Object.entries(unidades)) {
+    const x = u.extras && u.extras[d];
+    if (!x) { out[id] = u; continue; }
+    const ref = (u.abre || []).includes(2) ? 2 : (u.abre || [])[0] ?? dow;
+    const minimos = {}; for (const [f, arr] of Object.entries(u.minimos || {})) { const a = [...(arr || [0, 0, 0, 0, 0, 0, 0])]; if (!(u.abre || []).includes(dow)) a[dow] = a[ref] || 0; minimos[f] = a; }
+    const horario = { ...(u.horario || {}) }; if (x.ini && x.fim) horario[dow] = [x.ini, x.fim];
+    out[id] = { ...u, abre: [...new Set([...(u.abre || []), dow])], minimos, horario };
+  }
+  return out;
+}
+export const abreEm = (u, d) => !!u && (abreNo(u, weekday(d)) || !!(u.extras && u.extras[d]));
 const somaFalta = (falta) => Object.values(falta).reduce((a, n) => a + n, 0);
 
 /**
@@ -620,8 +638,46 @@ export function gerar5x2({ weeks, pessoas, unidades, semFolga = [6], domingo3 = 
       if (n && gruposDom.some((g) => (simulaDia({ pessoas, unidades, dow: 0, fora: g }).falta[uid] || {})[f] > 0)) avisos.push({ unidade: uid, funcao: f, pessoas: n, minDomingo: min0 });
     }
   }
+  aplicaExtras({ weeks, pessoas, unidades, folgas, semFolga, unavailable });
   const faltas = faltas5x2({ weeks, pessoas, unidades, folgas, unavailable });
   return { folgas, plano, faltas, avisos };
+}
+
+/**
+ * Abertura extra (dia em que a loja normalmente fecha): trabalha so o minimo (quem fez menos extras primeiro); o resto
+ * fica de folga como num dia fechado. Quem trabalhou ganha uma folga de compensacao na mesma semana, num dia em que a
+ * rede continua coberta (se nao houver, a semana fica com 1 folga e a grade mostra o ⚠).
+ */
+function aplicaExtras({ weeks, pessoas, unidades, folgas, semFolga, unavailable }) {
+  const vezes = {};
+  for (const week of weeks) for (const d of week) {
+    for (const [uid, u] of Object.entries(unidades)) {
+      if (!(u.extras && u.extras[d]) || abreNo(u, weekday(d))) continue;
+      const ud = unidadesNoDia(unidades, d)[uid];
+      const mins = minimosDia(ud, weekday(d));
+      const disp = pessoas.filter((p) => p.unidade === uid && !unavailable(p.id, d) && !(folgas[p.id] || []).includes(d))
+        .sort((a, b) => (vezes[a.id] || 0) - (vezes[b.id] || 0) || funcoesP(a).length - funcoesP(b).length || a.nome.localeCompare(b.nome));
+      const trabalha = new Set(), tem = {};
+      for (const [f, n] of Object.entries(mins)) for (const p of disp) {
+        if ((tem[f] || 0) >= n) break;
+        if (!trabalha.has(p.id) && funcoesP(p).length === 1 && p.funcao === f) { trabalha.add(p.id); tem[f] = (tem[f] || 0) + 1; }
+      }
+      for (const [f, n] of Object.entries(mins)) for (const p of disp) { // hibridos completam
+        if ((tem[f] || 0) >= n) break;
+        if (!trabalha.has(p.id) && funcoesP(p).includes(f)) { trabalha.add(p.id); tem[f] = (tem[f] || 0) + 1; }
+      }
+      for (const p of disp) {
+        if (!trabalha.has(p.id)) { (folgas[p.id] = folgas[p.id] || []).push(d); continue; }
+        vezes[p.id] = (vezes[p.id] || 0) + 1;
+        // compensacao na mesma semana
+        const cands = week.filter((x) => x !== d && x.slice(0, 7) === d.slice(0, 7) && !semFolga.includes(weekday(x)) && abreEm(u, x) && !(folgas[p.id] || []).includes(x) && !unavailable(p.id, x));
+        const custo = (x) => simulaDia({ pessoas, unidades: unidadesNoDia(unidades, x), dow: weekday(x), fora: new Set([...pessoas.filter((o) => unavailable(o.id, x) || (folgas[o.id] || []).includes(x)).map((o) => o.id), p.id]) }).total;
+        const melhor = cands.map((x) => ({ x, c: custo(x) })).sort((a, b) => a.c - b.c || a.x.localeCompare(b.x))[0];
+        if (melhor && melhor.c === 0) folgas[p.id].push(melhor.x);
+      }
+    }
+  }
+  for (const id of Object.keys(folgas)) folgas[id] = [...new Set(folgas[id])].sort();
 }
 
 const foraNoDia = (pessoas, d, folgas, unavailable) => new Set(pessoas.filter((p) => unavailable(p.id, d) || (folgas[p.id] || []).includes(d)).map((p) => p.id));
@@ -631,7 +687,7 @@ const cobreNoDia = (cobre, d) => { const o = {}; for (const [id, m] of Object.en
 export function contagem5x2({ pessoas, unidade, unidades = {}, d, folgas, cobre = {}, unavailable = () => '' }) {
   const presentes = pessoas.filter((p) => !unavailable(p.id, d) && !(folgas[p.id] || []).includes(d)
     && ((cobre[p.id] || {})[d] ? cobre[p.id][d] === unidade : p.unidade === unidade)).map((p) => ({ id: p.id, funcoes: funcoesP(p) }));
-  return alocar(minimosDia(unidades[unidade], weekday(d)), presentes);
+  return alocar(minimosDia(unidadesNoDia(unidades, d)[unidade], weekday(d)), presentes);
 }
 
 /** Quantos de uma funcao estao trabalhando numa unidade no dia (hibrido conta onde for alocado). */
@@ -643,7 +699,7 @@ export function naUnidade5x2({ funcao, ...a }) {
 export function faltas5x2({ weeks, pessoas, unidades, folgas, cobre = {}, unavailable = () => '' }) {
   const out = [];
   for (const week of weeks) for (const d of week) {
-    const r = simulaDia({ pessoas, unidades, dow: weekday(d), fora: foraNoDia(pessoas, d, folgas, unavailable), cobre: cobreNoDia(cobre, d), completar: false });
+    const r = simulaDia({ pessoas, unidades: unidadesNoDia(unidades, d), dow: weekday(d), fora: foraNoDia(pessoas, d, folgas, unavailable), cobre: cobreNoDia(cobre, d), completar: false });
     for (const [u, fs] of Object.entries(r.falta)) for (const [f, n] of Object.entries(fs)) if (n > 0) out.push({ date: d, unidade: u, funcao: f, falta: n });
   }
   return out.sort((a, b) => a.date.localeCompare(b.date) || a.unidade.localeCompare(b.unidade));
@@ -659,7 +715,7 @@ export function cobrir5x2({ weeks, pessoas, unidades, folgas, cobre: inicial = {
   const cobre = JSON.parse(JSON.stringify(inicial || {}));
   const vezes = {}; for (const [id, m] of Object.entries(cobre)) vezes[id] = Object.keys(m).length;
   for (const week of weeks) for (const d of week) {
-    const r = simulaDia({ pessoas, unidades, dow: weekday(d), fora: foraNoDia(pessoas, d, folgas, unavailable), cobre: cobreNoDia(cobre, d), vezes });
+    const r = simulaDia({ pessoas, unidades: unidadesNoDia(unidades, d), dow: weekday(d), fora: foraNoDia(pessoas, d, folgas, unavailable), cobre: cobreNoDia(cobre, d), vezes });
     for (const [id, u] of Object.entries(r.cobre)) if (!(cobre[id] || {})[d]) { (cobre[id] = cobre[id] || {})[d] = u; vezes[id] = (vezes[id] || 0) + 1; }
   }
   return cobre;
@@ -697,9 +753,11 @@ export function carga5x2({ weeks, pessoas, unidades, folgas, cobre = {}, unavail
         const dow = weekday(d);
         if (unavailable(p.id, d) || (folgas[p.id] || []).includes(d)) continue;
         const u = (cobre[p.id] || {})[d] || p.unidade;
-        if (!abreNo(unidades[u], dow)) continue;
-        const proprio = !(cobre[p.id] || {})[d] && (horariosPessoa[p.id] || {})[dow];
-        const h = proprio && proprio[0] && proprio[1] ? proprio : ((unidades[u].horario || {})[dow] || []);
+        const un = unidadesNoDia(unidades, d)[u];
+        if (!abreNo(un, dow)) continue;
+        const extra = !!(unidades[u]?.extras || {})[d];
+        const proprio = !extra && !(cobre[p.id] || {})[d] && (horariosPessoa[p.id] || {})[dow];
+        const h = proprio && proprio[0] && proprio[1] ? proprio : ((un.horario || {})[dow] || []);
         const horas = horasTurno(h[0], h[1], intervalo);
         if (horas) { dias[d] = horas; tot += horas; }
       }

@@ -399,18 +399,27 @@ test('E2E: escala 5x2 — confirmar equipe, gerar sem folga no sabado nem na seg
   assert.ok(await jef.locator('td.c .x5-pap').count() > 0, 'hibrido mostra a/m');
   // horario de funcionamento: ter a sab 08-18 e domingo 08-13 em todas as lojas -> carga horaria
   await page.click('[data-act=ajustes]'); await page.waitForSelector('.x5-hor');
-  for (const loja of ['bingen', 'correas', 'coronel']) {
-    for (const d of [2, 3, 4, 5, 6]) { await page.fill(`[data-hor="${loja}|${d}|0"]`, '08:00'); await page.fill(`[data-hor="${loja}|${d}|1"]`, loja === 'coronel' && d === 6 ? '20:00' : '18:00'); }
-    await page.fill(`[data-hor="${loja}|0|0"]`, '08:00'); await page.fill(`[data-hor="${loja}|0|1"]`, '13:00');
-  }
+  // um horario so para todas as lojas
+  for (const d of [2, 3, 4, 5, 6]) { await page.fill(`[data-hor="todas|${d}|0"]`, '08:00'); await page.fill(`[data-hor="todas|${d}|1"]`, d === 6 ? '20:00' : '18:00'); }
+  await page.fill('[data-hor="todas|0|0"]', '08:00'); await page.fill('[data-hor="todas|0|1"]', '13:00');
   await page.click('.modal-foot button:has-text("Salvar")'); await page.waitForSelector('th.tt:has-text("h/sem")');
   assert.match(await page.locator('table.x5grid th').nth(3).innerText(), /8-18/);
-  assert.ok(await page.locator('td.c.hx').count() > 0, 'sabado de 12h na Coronel passa de 10h');
+  assert.ok(await page.locator('td.c.hx').count() > 0, 'sabado de 12h passa de 10h');
   assert.ok(await page.locator('.x5-carga').count() > 0, 'resumo da carga horaria');
   // horario proprio da pessoa
   const nome = page.locator('td.nm[data-hp]').first(); await nome.click(); await page.waitForSelector('[data-hor^="hp|"]');
   await page.fill('[data-hor="hp|3|0"]', '12:00'); await page.fill('[data-hor="hp|3|1"]', '18:00');
   await page.click('.modal-foot button:has-text("Salvar")'); await page.waitForSelector('td.nm .x5-hp');
+  // abertura extra: segunda 07/12 na Coronel, 08-13, com observacao
+  await page.click('[data-act=extra]'); await page.waitForSelector('#ex_d');
+  await page.fill('#ex_d', '2026-12-07'); await page.dispatchEvent('#ex_d', 'change');
+  await page.locator('#ex_l input').evaluateAll((l) => l.forEach((i) => { i.checked = i.value === 'coronel'; }));
+  await page.fill('#ex_i', '08:00'); await page.fill('#ex_f', '13:00'); await page.fill('#ex_o', 'véspera de feriado');
+  await page.click('.modal-foot button:has-text("Salvar")'); await page.waitForSelector('.x5-ext:has-text("véspera de feriado")');
+  const cor = page.locator('section.store:has(h2:has-text("Coronel"))');
+  assert.ok(await cor.locator('th.extra').count() === 1, 'segunda 07/12 aberta na Coronel');
+  assert.ok(await cor.locator('td.c[data-d="2026-12-07"]').count() > 0, 'celulas clicaveis na segunda extra');
+  assert.equal(await page.locator('section.store:has(h2:has-text("Bingen")) td.c[data-d="2026-12-07"]').count(), 0, 'Bingen continua fechada');
   if (process.env.SHOT_DIR) await page.screenshot({ path: path.join(process.env.SHOT_DIR, 'escala5x2.png'), fullPage: true });
   // ajuste manual: clicar numa celula troca trabalho/folga
   const cel = page.locator('td.c:not(.f)').first(); const p = await cel.getAttribute('data-p'), d = await cel.getAttribute('data-d');

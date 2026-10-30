@@ -135,3 +135,27 @@ test('carga horaria: turno menos intervalo, limite semanal da EC 141 e horas por
   const proprio = C.carga5x2({ weeks, pessoas: ps, unidades: un, folgas, horariosPessoa: { x: { 4: ['12:00', '18:00'] } } });
   assert.equal(proprio.x.dias[weeks[0][3]], 5.75); // 6h de turno com 15 min de intervalo
 });
+
+test('abertura extra: a segunda que a loja abre vira dia aberto, com horario e minimo da terca', () => {
+  const weeks = C.semanasDoMes('2026-12');
+  const seg = weeks[1][0]; // 07/12
+  const un = { a: { abre: FECHA_SEG, minimos: { atendimento: [1, 0, 2, 2, 2, 2, 2] }, horario: { 2: ['08:00', '18:00'] }, extras: { [seg]: { ini: '08:00', fim: '13:00', obs: 'feriado' } } } };
+  assert.ok(C.abreEm(un.a, seg) && !C.abreEm(un.a, weeks[2][0]));
+  const ps = [P('x', 'a', 'atendimento')];
+  const f = C.faltas5x2({ weeks: [weeks[1]], pessoas: ps, unidades: un, folgas: {} });
+  assert.ok(f.some((x) => x.date === seg && x.falta === 1), 'minimo da terca (2) vale na segunda aberta');
+  const c = C.carga5x2({ weeks: [weeks[1]], pessoas: ps, unidades: un, folgas: {} });
+  assert.equal(c.x.dias[seg], 4.75);
+});
+
+test('abertura extra na geracao: so o minimo trabalha na segunda e ganha folga de compensacao', () => {
+  const weeks = C.semanasDoMes('2026-12');
+  const seg = weeks[1][0];
+  const un = { a: { abre: FECHA_SEG, minimos: { atendimento: [1, 0, 1, 1, 1, 1, 1] }, extras: { [seg]: { ini: '08:00', fim: '13:00' } } } };
+  const ps = [P('x', 'a', 'atendimento'), P('y', 'a', 'atendimento'), P('z', 'a', 'atendimento')];
+  const r = C.gerar5x2({ weeks, pessoas: ps, unidades: un, semFolga: [6] });
+  const trab = ps.filter((p) => !r.folgas[p.id].includes(seg));
+  assert.equal(trab.length, 1, 'so 1 trabalha na segunda');
+  for (const p of ps) assert.equal(weeks[1].filter((d) => r.folgas[p.id].includes(d)).length, 2, `${p.id}: 2 folgas na semana`);
+  assert.deepEqual(r.faltas, []);
+});
