@@ -269,7 +269,7 @@ tfoot td{font-weight:800;border-top:2px solid var(--line)}
           <button class="btn ghost" id="btnLogout">Sair</button>
         </div>
         <div class="sub" id="fbMsg" style="margin-top:10px"></div>
-        <div class="note">Tudo o que você altera (metas, grupos, valores estimados, importações) é salvo sozinho no Firebase do Rei do Gado. Qualquer computador que abrir o painel e entrar com o mesmo login vê as mesmas informações.</div>
+        <div class="note">Tudo o que você altera (metas, grupos, valores estimados, importações) é salvo sozinho no Firebase do Rei do Gado (o mesmo do RH). Qualquer computador que abrir o painel e entrar com o mesmo login vê as mesmas informações.</div>
       </div>
     </div>
   </section>
@@ -280,8 +280,8 @@ tfoot td{font-weight:800;border-top:2px solid var(--line)}
 <div id="tip"></div>
 <div id="login"><div class="box">
   <div class="logo" style="color:var(--ink);margin-bottom:14px"><div class="crown">👑</div><div>REI DO GADO<small style="color:var(--ink2)">Painel de contas a pagar</small></div></div>
-  <h3>Entrar</h3><div class="sub">Use o mesmo e-mail e senha do Caixa Rei do Gado.</div>
-  <input id="lgEmail" type="email" placeholder="e-mail" autocomplete="username">
+  <h3>Entrar</h3><div class="sub">Use o mesmo ID e senha do sistema de RH / Folha.</div>
+  <input id="lgEmail" type="text" placeholder="ID (ex.: marcelo)" autocomplete="username" autocapitalize="none">
   <input id="lgPass" type="password" placeholder="senha" autocomplete="current-password">
   <button class="btn red" id="lgBtn">Entrar</button>
   <div id="loginMsg"></div>
@@ -721,17 +721,19 @@ function wireDrop(dropId,inputId,fn){
 wireDrop('#dropCP','#fileCP',importCP); wireDrop('#dropVD','#fileVD',importVD);
 
 /* ================= FIREBASE: Auth REST + Realtime Database REST (sem SDK) ================= */
-const FB = {apiKey:'AIzaSyDoYFoKnVjtcib0V4yN1Qzvk2B7QrNgiuM', db:'https://motoboy-ddefa-default-rtdb.firebaseio.com', path:'contas_pagar_rei'};
+const FB = {apiKey:'AIzaSyDoYFoKnVjtcib0V4yN1Qzvk2B7QrNgiuM', doc:'https://firestore.googleapis.com/v1/projects/motoboy-ddefa/databases/(default)/documents/rh_config/contas_pagar_rei', path:'rh_config/contas_pagar_rei'};
 const AUTH_KEY='painelCP_rei_auth';
 let AUTH=null; try{ AUTH=JSON.parse(localStorage.getItem(AUTH_KEY)||'null'); }catch(e){}
 function chip(t,cls=''){ const c=$('#cloudChip'); c.textContent=t; c.className='chip '+cls; }
 function fbErr(j,status){
   const m=(j&&j.error&&(j.error.message||j.error))||('HTTP '+status);
-  const map={EMAIL_NOT_FOUND:'E-mail não cadastrado.',INVALID_PASSWORD:'Senha incorreta.',INVALID_LOGIN_CREDENTIALS:'E-mail ou senha incorretos.',USER_DISABLED:'Usuário desativado.',TOO_MANY_ATTEMPTS_TRY_LATER:'Muitas tentativas. Aguarde alguns minutos.','Permission denied':'Sem permissão no Firebase para gravar em “'+FB.path+'”. Libere esse caminho nas regras do Realtime Database.'};
+  const map={EMAIL_NOT_FOUND:'ID não cadastrado.',INVALID_PASSWORD:'Senha incorreta.',INVALID_LOGIN_CREDENTIALS:'ID ou senha incorretos.',USER_DISABLED:'Usuário desativado.',TOO_MANY_ATTEMPTS_TRY_LATER:'Muitas tentativas. Aguarde alguns minutos.','PERMISSION_DENIED':'Seu usuário não tem acesso total no RH (perfil “total”). Peça para liberar em RH → Configurações → Usuários do sistema.','Missing or insufficient permissions':'Seu usuário não tem acesso total no RH (perfil “total”).'};
   for(const k in map) if(String(m).includes(k)) return map[k];
   return String(m);
 }
+const idToEmail = id => { const s=String(id).trim().toLowerCase(); return s.includes('@') ? s : s.replace(/[^a-z0-9._-]/g,'')+'@rh.reidogado.app'; };
 async function login(email,pass){
+  email=idToEmail(email);
   const r=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FB.apiKey}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pass,returnSecureToken:true})});
   const j=await r.json(); if(!r.ok) throw new Error(fbErr(j,r.status));
   AUTH={email:j.email,idToken:j.idToken,refreshToken:j.refreshToken,exp:Date.now()+(+j.expiresIn-120)*1000};
@@ -745,9 +747,11 @@ async function token(){
   AUTH.idToken=j.id_token; AUTH.refreshToken=j.refresh_token; AUTH.exp=Date.now()+(+j.expires_in-120)*1000;
   localStorage.setItem(AUTH_KEY,JSON.stringify(AUTH)); return AUTH.idToken;
 }
-async function dbReq(sub,method='GET',body){
+async function fsReq(method,body,mask){
   const t=await token();
-  const r=await fetch(`${FB.db}/${FB.path}${sub}.json?auth=${t}`,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
+  const url=FB.doc+(mask?'?'+mask.map(f=>'updateMask.fieldPaths='+f).join('&'):'');
+  const r=await fetch(url,{method,headers:{'Authorization':'Bearer '+t,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
+  if(r.status===404) return null;
   const j=await r.json().catch(()=>null); if(!r.ok) throw new Error(fbErr(j,r.status)); return j;
 }
 /* guardamos cfg e data como texto JSON: evita limitações de chave do Realtime Database */
@@ -757,9 +761,10 @@ async function cloudFlush(){
   if(!AUTH){ chip('não salvo · faça login','err'); return; }
   const d={...dirty}; dirty={cfg:false,data:false};
   try{
-    if(d.data) await dbReq('/data','PUT',JSON.stringify(S.data));
-    if(d.cfg)  await dbReq('/cfg','PUT',JSON.stringify(S.cfg));
-    await dbReq('/savedAt','PUT',S.savedAt);
+    const f={savedAt:{integerValue:String(S.savedAt)}}, mask=['savedAt'];
+    if(d.data){ f.data={stringValue:JSON.stringify(S.data)}; mask.push('data'); }
+    if(d.cfg){ f.cfg={stringValue:JSON.stringify(S.cfg)}; mask.push('cfg'); }
+    await fsReq('PATCH',{fields:f},mask);
     chip('☁️ salvo '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),'ok');
     $('#fbMsg').textContent='';
   }catch(e){ dirty.cfg=dirty.cfg||d.cfg; dirty.data=dirty.data||d.data; chip('erro ao salvar','err'); $('#fbMsg').textContent='❌ '+e.message; }
@@ -767,7 +772,8 @@ async function cloudFlush(){
 async function cloudLoad(){
   chip('carregando…');
   try{
-    const j=await dbReq('');
+    const doc=await fsReq('GET'); const F=(doc&&doc.fields)||{};
+    const j=F.data?{data:F.data.stringValue,cfg:F.cfg&&F.cfg.stringValue,savedAt:+((F.savedAt&&F.savedAt.integerValue)||0)}:null;
     if(j && j.data){
       S={data:JSON.parse(j.data),cfg:Object.assign({},DEF_CFG,j.cfg?JSON.parse(j.cfg):{}),savedAt:j.savedAt||0};
       ['sales'].forEach(k=>S.data[k]=S.data[k]||{}); ['grupos','estim','metas'].forEach(k=>S.cfg[k]=S.cfg[k]||{});
@@ -778,9 +784,9 @@ async function cloudLoad(){
 function logout(){ AUTH=null; localStorage.removeItem(AUTH_KEY); showLogin(); }
 function showLogin(){ $('#login').style.display='grid'; setTimeout(()=>$('#lgEmail').focus(),50); }
 async function doLogin(){
-  const e=$('#lgEmail').value.trim(), p=$('#lgPass').value; if(!e||!p){ $('#loginMsg').textContent='Preencha e-mail e senha.'; return; }
+  const e=$('#lgEmail').value.trim(), p=$('#lgPass').value; if(!e||!p){ $('#loginMsg').textContent='Preencha ID e senha.'; return; }
   $('#lgBtn').disabled=true; $('#lgBtn').textContent='Entrando…'; $('#loginMsg').textContent='';
-  try{ await login(e,p); $('#login').style.display='none'; $('#fbUser').textContent='Conectado como '+AUTH.email; await cloudLoad(); }
+  try{ await login(e,p); $('#login').style.display='none'; $('#fbUser').textContent='Conectado como '+AUTH.email.split('@')[0]; await cloudLoad(); }
   catch(err){ $('#loginMsg').textContent=err.message; }
   finally{ $('#lgBtn').disabled=false; $('#lgBtn').textContent='Entrar'; }
 }
@@ -806,7 +812,7 @@ function commit(dataChanged){ S.savedAt=Date.now(); saveLocal(); refresh(); clou
 $('#monthSel').onchange=e=>{ S.cfg.month=e.target.value; commit(); };
 $('#tabs').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('on',x===b)); document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.id==='t-'+b.dataset.t)); scrollTo(0,0); };
 refresh();
-if(AUTH){ $('#fbUser').textContent='Conectado como '+AUTH.email; cloudLoad(); } else showLogin();
+if(AUTH){ $('#fbUser').textContent='Conectado como '+AUTH.email.split('@')[0]; cloudLoad(); } else showLogin();
 </script>
 </body>
 </html>
