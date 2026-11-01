@@ -285,6 +285,7 @@ tfoot td{font-weight:800;border-top:2px solid var(--line)}
   <input id="lgPass" type="password" placeholder="senha" autocomplete="current-password">
   <button class="btn red" id="lgBtn">Entrar</button>
   <div id="loginMsg"></div>
+  <div class="sub" style="margin-top:12px;font-size:11px;color:var(--ink3)">versão 2026-11-01 · login com ID do RH</div>
 </div></div>
 
 <script>
@@ -729,7 +730,7 @@ function fbErr(j,status){
   const m=(j&&j.error&&(j.error.message||j.error))||('HTTP '+status);
   const map={EMAIL_NOT_FOUND:'ID não cadastrado.',INVALID_PASSWORD:'Senha incorreta.',INVALID_LOGIN_CREDENTIALS:'ID ou senha incorretos.',USER_DISABLED:'Usuário desativado.',TOO_MANY_ATTEMPTS_TRY_LATER:'Muitas tentativas. Aguarde alguns minutos.','PERMISSION_DENIED':'Seu usuário não tem acesso total no RH (perfil “total”). Peça para liberar em RH → Configurações → Usuários do sistema.','Missing or insufficient permissions':'Seu usuário não tem acesso total no RH (perfil “total”).'};
   for(const k in map) if(String(m).includes(k)) return map[k];
-  return String(m);
+  return 'Erro do Firebase: '+String(m);
 }
 const idToEmail = id => { const s=String(id).trim().toLowerCase(); return s.includes('@') ? s : s.replace(/[^a-z0-9._-]/g,'')+'@rh.reidogado.app'; };
 async function login(email,pass){
