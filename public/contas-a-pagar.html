@@ -69,43 +69,54 @@ h3{font-size:14px;margin:0 0 10px}
 .mini i.ok{background:var(--ok)}.mini i.warn{background:#e09a00}.mini i.crit{background:var(--crit)}
 
 /* ---------- AGENDA ---------- */
-.week{display:grid;grid-template-columns:300px repeat(5,minmax(0,1fr));gap:8px;margin-bottom:14px;align-items:stretch}
-@media(max-width:1150px){.week{grid-template-columns:repeat(5,minmax(0,1fr))}.week .whead{grid-column:1/-1}}
-.whead{background:var(--card);border:1px solid var(--line);border-left:6px solid var(--ink3);border-radius:var(--radius);padding:12px 14px;cursor:pointer}
-.whead:hover{box-shadow:0 2px 10px rgba(0,0,0,.06)}
-.whead.ok{border-left-color:var(--ok)}.whead.warn{border-left-color:#e09a00}.whead.crit{border-left-color:var(--crit)}
-.whead.cur{box-shadow:0 0 0 2px var(--brand) inset}
-.whead .t{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
-.whead .t b{font-size:15px}
-.whead .rng{font-size:12px;color:var(--ink2)}
-.wf{display:grid;grid-template-columns:1fr auto;gap:3px 10px;font-size:13px;margin-top:10px}
-.wf span{color:var(--ink2)}
-.wf b{text-align:right;font-variant-numeric:tabular-nums}
-.wf .sep{grid-column:1/-1;border-top:1px solid var(--line);margin:3px 0}
-.wf .big{font-size:14.5px;color:var(--ink);font-weight:800}
-.dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;vertical-align:0}
-.bar{height:10px;border-radius:99px;background:var(--line2);overflow:hidden;margin-top:8px}
+.resumo th.grp{text-align:center;font-size:11px;border-bottom:2px solid var(--line);color:var(--ink)}
+.resumo th.grp.rec{color:#0f6b4a;border-bottom-color:var(--s1)}
+.resumo th.grp.des{color:#8a3b0c;border-bottom-color:var(--s2)}
+.resumo td.rec{background:#f3fbf7}
+.resumo tr.cur td.rec{background:#eaf7f0}
+.tagr{font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;margin-left:4px;vertical-align:1px}
+.tagr.real{background:var(--ok-bg);color:var(--ok)}.tagr.proj{background:var(--line2);color:var(--ink2)}
+.wk2{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:16px;overflow:hidden}
+.wk2.cur{box-shadow:0 0 0 2px var(--brand)}
+.wk2 .wh{display:grid;grid-template-columns:190px 1fr 1fr 1fr 1.1fr;gap:0;border-bottom:1px solid var(--line);cursor:pointer}
+.wk2 .wh>div{padding:12px 14px;border-right:1px solid var(--line2)}
+.wk2 .wh>div:last-child{border-right:0}
+.wk2 .wh .k{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--ink2)}
+.wk2 .wh .v{font-size:19px;font-weight:800;margin-top:2px;font-variant-numeric:tabular-nums}
+.wk2 .wh .d{font-size:12px;color:var(--ink2);margin-top:2px}
+.wk2 .wh .rec .v{color:#0f6b4a}
+.wk2 .days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+@media(max-width:1100px){.wk2 .wh{grid-template-columns:1fr 1fr}.wk2 .days{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.dc{padding:10px 11px;border-right:1px solid var(--line2);cursor:pointer;display:flex;flex-direction:column;gap:3px;min-height:150px}
+.dc:last-child{border-right:0}
+.dc:hover{background:#faf9f6}
+.dc.we{background:#fbfaf7}
+.dc.today{box-shadow:inset 0 0 0 2px var(--brand)}
+.dc.out{opacity:.55}
+.dc .top{display:flex;justify-content:space-between;align-items:baseline}
+.dc .dw{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--ink2);letter-spacing:.4px}
+.dc .dn{font-size:16px;font-weight:800}
+.dc .tag{font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;background:#efe9ff;color:#4a3aa8;align-self:flex-start}
+.dc .tag.hoje{background:var(--brand);color:#fff}
+.dc .ln{display:flex;justify-content:space-between;font-size:12.5px;font-variant-numeric:tabular-nums}
+.dc .ln span{color:var(--ink2)}
+.dc .ln.in b{color:#0f6b4a}
+.dc .ln.out b{color:#8a3b0c}
+.dc .ln.sm{font-size:11.5px;padding-left:8px}
+.dc .res{margin-top:auto;padding-top:6px;border-top:1px solid var(--line2)}
+.dc .res .ln b{font-weight:800}
+.dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;vertical-align:0}
+.bar{height:8px;border-radius:99px;background:var(--line2);overflow:hidden;margin-top:6px}
 .bar i{display:block;height:100%;border-radius:99px}
 .bar i.ok{background:var(--ok)}.bar i.warn{background:#e09a00}.bar i.crit{background:var(--crit)}
-.barlbl{display:flex;justify-content:space-between;font-size:12px;margin-top:4px;color:var(--ink2)}
-.day{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:10px 11px;cursor:pointer;min-height:150px;display:flex;flex-direction:column;position:relative;transition:transform .08s}
-.day:hover{transform:translateY(-1px);box-shadow:0 2px 10px rgba(0,0,0,.07)}
-.day.today{outline:2.5px solid var(--brand);outline-offset:-1px}
-.day.out{opacity:.55}
-.day.hol{background:repeating-linear-gradient(135deg,#faf9f6,#faf9f6 6px,#f2f0eb 6px,#f2f0eb 12px);cursor:default}
-.day .dh{display:flex;justify-content:space-between;align-items:baseline}
-.day .dw{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--ink2);letter-spacing:.4px}
-.day .dn{font-size:19px;font-weight:800;line-height:1}
-.day .tag{font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;background:#efe9ff;color:#4a3aa8;margin-top:4px;align-self:flex-start}
-.day .tag.hoje{background:var(--brand);color:#fff}
-.day .tag.fds{background:#fff1e6;color:#8a3b0c}
-.day .pay{font-size:16px;font-weight:800;margin-top:8px}
-.day .pay.zero{color:var(--ink3);font-weight:600;font-size:13px}
-.day .split{font-size:12px;color:var(--ink2);margin-top:4px;display:grid;grid-template-columns:auto 1fr;gap:1px 6px}
-.day .split b{text-align:right;color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
-.stack{display:flex;height:6px;border-radius:99px;overflow:hidden;background:var(--line2);margin-top:auto;gap:2px}
-.stack i{display:block;height:100%}
-
+.mini{height:7px;border-radius:99px;background:var(--line2);overflow:hidden;margin-top:4px;min-width:80px}
+.mini i{display:block;height:100%;border-radius:99px}
+.mini i.ok{background:var(--ok)}.mini i.warn{background:#e09a00}.mini i.crit{background:var(--crit)}
+.resumo td,.resumo th{padding:8px 9px;font-size:13px}
+.resumo tr.wk{cursor:pointer}
+.resumo tr.wk:hover td{background:#faf9f6}
+.resumo tr.cur td{background:#fff7f7}
+.resumo td.lbl{font-weight:700}
 /* ---------- drawer ---------- */
 .drawer-bg{position:fixed;inset:0;background:rgba(0,0,0,.28);display:none;z-index:40}
 .drawer{position:fixed;top:0;right:0;height:100%;width:min(660px,100%);background:var(--surface);z-index:41;transform:translateX(100%);transition:transform .18s;display:flex;flex-direction:column;box-shadow:-6px 0 24px rgba(0,0,0,.15)}
@@ -177,16 +188,17 @@ tfoot td{font-weight:800;border-top:2px solid var(--line)}
   <section class="tab on" id="t-agenda">
     <div class="grid kpis" id="kpiAgenda"></div>
 
-    <h2>Resumo das semanas <span class="sub">· semana de pagamento = sábado a sexta · o que vence sáb/dom é pago na segunda</span></h2>
+    <h2>Receita × despesas por semana <span class="sub">· sábado a sexta · o que vence sáb/dom é pago na segunda</span></h2>
     <div class="card" style="padding:6px 10px"><table class="resumo" id="resumo"></table></div>
-    <div class="sub" style="margin-top:8px">Teto de compras = meta de venda − fixos − outras despesas<span id="regraReserva"></span>. A meta é editável em cada semana (clique no valor). Clique na semana para ver os títulos.</div>
+    <div class="sub" style="margin-top:8px">Receita = vendas de todas as lojas (<span class="tagr real">real</span> dias já importados do relatório · <span class="tagr proj">proj.</span> média do mesmo dia da semana do último mês importado). Resultado = receita − tudo o que vence na semana. Teto de compras = meta − fixos − outras despesas<span id="regraReserva"></span>; a meta é editável (clique no valor).</div>
 
-    <h2>Agenda dia a dia</h2>
+    <h2>Agenda dia a dia <span class="sub">· venda que entra × contas que vencem</span></h2>
     <div class="legend-row">
-      <span><span class="sw" style="background:var(--gF)"></span>Gastos fixos</span>
-      <span><span class="sw" style="background:var(--gC)"></span>Compras (abastecimento)</span>
+      <span><span class="sw" style="background:var(--s1)"></span>Venda do dia</span>
+      <span><span class="sw" style="background:var(--gF)"></span>Fixos</span>
+      <span><span class="sw" style="background:var(--gC)"></span>Compras</span>
       <span><span class="sw" style="background:var(--gO)"></span>Outras despesas</span>
-      <span style="margin-left:auto">Clique no dia para ver os títulos</span>
+      <span style="margin-left:auto">Clique no dia ou no cabeçalho da semana para ver os títulos</span>
     </div>
     <div id="agenda"></div>
   </section>
@@ -425,60 +437,60 @@ const kpi=(lbl,val,foot,cls='')=>`<div class="card kpi"><div class="lbl">${lbl}<
 const stLabel = s => s==='crit'?'ESTOUROU':s==='warn'?'NO LIMITE':'OK';
 
 /* ================= AGENDA ================= */
+function salesTag(w){ return w.realDays===7?'<span class="tagr real">real</span>':w.realDays?`<span class="tagr real">${w.realDays}d real</span>`:'<span class="tagr proj">proj.</span>'; }
 function renderAgenda(){
-  const {weeks,T,curW}=M;
-  const fx = +S.cfg.fixExtra||0;
+  const {weeks,T,curW,allDays}=M;
+  const minD = allDays.reduce((a,b)=>a.acc<b.acc?a:b,allDays[0]);
+  const realD = allDays.filter(d=>d.salesReal).length;
   $('#kpiAgenda').innerHTML =
-    (curW? kpi('Esta semana · '+curW.range, brl0(curW.saidas), `fixos ${brl0(curW.Fx)} · compras ${brl0(curW.C)} · outras ${brl0(curW.O)}`) : '')+
-    (curW? kpi(curW.sobra<0?'Compras passaram do teto esta semana':'Ainda pode comprar esta semana', brl0(Math.abs(curW.sobra)), `teto ${brl0(curW.teto)} − já agendado ${brl0(curW.C)}`, curW.sobra<0?'neg':'pos') : '')+
-    kpi('Gastos fixos no período', brl0(T.Fx), `${weeks.length} semanas · média ${brl0(T.Fx/weeks.length)}/semana`)+
-    kpi('Compras agendadas', brl0(T.C), `teto somado ${brl0(T.teto)} · ${pct(T.teto>0?T.C/T.teto:0)} usado`, T.C>T.teto?'neg':'')+
-    kpi('Meta de venda no período', brl0(T.meta), `projeção média ${brl0(T.sales/weeks.length)}/sem (base ${M.sm.base?monthLabel(M.sm.base):'—'})`);
+    kpi('Receita (vendas)', brl0(T.sales), realD?`${realD} ${realD>1?'dias reais':'dia real'} do relatório + ${allDays.length-realD} projetados`:`projetada pela média de ${M.sm.base?monthLabel(M.sm.base):'—'}`)+
+    kpi('Despesas a pagar', brl0(T.saidas), `fixos ${brl0(T.Fx)} · compras ${brl0(T.C)} · outras ${brl0(T.O)}`)+
+    kpi('Resultado', brl0(T.net-T.saidas), `receita líquida − despesas · ${pct(T.sales?(T.net-T.saidas)/T.sales:0)} da venda`, (T.net-T.saidas)<0?'neg':'pos')+
+    kpi('Menor saldo de caixa', brl0(minD.acc), `${DOW[minD.dow]} ${dmy(minD.ds)} · saldo inicial ${brl0(+S.cfg.saldoInicial||0)}`, minD.acc<0?'neg':'pos')+
+    (curW? kpi(curW.sobra<0?'Compras acima do teto (semana atual)':'Ainda pode comprar (semana atual)', brl0(Math.abs(curW.sobra)), `teto ${brl0(curW.teto)} · já agendado ${brl0(curW.C)}`, curW.sobra<0?'neg':'pos') : '');
+  $('#regraReserva').textContent = (+S.cfg.reserva? ' − reserva '+brl0(+S.cfg.reserva):'');
 
-  $('#regraReserva').textContent = (+S.cfg.reserva? ' − Reserva '+brl0(+S.cfg.reserva):'');
-
-  /* tabela resumo */
-  let h=`<thead><tr><th>Semana (sáb→sex)</th><th class="r">Meta de venda</th><th class="r">(−) Fixos</th><th class="r">(−) Outras desp.</th>${+S.cfg.reserva?'<th class="r">(−) Reserva</th>':''}<th class="r">= Teto de compras</th><th class="r">Compras agendadas</th><th class="r">Sobra / estouro</th><th style="width:150px">Uso do teto</th></tr></thead><tbody>`;
-  weeks.forEach(w=>{ h+=`<tr class="wk ${w===M.curW?'cur':''}" data-w="${w.n}"><td class="lbl">${w.label}<div class="sub">${w.range}${w===M.curW?' · <b style="color:var(--brand)">semana atual</b>':''}</div></td>
-    <td class="r"><input class="metain num" data-ws="${w.ws}" value="${w.meta.toLocaleString('pt-BR')}" title="Meta de venda desta semana — edite e tecle Enter"></td><td class="r num">${brl0(w.Fx)}</td><td class="r num">${brl0(w.O)}</td>${+S.cfg.reserva?`<td class="r num">${brl0(+S.cfg.reserva)}</td>`:''}
-    <td class="r num teto">${brl0(w.teto)}</td><td class="r num">${brl0(w.C)}</td>
-    <td class="r num ${w.sobra<0?'neg':'pos'}"><b>${w.sobra<0?'passa ':'sobra '}${brl0(Math.abs(w.sobra))}</b></td>
-    <td><span class="badge ${w.status}">${stLabel(w.status)} · ${pct(w.used)}</span><div class="mini"><i class="${w.status}" style="width:${Math.min(100,(isFinite(w.used)?w.used:1)*100)}%"></i></div></td></tr>`; });
-  h+=`</tbody><tfoot><tr><td>Total ${weeks.length} semanas</td><td class="r num">${brl0(T.meta)}</td><td class="r num">${brl0(T.Fx)}</td><td class="r num">${brl0(T.O)}</td>${+S.cfg.reserva?`<td class="r num">${brl0(+S.cfg.reserva*weeks.length)}</td>`:''}<td class="r num">${brl0(T.teto)}</td><td class="r num">${brl0(T.C)}</td><td class="r num ${T.teto-T.C<0?'neg':'pos'}">${brl0(T.teto-T.C)}</td><td></td></tr></tfoot>`;
+  /* ---- tabela semanal integrada ---- */
+  let h=`<thead><tr><th></th><th class="grp rec" colspan="3">RECEITA</th><th class="grp des" colspan="4">DESPESAS A PAGAR</th><th class="grp" colspan="2">RESULTADO</th><th class="grp" colspan="2">COMPRAS × TETO</th></tr>
+  <tr><th>Semana</th><th class="r">Venda</th><th class="r">Meta</th><th class="r">% meta</th><th class="r">Fixos</th><th class="r">Outras</th><th class="r">Compras</th><th class="r">Total</th><th class="r">Semana</th><th class="r">Saldo acum.</th><th class="r">Teto</th><th>Sobra / estouro</th></tr></thead><tbody>`;
+  weeks.forEach(w=>{ const pm=w.meta?w.sales/w.meta:0;
+    h+=`<tr class="wk ${w===curW?'cur':''}" data-w="${w.n}"><td class="lbl">${w.label}<div class="sub">${w.range}${w===curW?' · <b style="color:var(--brand)">atual</b>':''}</div></td>
+    <td class="r num rec"><b>${brl0(w.sales)}</b><br>${salesTag(w)}</td>
+    <td class="r rec"><input class="metain num" data-ws="${w.ws}" value="${w.meta.toLocaleString('pt-BR')}" title="Meta de venda desta semana — edite e tecle Enter"></td>
+    <td class="r num rec ${pm<1?'neg':'pos'}">${pct(pm)}</td>
+    <td class="r num">${brl0(w.Fx)}</td><td class="r num">${brl0(w.O)}</td><td class="r num">${brl0(w.C)}</td><td class="r num"><b>${brl0(w.saidas)}</b></td>
+    <td class="r num ${w.result<0?'neg':'pos'}"><b>${brl0(w.result)}</b></td><td class="r num ${w.saldoFim<0?'neg':''}">${brl0(w.saldoFim)}</td>
+    <td class="r num">${brl0(w.teto)}</td>
+    <td><b class="num ${w.sobra<0?'neg':'pos'}">${w.sobra<0?'passa ':'sobra '}${brl0(Math.abs(w.sobra))}</b><div class="mini"><i class="${w.status}" style="width:${Math.min(100,(isFinite(w.used)?w.used:1)*100)}%"></i></div></td></tr>`; });
+  const last=weeks[weeks.length-1];
+  h+=`</tbody><tfoot><tr><td>Total</td><td class="r num rec">${brl0(T.sales)}</td><td class="r num rec">${brl0(T.meta)}</td><td class="r num rec">${pct(T.meta?T.sales/T.meta:0)}</td><td class="r num">${brl0(T.Fx)}</td><td class="r num">${brl0(T.O)}</td><td class="r num">${brl0(T.C)}</td><td class="r num">${brl0(T.saidas)}</td><td class="r num ${(T.net-T.saidas)<0?'neg':'pos'}">${brl0(T.net-T.saidas)}</td><td class="r num">${brl0(last.saldoFim)}</td><td class="r num">${brl0(T.teto)}</td><td class="num ${T.teto-T.C<0?'neg':'pos'}">${brl0(T.teto-T.C)}</td></tr></tfoot>`;
   $('#resumo').innerHTML=h;
 
-  /* agenda dia a dia: card da semana + seg a sex */
-  const maxDay=Math.max(1,...M.allDays.map(d=>d.total));
+  /* ---- agenda dia a dia: sábado a sexta, venda × pagamentos ---- */
   let a='';
   weeks.forEach(w=>{
-    a+=`<div class="week"><div class="whead ${w.status} ${w===M.curW?'cur':''}" data-w="${w.n}">
-      <div class="t"><b>${w.label}</b><span class="badge ${w.status}">${stLabel(w.status)}</span></div>
-      <div class="rng">sáb ${dmy(w.ws)} a sex ${dmy(w.we)} · ${w.items.length} títulos</div>
-      <div class="wf">
-        <span>Meta de venda</span><b>${brl0(w.meta)}</b>
-        <span><i class="dot" style="background:var(--gF)"></i>(−) Gastos fixos</span><b>${brl0(w.Fx)}</b>
-        <span><i class="dot" style="background:var(--gO)"></i>(−) Outras despesas</span><b>${brl0(w.O)}</b>
-        ${+S.cfg.reserva?`<span>(−) Reserva</span><b>${brl0(+S.cfg.reserva)}</b>`:''}
-        <i class="sep"></i>
-        <span class="big">= Teto de compras</span><b class="big">${brl0(w.teto)}</b>
-        <span><i class="dot" style="background:var(--gC)"></i>Compras agendadas</span><b>${brl0(w.C)}</b>
-      </div>
-      <div class="bar"><i class="${w.status}" style="width:${Math.min(100,(isFinite(w.used)?w.used:1)*100)}%"></i></div>
-      <div class="barlbl"><span>${pct(w.used)} do teto</span><b class="${w.sobra<0?'neg':'pos'}">${w.sobra<0?'passa ':'sobra '}${brl0(Math.abs(w.sobra))}</b></div>
-    </div>`;
-    w.days.filter(d=>d.dow>=1&&d.dow<=5).forEach(d=>{
-      if(d.hol){ a+=`<div class="day hol ${d.inMonth?'':'out'}"><div class="dh"><span class="dw">${DOW[d.dow]}</span></div><div class="dn">${dmy(d.ds)}</div><span class="tag">${esc(d.hol)}</span><div class="pay zero">feriado · sem pagamento<br><span class="sub">vai para o próximo dia útil</span></div></div>`; return; }
-      const fdsTag = d.moved ? `<span class="tag fds" data-tip="${brl0(d.moved)} vencem no fim de semana/feriado e são pagos neste dia">inclui sáb/dom ${brl0(d.moved)}</span>` : '';
-      a+=`<div class="day ${d.ds===M.today?'today':''} ${d.inMonth?'':'out'}" data-d="${d.ds}">
-        <div class="dh"><span class="dw">${DOW[d.dow]}</span>${d.inMonth?'':'<span class="sub">'+monthLabel(d.ds.slice(0,7)).split('/')[0]+'</span>'}</div>
-        <div class="dn">${dmy(d.ds)}</div>
-        ${d.ds===M.today?'<span class="tag hoje">HOJE</span>':''}${fdsTag}
-        <div class="pay num ${d.total?'':'zero'}">${d.total?brl0(d.total):'sem pagamentos'}</div>
-        ${d.total?`<div class="split">${d.F?`<span><i class="dot" style="background:var(--gF)"></i>Fixos</span><b>${brl0(d.F)}</b>`:''}${d.C?`<span><i class="dot" style="background:var(--gC)"></i>Compras</span><b>${brl0(d.C)}</b>`:''}${d.O?`<span><i class="dot" style="background:var(--gO)"></i>Outras</span><b>${brl0(d.O)}</b>`:''}</div>`:''}
-        <div class="stack" style="margin-top:auto;padding-top:0;width:${Math.max(6,d.total/maxDay*100)}%">${['F','C','O'].filter(g=>d[g]>0).map(g=>`<i style="flex:${d[g]};background:${GCOL[g]}"></i>`).join('')}</div>
+    a+=`<div class="wk2 ${w===curW?'cur':''}"><div class="wh" data-w="${w.n}">
+      <div><div class="k">${w.label}</div><div class="v" style="font-size:15px">${w.range}</div><div class="d">${w.items.length} títulos${w===curW?' · <b style="color:var(--brand)">semana atual</b>':''}</div></div>
+      <div class="rec"><div class="k">Receita ${salesTag(w)}</div><div class="v">${brl0(w.sales)}</div><div class="d">meta ${brl0(w.meta)} · ${pct(w.meta?w.sales/w.meta:0)}</div></div>
+      <div><div class="k">Despesas</div><div class="v" style="color:#8a3b0c">${brl0(w.saidas)}</div><div class="d"><i class="dot" style="background:var(--gF)"></i>${kfmt(w.Fx)} <i class="dot" style="background:var(--gC);margin-left:6px"></i>${kfmt(w.C)} <i class="dot" style="background:var(--gO);margin-left:6px"></i>${kfmt(w.O)}</div></div>
+      <div><div class="k">Resultado</div><div class="v ${w.result<0?'neg':'pos'}">${brl0(w.result)}</div><div class="d">saldo ao fim: <b class="${w.saldoFim<0?'neg':''}">${brl0(w.saldoFim)}</b></div></div>
+      <div><div class="k">Compras × teto</div><div class="v ${w.sobra<0?'neg':''}">${brl0(w.C)} <span style="font-size:12px;color:var(--ink2);font-weight:600">de ${brl0(w.teto)}</span></div><div class="bar"><i class="${w.status}" style="width:${Math.min(100,(isFinite(w.used)?w.used:1)*100)}%"></i></div><div class="d"><b class="${w.sobra<0?'neg':'pos'}">${w.sobra<0?'passa ':'sobra '}${brl0(Math.abs(w.sobra))}</b></div></div>
+    </div><div class="days">`;
+    w.days.forEach(d=>{
+      const we = d.dow===0||d.dow===6, pag = d.total+d.extra, saldoDia = d.net - pag;
+      a+=`<div class="dc ${we?'we':''} ${d.ds===M.today?'today':''} ${d.inMonth?'':'out'}" data-d="${d.ds}">
+        <div class="top"><span class="dw">${DOW[d.dow]}</span><span class="dn">${dmy(d.ds)}</span></div>
+        ${d.ds===M.today?'<span class="tag hoje">HOJE</span>':d.hol?`<span class="tag">${esc(d.hol)}</span>`:''}
+        <div class="ln in"><span>Venda ${d.salesReal?'':'~'}</span><b>${d.sales?brl0(d.sales):'fechado'}</b></div>
+        <div class="ln out"><span>A pagar</span><b>${pag?brl0(pag):'—'}</b></div>
+        ${d.F+d.extra?`<div class="ln sm"><span><i class="dot" style="background:var(--gF)"></i>fixos</span><span>${brl0(d.F+d.extra)}</span></div>`:''}
+        ${d.C?`<div class="ln sm"><span><i class="dot" style="background:var(--gC)"></i>compras</span><span>${brl0(d.C)}</span></div>`:''}
+        ${d.O?`<div class="ln sm"><span><i class="dot" style="background:var(--gO)"></i>outras</span><span>${brl0(d.O)}</span></div>`:''}
+        ${we?'<div class="ln sm"><span>contas → segunda</span></div>':''}${d.hol&&!we?'<div class="ln sm"><span>feriado: contas → próximo dia útil</span></div>':''}
+        <div class="res"><div class="ln"><span>Saldo do dia</span><b class="${saldoDia<0?'neg':'pos'}">${brl0(saldoDia)}</b></div><div class="ln"><span>Acumulado</span><b class="${d.acc<0?'neg':''}">${brl0(d.acc)}</b></div></div>
       </div>`;
     });
-    a+=`</div>`;
+    a+=`</div></div>`;
   });
   $('#agenda').innerHTML=a;
 }
@@ -505,13 +517,13 @@ function itemsTable(its,withDate,extraFix){
 function openWeek(n){
   const w=M.weeks[n-1];
   openDrawer(`${w.label} · sáb ${dmy(w.ws)} a sex ${dmy(w.we)}`,
-    `Meta ${brl0(w.meta)} − fixos ${brl0(w.Fx)} − outras ${brl0(w.O)}${+S.cfg.reserva?' − reserva '+brl0(+S.cfg.reserva):''} = teto <b>${brl0(w.teto)}</b> · compras ${brl0(w.C)} · <b class="${w.sobra<0?'neg':'pos'}">${w.sobra<0?'passa':'sobra'} ${brl0(Math.abs(w.sobra))}</b>`,
+    `Receita <b style="color:#0f6b4a">${brl0(w.sales)}</b> − despesas <b>${brl0(w.saidas)}</b> = resultado <b class="${w.result<0?'neg':'pos'}">${brl0(w.result)}</b><br>Teto de compras ${brl0(w.teto)} (meta ${brl0(w.meta)} − fixos ${brl0(w.Fx)} − outras ${brl0(w.O)}${+S.cfg.reserva?' − reserva '+brl0(+S.cfg.reserva):''}) · compras ${brl0(w.C)} · <b class="${w.sobra<0?'neg':'pos'}">${w.sobra<0?'passa':'sobra'} ${brl0(Math.abs(w.sobra))}</b>`,
     itemsTable([...w.items].sort((a,b)=>a.pay.localeCompare(b.pay)),true,+S.cfg.fixExtra||0));
 }
 $('#agenda').addEventListener('click',e=>{
-  const d=e.target.closest('.day[data-d]'), w=e.target.closest('.whead');
+  const d=e.target.closest('.dc[data-d]'), w=e.target.closest('.wh[data-w]');
   if(d){ const x=M.allDays.find(z=>z.ds===d.dataset.d);
-    openDrawer(`${DOW_L[x.dow]}, ${dmyy(x.ds)}`,`A pagar <b>${brl(x.total)}</b> · fixos ${brl0(x.F)} · compras ${brl0(x.C)} · outras ${brl0(x.O)}${x.moved?` · inclui ${brl0(x.moved)} de sáb/dom/feriado`:''}`,itemsTable(x.items,false)); }
+    openDrawer(`${DOW_L[x.dow]}, ${dmyy(x.ds)}`,`Venda ${x.salesReal?'real':'projetada'} <b style="color:#0f6b4a">${brl(x.sales)}</b> · a pagar <b>${brl(x.total+x.extra)}</b> · saldo do dia <b class="${x.net-x.total-x.extra<0?'neg':'pos'}">${brl(x.net-x.total-x.extra)}</b>${x.moved?` · inclui ${brl0(x.moved)} que venceu no sáb/dom/feriado`:''}`,itemsTable(x.items,false,x.extra)); }
   else if(w) openWeek(+w.dataset.w);
 });
 $('#resumo').addEventListener('click',e=>{ if(e.target.classList.contains('metain')) return; const r=e.target.closest('tr[data-w]'); if(r) openWeek(+r.dataset.w); });
