@@ -247,9 +247,9 @@ tfoot td{font-weight:800;border-top:2px solid var(--line)}
         <div class="drop" id="dropCP"><b>📥 Arraste o arquivo de contas a pagar aqui</b><span class="sub">ou clique para escolher · substitui os títulos atuais</span></div>
         <input type="file" id="fileCP" accept=".xls,.xlsx,.csv" hidden>
         <div class="sub" id="cpInfo" style="margin-top:8px"></div>
-        <h3 style="margin-top:20px">2. Importar vendas diárias (PDF “Quadro de Venda Diária”)</h3>
-        <div class="drop" id="dropVD"><b>📥 Arraste o PDF de vendas aqui</b><span class="sub">ou clique · cada mês fica salvo · usamos o TOTAL de todas as lojas</span></div>
-        <input type="file" id="fileVD" accept=".pdf" hidden>
+        <h3 style="margin-top:20px">2. Importar vendas diárias (“Quadro de Venda Diária” em PDF ou XLS)</h3>
+        <div class="drop" id="dropVD"><b>📥 Arraste o relatório de vendas aqui (PDF ou XLS)</b><span class="sub">ou clique · cada dia importado fica salvo · usamos o TOTAL de todas as lojas</span></div>
+        <input type="file" id="fileVD" accept=".pdf,.xls,.xlsx,.csv" hidden>
         <div class="sub" id="vdInfo" style="margin-top:8px"></div>
         <div id="impMsg" style="margin-top:10px"></div>
       </div>
@@ -705,24 +705,48 @@ async function importCP(file){
     msg(`✅ <b>${out.length} títulos</b> importados (${brl(out.reduce((a,r)=>a+r[3],0))})`);
   }catch(e){ console.error(e); msg('❌ '+esc(e.message),'crit'); }
 }
+function lineToSale(cells,found,totIdx){
+  const first=String(cells[0]??'').trim();
+  const m=first.match(/^(\d{2})\/(\d{2})\/(\d{4})/); if(!m) return;
+  let v = totIdx>=0 ? cells[totIdx] : cells.filter(c=>c!==''&&c!=null).pop();
+  found[`${m[3]}-${m[2]}-${m[1]}`] = toNum(v);
+}
+async function readSalesXLS(file){
+  await needXLSX();
+  const wb=XLSX.read(await file.arrayBuffer(),{type:'array'}), found={};
+  wb.SheetNames.forEach(n=>{
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:''});
+    let totIdx=-1;
+    rows.forEach(r=>{
+      const ti=r.findIndex(c=>String(c).trim().toUpperCase()==='TOTAL'); if(ti>=0 && /dia/i.test(String(r[0]))) totIdx=ti;
+      lineToSale(r,found,totIdx);
+    });
+  });
+  return found;
+}
+async function readSalesPDF(file){
+  await needPDF();
+  const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise, found={};
+  for(let p=1;p<=pdf.numPages;p++){
+    const tc=await (await pdf.getPage(p)).getTextContent(), lines={};
+    tc.items.forEach(it=>{ if(!it.str.trim()) return; const y=Math.round(it.transform[5]/2)*2; (lines[y]=lines[y]||[]).push(it); });
+    Object.values(lines).forEach(l=>{
+      const txt=l.sort((a,b)=>a.transform[4]-b.transform[4]).map(i=>i.str).join(' ').replace(/\s+/g,' ').trim();
+      const m=txt.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*-\s*\S+\s+(.*)$/);
+      if(m){ const nums=m[4].match(/-?[\d.]+,\d{2}/g); if(nums) found[`${m[3]}-${m[2]}-${m[1]}`]=toNum(nums[nums.length-1]); }
+    });
+  }
+  return found;
+}
 async function importVD(file){
   try{
-    msg('Lendo '+esc(file.name)+'…'); await needPDF();
-    const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise, found={};
-    for(let p=1;p<=pdf.numPages;p++){
-      const tc=await (await pdf.getPage(p)).getTextContent(), lines={};
-      tc.items.forEach(it=>{ if(!it.str.trim()) return; const y=Math.round(it.transform[5]/2)*2; (lines[y]=lines[y]||[]).push(it); });
-      Object.values(lines).forEach(l=>{
-        const txt=l.sort((a,b)=>a.transform[4]-b.transform[4]).map(i=>i.str).join(' ').replace(/\s+/g,' ').trim();
-        const m=txt.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*-\s*\S+\s+(.*)$/);
-        if(m){ const nums=m[4].match(/-?[\d.]+,\d{2}/g); if(nums) found[`${m[3]}-${m[2]}-${m[1]}`]=toNum(nums[nums.length-1]); }
-      });
-    }
-    const keys=Object.keys(found); if(!keys.length) throw new Error('Não encontrei linhas “dd/mm/aaaa - dia” no PDF. É o Quadro de Venda Diária?');
+    msg('Lendo '+esc(file.name)+'…');
+    const found = /\.pdf$/i.test(file.name) ? await readSalesPDF(file) : await readSalesXLS(file);
+    const keys=Object.keys(found); if(!keys.length) throw new Error('Não encontrei linhas “dd/mm/aaaa - dia” no arquivo. É o Quadro de Venda Diária?');
     const byM={}; keys.forEach(k=>{ (byM[k.slice(0,7)]=byM[k.slice(0,7)]||{})[k]=found[k]; });
     Object.entries(byM).forEach(([m,o])=>S.data.sales[m]=Object.assign({},S.data.sales[m]||{},o));
     S.data.salesFile=file.name; S.data.salesAt=Date.now(); commit(true);
-    msg(`✅ Vendas: ${Object.entries(byM).map(([m,o])=>`<b>${monthLabel(m)}</b> ${Object.keys(o).length} dias · ${brl(Object.values(o).reduce((a,b)=>a+b,0))}`).join(' · ')}`);
+    msg(`✅ Vendas: ${Object.entries(byM).map(([m,o])=>{ const ks=Object.keys(o).sort(); return `<b>${monthLabel(m)}</b> ${dmy(ks[0])} a ${dmy(ks[ks.length-1])} (${ks.length} dias) · ${brl(Object.values(o).reduce((a,b)=>a+b,0))}`; }).join(' · ')}`);
   }catch(e){ console.error(e); msg('❌ '+esc(e.message),'crit'); }
 }
 function wireDrop(dropId,inputId,fn){
