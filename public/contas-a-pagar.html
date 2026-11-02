@@ -87,6 +87,14 @@ h3{font-size:14px;margin:0 0 10px}
 .wk2 .wh .rec .v{color:#0f6b4a}
 .wk2 .days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
 @media(max-width:1100px){.wk2 .wh{grid-template-columns:1fr 1fr}.wk2 .days{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.rowlbl{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:7px 12px;border-bottom:1px solid var(--line2)}
+.rowlbl.rec{background:#f3fbf7;color:#0f6b4a}.rowlbl.des{background:#fdf6f1;color:#8a3b0c;border-top:1px solid var(--line)}
+.sc{padding:8px 11px;border-right:1px solid var(--line2);background:#f8fdfa;display:flex;flex-direction:column;gap:2px}
+.sc:last-child{border-right:0}.sc.today{box-shadow:inset 0 0 0 2px var(--brand)}.sc.out .dn{color:var(--ink3)}
+.sc .top{display:flex;justify-content:space-between;align-items:baseline}
+.sc .dw{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--ink2)}.sc .dn{font-size:13px;font-weight:700}
+.sc .sv{font-size:16px;font-weight:800;color:#0f6b4a;font-variant-numeric:tabular-nums}.sc .sv.zero{color:var(--ink3);font-size:13px;font-weight:600}
+.sc .sm{font-size:11px;color:var(--ink2)}
 .dc{padding:10px 11px;border-right:1px solid var(--line2);cursor:pointer;display:flex;flex-direction:column;gap:3px;min-height:150px}
 .dc:last-child{border-right:0}
 .dc:hover{background:#faf9f6}
@@ -188,13 +196,13 @@ tfoot td{font-weight:800;border-top:2px solid var(--line)}
   <section class="tab on" id="t-agenda">
     <div class="grid kpis" id="kpiAgenda"></div>
 
-    <h2>Receita × despesas por semana <span class="sub">· sábado a sexta · o que vence sáb/dom é pago na segunda</span></h2>
+    <h2>Vendas × despesas por semana <span class="sub">· vendas de sexta a quinta · despesas de sábado a sexta (o que vence sáb/dom é pago na segunda)</span></h2>
     <div class="card" style="padding:6px 10px"><table class="resumo" id="resumo"></table></div>
-    <div class="sub" style="margin-top:8px">Receita = vendas de todas as lojas (<span class="tagr real">real</span> dias já importados do relatório · <span class="tagr proj">proj.</span> média do mesmo dia da semana do último mês importado). Resultado = receita − tudo o que vence na semana. Teto de compras = meta − fixos − outras despesas<span id="regraReserva"></span>; a meta é editável (clique no valor).</div>
+    <div class="sub" style="margin-top:8px">Vendas = todas as lojas, de sexta a quinta (<span class="tagr real">real</span> dias já importados do relatório · <span class="tagr proj">proj.</span> média do mesmo dia da semana do último mês importado). Resultado = receita − tudo o que vence na semana. Teto de compras = meta − fixos − outras despesas<span id="regraReserva"></span>; a meta é editável (clique no valor).</div>
 
-    <h2>Agenda dia a dia <span class="sub">· venda que entra × contas que vencem</span></h2>
+    <h2>Agenda dia a dia <span class="sub">· vendas de sexta a quinta pagam as contas de sábado a sexta</span></h2>
     <div class="legend-row">
-      <span><span class="sw" style="background:var(--s1)"></span>Venda do dia</span>
+      <span><span class="sw" style="background:var(--s1)"></span>Venda (sex→qui) e o dia em que cai na conta</span>
       <span><span class="sw" style="background:var(--gF)"></span>Fixos</span>
       <span><span class="sw" style="background:var(--gC)"></span>Compras</span>
       <span><span class="sw" style="background:var(--gO)"></span>Outras despesas</span>
@@ -390,20 +398,28 @@ function compute(){
   let lu = last; while(!isUtil(lu)) lu=addD(lu,-1);
   const sm = salesModel(month), taxa=(+S.cfg.taxa||0)/100, meta=+S.cfg.meta||0, reserva=+S.cfg.reserva||0, fixExtra=+S.cfg.fixExtra||0;
   const weeks=[]; let saldo=+S.cfg.saldoInicial||0, n=0;
+  /* recebimento: venda de seg a qui cai no dia útil seguinte; sex, sáb e dom caem na segunda (ou no próximo dia útil) */
+  const rcvDate = ds => { let d=addD(ds,1); while(!isUtil(d)) d=addD(d,1); return d; };
+  const RCV={};
+  for(let ds=addD(weekStart(fu),-14); ds<=addD(weekStart(lu),6); ds=addD(ds,1)){ const s=sm.get(ds), r=rcvDate(ds); (RCV[r]=RCV[r]||{v:0,from:[]}); RCV[r].v+=s.v*(1-taxa); if(s.v) RCV[r].from.push({ds,v:s.v,real:s.real}); }
   for(let ws=weekStart(fu); ws<=weekStart(lu); ws=addD(ws,7)){
     n++;
+    /* vendas da semana: sexta anterior a quinta */
+    const sDays=[]; for(let k=0;k<7;k++){ const ds=addD(ws,k-1), s=sm.get(ds); sDays.push({ds,dow:dowOf(ds),sales:s.v,real:s.real,rcv:rcvDate(ds),hol:feriado(ds),inMonth:ds.slice(0,7)===month}); }
     const days=[];
     for(let k=0;k<7;k++){
-      const ds=addD(ws,k), its=RECS.filter(r=>r.pay===ds), s=sm.get(ds);
+      const ds=addD(ws,k), its=RECS.filter(r=>r.pay===ds);
       const sum=g=>its.filter(r=>r.g===g).reduce((a,r)=>a+r.val,0);
       days.push({ds,dow:dowOf(ds),items:its,F:sum('F'),C:sum('C'),O:sum('O'),total:its.reduce((a,r)=>a+r.val,0),
-        moved:its.filter(r=>r.moved).reduce((a,r)=>a+r.val,0),sales:s.v,salesReal:s.real,net:s.v*(1-taxa),hol:feriado(ds),inMonth:ds.slice(0,7)===month});
+        moved:its.filter(r=>r.moved).reduce((a,r)=>a+r.val,0),rcv:(RCV[ds]||{v:0}).v,rcvFrom:(RCV[ds]||{from:[]}).from,hol:feriado(ds),inMonth:ds.slice(0,7)===month});
     }
-    const w={n,ws,we:addD(ws,6),days,items:days.flatMap(d=>d.items)};
-    ['F','C','O','total','sales','net'].forEach(k=>w[k]=days.reduce((a,d)=>a+d[k],0));
+    const w={n,ws,we:addD(ws,6),days,sDays,items:days.flatMap(d=>d.items)};
+    ['F','C','O','total','rcv'].forEach(k=>w[k]=days.reduce((a,d)=>a+d[k],0));
+    w.sales = sDays.reduce((a,d)=>a+d.sales,0); w.net = w.sales*(1-taxa);
+    w.ss = sDays[0].ds; w.se = sDays[6].ds; w.srange = dmy(w.ss)+' a '+dmy(w.se);
     w.Fx = w.F + fixExtra;                 // fixos + fixos fora do sistema
     w.saidas = w.total + fixExtra;
-    w.realDays = days.filter(d=>d.salesReal).length;
+    w.realDays = sDays.filter(d=>d.real).length;
     w.meta = (S.cfg.metas && S.cfg.metas[ws]!=null) ? +S.cfg.metas[ws] : meta;
     w.teto = w.meta - w.Fx - w.O - reserva;  // quanto pode comprar
     w.sobra = w.teto - w.C;
@@ -415,7 +431,7 @@ function compute(){
   }
   let acc=+S.cfg.saldoInicial||0;
   const allDays = weeks.flatMap(w=>w.days);
-  allDays.forEach(d=>{ const extra = d.dow===5 ? fixExtra : 0; d.extra=extra; acc += d.net - d.total - extra; d.acc=acc; });
+  allDays.forEach(d=>{ const extra = d.dow===5 ? fixExtra : 0; d.extra=extra; acc += d.rcv - d.total - extra; d.acc=acc; });
   const items = weeks.flatMap(w=>w.items);
   const T={}; ['F','Fx','C','O','total','saidas','sales','net','teto','meta'].forEach(k=>T[k]=weeks.reduce((a,w)=>a+w[k],0));
   T.n=items.length;
@@ -441,9 +457,9 @@ function salesTag(w){ return w.realDays===7?'<span class="tagr real">real</span>
 function renderAgenda(){
   const {weeks,T,curW,allDays}=M;
   const minD = allDays.reduce((a,b)=>a.acc<b.acc?a:b,allDays[0]);
-  const realD = allDays.filter(d=>d.salesReal).length;
+  const sAll = weeks.flatMap(w=>w.sDays), realD = sAll.filter(d=>d.real).length;
   $('#kpiAgenda').innerHTML =
-    kpi('Receita (vendas)', brl0(T.sales), realD?`${realD} ${realD>1?'dias reais':'dia real'} do relatório + ${allDays.length-realD} projetados`:`projetada pela média de ${M.sm.base?monthLabel(M.sm.base):'—'}`)+
+    kpi('Receita (vendas)', brl0(T.sales), realD?`${realD} ${realD>1?'dias reais':'dia real'} do relatório + ${sAll.length-realD} projetados · sex→qui`:`projetada pela média de ${M.sm.base?monthLabel(M.sm.base):'—'}`)+
     kpi('Despesas a pagar', brl0(T.saidas), `fixos ${brl0(T.Fx)} · compras ${brl0(T.C)} · outras ${brl0(T.O)}`)+
     kpi('Resultado', brl0(T.net-T.saidas), `receita líquida − despesas · ${pct(T.sales?(T.net-T.saidas)/T.sales:0)} da venda`, (T.net-T.saidas)<0?'neg':'pos')+
     kpi('Menor saldo de caixa', brl0(minD.acc), `${DOW[minD.dow]} ${dmy(minD.ds)} · saldo inicial ${brl0(+S.cfg.saldoInicial||0)}`, minD.acc<0?'neg':'pos')+
@@ -451,10 +467,10 @@ function renderAgenda(){
   $('#regraReserva').textContent = (+S.cfg.reserva? ' − reserva '+brl0(+S.cfg.reserva):'');
 
   /* ---- tabela semanal integrada ---- */
-  let h=`<thead><tr><th></th><th class="grp rec" colspan="3">RECEITA</th><th class="grp des" colspan="4">DESPESAS A PAGAR</th><th class="grp" colspan="2">RESULTADO</th><th class="grp" colspan="2">COMPRAS × TETO</th></tr>
+  let h=`<thead><tr><th></th><th class="grp rec" colspan="3">VENDAS (SEX → QUI)</th><th class="grp des" colspan="4">DESPESAS (SÁB → SEX)</th><th class="grp" colspan="2">RESULTADO</th><th class="grp" colspan="2">COMPRAS × TETO</th></tr>
   <tr><th>Semana</th><th class="r">Venda</th><th class="r">Meta</th><th class="r">% meta</th><th class="r">Fixos</th><th class="r">Outras</th><th class="r">Compras</th><th class="r">Total</th><th class="r">Semana</th><th class="r">Saldo acum.</th><th class="r">Teto</th><th>Sobra / estouro</th></tr></thead><tbody>`;
   weeks.forEach(w=>{ const pm=w.meta?w.sales/w.meta:0;
-    h+=`<tr class="wk ${w===curW?'cur':''}" data-w="${w.n}"><td class="lbl">${w.label}<div class="sub">${w.range}${w===curW?' · <b style="color:var(--brand)">atual</b>':''}</div></td>
+    h+=`<tr class="wk ${w===curW?'cur':''}" data-w="${w.n}"><td class="lbl">${w.label}${w===curW?' <b style="color:var(--brand);font-size:11px">· atual</b>':''}<div class="sub">vendas ${w.srange}<br>pagam. ${w.range}</div></td>
     <td class="r num rec"><b>${brl0(w.sales)}</b><br>${salesTag(w)}</td>
     <td class="r rec"><input class="metain num" data-ws="${w.ws}" value="${w.meta.toLocaleString('pt-BR')}" title="Meta de venda desta semana — edite e tecle Enter"></td>
     <td class="r num rec ${pm<1?'neg':'pos'}">${pct(pm)}</td>
@@ -470,24 +486,33 @@ function renderAgenda(){
   let a='';
   weeks.forEach(w=>{
     a+=`<div class="wk2 ${w===curW?'cur':''}"><div class="wh" data-w="${w.n}">
-      <div><div class="k">${w.label}</div><div class="v" style="font-size:15px">${w.range}</div><div class="d">${w.items.length} títulos${w===curW?' · <b style="color:var(--brand)">semana atual</b>':''}</div></div>
-      <div class="rec"><div class="k">Receita ${salesTag(w)}</div><div class="v">${brl0(w.sales)}</div><div class="d">meta ${brl0(w.meta)} · ${pct(w.meta?w.sales/w.meta:0)}</div></div>
-      <div><div class="k">Despesas</div><div class="v" style="color:#8a3b0c">${brl0(w.saidas)}</div><div class="d"><i class="dot" style="background:var(--gF)"></i>${kfmt(w.Fx)} <i class="dot" style="background:var(--gC);margin-left:6px"></i>${kfmt(w.C)} <i class="dot" style="background:var(--gO);margin-left:6px"></i>${kfmt(w.O)}</div></div>
+      <div><div class="k">${w.label}</div><div class="d" style="margin-top:4px">vendas <b>${w.srange}</b><br>pagamentos <b>${w.range}</b></div><div class="d">${w.items.length} títulos${w===curW?' · <b style="color:var(--brand)">semana atual</b>':''}</div></div>
+      <div class="rec"><div class="k">Vendas sex→qui ${salesTag(w)}</div><div class="v">${brl0(w.sales)}</div><div class="d">meta ${brl0(w.meta)} · ${pct(w.meta?w.sales/w.meta:0)}</div></div>
+      <div><div class="k">Despesas sáb→sex</div><div class="v" style="color:#8a3b0c">${brl0(w.saidas)}</div><div class="d"><i class="dot" style="background:var(--gF)"></i>${kfmt(w.Fx)} <i class="dot" style="background:var(--gC);margin-left:6px"></i>${kfmt(w.C)} <i class="dot" style="background:var(--gO);margin-left:6px"></i>${kfmt(w.O)}</div></div>
       <div><div class="k">Resultado</div><div class="v ${w.result<0?'neg':'pos'}">${brl0(w.result)}</div><div class="d">saldo ao fim: <b class="${w.saldoFim<0?'neg':''}">${brl0(w.saldoFim)}</b></div></div>
       <div><div class="k">Compras × teto</div><div class="v ${w.sobra<0?'neg':''}">${brl0(w.C)} <span style="font-size:12px;color:var(--ink2);font-weight:600">de ${brl0(w.teto)}</span></div><div class="bar"><i class="${w.status}" style="width:${Math.min(100,(isFinite(w.used)?w.used:1)*100)}%"></i></div><div class="d"><b class="${w.sobra<0?'neg':'pos'}">${w.sobra<0?'passa ':'sobra '}${brl0(Math.abs(w.sobra))}</b></div></div>
-    </div><div class="days">`;
+    </div>
+    <div class="rowlbl rec">💰 Vendas da semana · sexta a quinta</div><div class="days">`;
+    w.sDays.forEach(d=>{
+      a+=`<div class="sc ${d.ds===M.today?'today':''} ${d.inMonth?'':'out'}" data-tip="Venda de ${DOW_L[d.dow]} ${dmy(d.ds)} cai na conta ${DOW[dowOf(d.rcv)].toLowerCase()} ${dmy(d.rcv)}">
+        <div class="top"><span class="dw">${DOW[d.dow]}</span><span class="dn">${dmy(d.ds)}</span></div>
+        <div class="sv ${d.sales?'':'zero'}">${d.sales?brl0(d.sales):'fechado'}</div>
+        <div class="sm">${d.sales?(d.real?'<span class="tagr real">real</span>':'<span class="tagr proj">proj.</span>'):''} ${d.hol?esc(d.hol)+(d.sales?' · ':''):''}${d.sales?'cai '+DOW[dowOf(d.rcv)].toLowerCase()+' '+dmy(d.rcv):''}</div>
+      </div>`;
+    });
+    a+=`</div><div class="rowlbl des">📄 Pagamentos da semana · sábado a sexta</div><div class="days">`;
     w.days.forEach(d=>{
-      const we = d.dow===0||d.dow===6, pag = d.total+d.extra, saldoDia = d.net - pag;
+      const we = d.dow===0||d.dow===6, pag = d.total+d.extra, saldoDia = d.rcv - pag;
       a+=`<div class="dc ${we?'we':''} ${d.ds===M.today?'today':''} ${d.inMonth?'':'out'}" data-d="${d.ds}">
         <div class="top"><span class="dw">${DOW[d.dow]}</span><span class="dn">${dmy(d.ds)}</span></div>
         ${d.ds===M.today?'<span class="tag hoje">HOJE</span>':d.hol?`<span class="tag">${esc(d.hol)}</span>`:''}
-        <div class="ln in"><span>Venda ${d.salesReal?'':'~'}</span><b>${d.sales?brl0(d.sales):'fechado'}</b></div>
-        <div class="ln out"><span>A pagar</span><b>${pag?brl0(pag):'—'}</b></div>
+        <div class="ln in"><span>Entra na conta</span><b>${d.rcv?brl0(d.rcv):'—'}</b></div>
+        <div class="ln out"><span>Paga</span><b>${pag?brl0(pag):'—'}</b></div>
         ${d.F+d.extra?`<div class="ln sm"><span><i class="dot" style="background:var(--gF)"></i>fixos</span><span>${brl0(d.F+d.extra)}</span></div>`:''}
         ${d.C?`<div class="ln sm"><span><i class="dot" style="background:var(--gC)"></i>compras</span><span>${brl0(d.C)}</span></div>`:''}
         ${d.O?`<div class="ln sm"><span><i class="dot" style="background:var(--gO)"></i>outras</span><span>${brl0(d.O)}</span></div>`:''}
-        ${we?'<div class="ln sm"><span>contas → segunda</span></div>':''}${d.hol&&!we?'<div class="ln sm"><span>feriado: contas → próximo dia útil</span></div>':''}
-        <div class="res"><div class="ln"><span>Saldo do dia</span><b class="${saldoDia<0?'neg':'pos'}">${brl0(saldoDia)}</b></div><div class="ln"><span>Acumulado</span><b class="${d.acc<0?'neg':''}">${brl0(d.acc)}</b></div></div>
+        ${we?'<div class="ln sm"><span>contas → segunda</span></div>':''}${d.hol&&!we?'<div class="ln sm"><span>feriado: tudo → próximo dia útil</span></div>':''}
+        <div class="res"><div class="ln"><span>Saldo do dia</span><b class="${saldoDia<0?'neg':'pos'}">${brl0(saldoDia)}</b></div><div class="ln"><span>Caixa acumulado</span><b class="${d.acc<0?'neg':''}">${brl0(d.acc)}</b></div></div>
       </div>`;
     });
     a+=`</div></div>`;
@@ -523,7 +548,7 @@ function openWeek(n){
 $('#agenda').addEventListener('click',e=>{
   const d=e.target.closest('.dc[data-d]'), w=e.target.closest('.wh[data-w]');
   if(d){ const x=M.allDays.find(z=>z.ds===d.dataset.d);
-    openDrawer(`${DOW_L[x.dow]}, ${dmyy(x.ds)}`,`Venda ${x.salesReal?'real':'projetada'} <b style="color:#0f6b4a">${brl(x.sales)}</b> · a pagar <b>${brl(x.total+x.extra)}</b> · saldo do dia <b class="${x.net-x.total-x.extra<0?'neg':'pos'}">${brl(x.net-x.total-x.extra)}</b>${x.moved?` · inclui ${brl0(x.moved)} que venceu no sáb/dom/feriado`:''}`,itemsTable(x.items,false,x.extra)); }
+    openDrawer(`${DOW_L[x.dow]}, ${dmyy(x.ds)}`,`Entra na conta <b style="color:#0f6b4a">${brl(x.rcv)}</b>${x.rcvFrom.length?' (vendas de '+x.rcvFrom.map(f=>DOW[dowOf(f.ds)].toLowerCase()+' '+dmy(f.ds)).join(', ')+')':''} · paga <b>${brl(x.total+x.extra)}</b> · saldo do dia <b class="${x.rcv-x.total-x.extra<0?'neg':'pos'}">${brl(x.rcv-x.total-x.extra)}</b>${x.moved?` · inclui ${brl0(x.moved)} que venceu no sáb/dom/feriado`:''}`,itemsTable(x.items,false,x.extra)); }
   else if(w) openWeek(+w.dataset.w);
 });
 $('#resumo').addEventListener('click',e=>{ if(e.target.classList.contains('metain')) return; const r=e.target.closest('tr[data-w]'); if(r) openWeek(+r.dataset.w); });
@@ -562,7 +587,7 @@ function lineChart(el,days){
   for(let v=mn; v<=mx+1e-6; v+=step){ const yy=y(v), z=Math.abs(v)<1e-6; s+=`<line x1="${pl}" x2="${W-pr}" y1="${yy}" y2="${yy}" stroke="${z?'#9a978f':'#efede8'}" ${z?'stroke-dasharray="4 3"':''}/><text x="${pl-6}" y="${yy+4}" text-anchor="end" font-size="11" fill="#86847e">${kfmt(v)}</text>`; }
   s+=`<polyline points="${days.map((d,i)=>x(i).toFixed(1)+','+y(d.acc).toFixed(1)).join(' ')}" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>`;
   days.forEach((d,i)=>{ if(d.acc<0) s+=`<circle cx="${x(i)}" cy="${y(d.acc)}" r="4" fill="var(--crit)" stroke="#fff" stroke-width="2"/>`; });
-  days.forEach((d,i)=>{ s+=`<rect x="${x(i)-cw/2}" y="${pt}" width="${cw}" height="${ih}" fill="transparent" data-tip="<b>${DOW[d.dow]} ${dmy(d.ds)}</b><br>Venda líquida: ${brl0(d.net)}${d.salesReal?'':' (proj.)'}<br>Pagamentos: ${brl0(d.total+d.extra)}<br>Saldo acumulado: <b>${brl0(d.acc)}</b>"/>`; });
+  days.forEach((d,i)=>{ s+=`<rect x="${x(i)-cw/2}" y="${pt}" width="${cw}" height="${ih}" fill="transparent" data-tip="<b>${DOW[d.dow]} ${dmy(d.ds)}</b><br>Entra na conta: ${brl0(d.rcv)}<br>Pagamentos: ${brl0(d.total+d.extra)}<br>Saldo acumulado: <b>${brl0(d.acc)}</b>"/>`; });
   el.innerHTML=s+'</svg>';
 }
 
@@ -575,10 +600,10 @@ function renderFluxo(){
     kpi('Pior saldo',brl0(min.acc),`${DOW[min.dow]} ${dmy(min.ds)}`,min.acc<0?'neg':'pos')+
     kpi('Saldo ao fim',brl0(last.saldoFim),'sexta '+dmy(last.we),last.saldoFim<0?'neg':'pos');
   let h=`<thead><tr><th>Semana</th><th class="r">Saldo inicial</th><th class="r">Venda bruta</th><th class="r">vs meta</th><th class="r">Venda líquida</th><th class="r">Fixos</th><th class="r">Compras</th><th class="r">Outras</th><th class="r">Total pago</th><th class="r">Resultado</th><th class="r">Saldo final</th></tr></thead><tbody>`;
-  weeks.forEach(w=>{ const dm=w.sales-w.meta; h+=`<tr><td><b>${w.label}</b><div class="sub">${w.range} · venda ${w.realDays===7?'real':w.realDays?'real+proj.':'projetada'}</div></td><td class="r num">${brl0(w.saldoIni)}</td><td class="r num">${brl0(w.sales)}</td><td class="r num ${dm<0?'neg':'pos'}">${dm<0?'':'+'}${brl0(dm)}</td><td class="r num">${brl0(w.net)}</td><td class="r num">${brl0(w.Fx)}</td><td class="r num">${brl0(w.C)}</td><td class="r num">${brl0(w.O)}</td><td class="r num">${brl0(w.saidas)}</td><td class="r num ${w.result<0?'neg':'pos'}">${brl0(w.result)}</td><td class="r num ${w.saldoFim<0?'neg':''}"><b>${brl0(w.saldoFim)}</b></td></tr>`; });
+  weeks.forEach(w=>{ const dm=w.sales-w.meta; h+=`<tr><td><b>${w.label}</b><div class="sub">vendas ${w.srange} (${w.realDays===7?'real':w.realDays?'real+proj.':'proj.'}) · pagam. ${w.range}</div></td><td class="r num">${brl0(w.saldoIni)}</td><td class="r num">${brl0(w.sales)}</td><td class="r num ${dm<0?'neg':'pos'}">${dm<0?'':'+'}${brl0(dm)}</td><td class="r num">${brl0(w.net)}</td><td class="r num">${brl0(w.Fx)}</td><td class="r num">${brl0(w.C)}</td><td class="r num">${brl0(w.O)}</td><td class="r num">${brl0(w.saidas)}</td><td class="r num ${w.result<0?'neg':'pos'}">${brl0(w.result)}</td><td class="r num ${w.saldoFim<0?'neg':''}"><b>${brl0(w.saldoFim)}</b></td></tr>`; });
   h+=`</tbody><tfoot><tr><td>Total</td><td class="r num">${brl0(+S.cfg.saldoInicial||0)}</td><td class="r num">${brl0(T.sales)}</td><td class="r num">${brl0(T.sales-T.meta)}</td><td class="r num">${brl0(T.net)}</td><td class="r num">${brl0(T.Fx)}</td><td class="r num">${brl0(T.C)}</td><td class="r num">${brl0(T.O)}</td><td class="r num">${brl0(T.saidas)}</td><td class="r num ${(T.net-T.saidas)<0?'neg':'pos'}">${brl0(T.net-T.saidas)}</td><td class="r num">${brl0(last.saldoFim)}</td></tr></tfoot>`;
   $('#flowTbl').innerHTML=h;
-  $('#flowNote').innerHTML=`Venda = todas as lojas somadas, de sábado a sexta. Dias sem venda importada usam a média do mesmo dia da semana de ${M.sm.base?monthLabel(M.sm.base):'—'}${+S.cfg.growth?` (${S.cfg.growth>0?'+':''}${S.cfg.growth}%)`:''}. Vendas no crédito caem na conta depois; se não antecipa, o caixa real fica abaixo deste fluxo.`;
+  $('#flowNote').innerHTML=`Vendas = todas as lojas, de sexta a quinta (o que é vendido sex/sáb/dom cai na conta na segunda). Despesas = vencimentos de sábado a sexta. Dias sem venda importada usam a média do mesmo dia da semana de ${M.sm.base?monthLabel(M.sm.base):'—'}${+S.cfg.growth?` (${S.cfg.growth>0?'+':''}${S.cfg.growth}%)`:''}. Vendas no crédito caem na conta depois; se não antecipa, o caixa real fica abaixo deste fluxo.`;
   groupedBars($('#chWeek'),weeks.map(w=>'Sem '+w.n),weeks.map(w=>w.net),weeks.map(w=>w.saidas),weeks.map(w=>`<b>${w.label} · ${w.range}</b><br>Venda líquida: ${brl0(w.net)}<br>Pagamentos: ${brl0(w.saidas)}<br>Resultado: ${brl0(w.result)}`));
   lineChart($('#chDaily'),allDays);
 }
