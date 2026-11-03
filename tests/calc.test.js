@@ -287,3 +287,19 @@ test('motoboy: periculosidade de 30% sobre o salario base e aluguel de moto reco
   assert.ok(C.RECURRING.includes('aluguelMoto'));
   assert.equal(C.carryOver({ aluguelMoto: 400, vale: 50 }, '2026-11', 'x').aluguelMoto, 400);
 });
+
+test('contracheques: total de salarios por loja sem o motoboy', () => {
+  const emps = [{ id: 'a', nome: 'A', loja: 'bingen' }, { id: 'b', nome: 'B', loja: 'bingen' }, { id: 'c', nome: 'C', loja: 'coronel' }, { id: 'm', nome: 'MARCIO', loja: 'correas', motoboy: true }, { id: 'x', nome: 'X', loja: 'correas' }];
+  const slips = new Map([
+    ['a', { liquido: 1500, inss: 120, fgts: 150, totalVenc: 2000, itens: [{ tipo: 'venc', desc: 'Salário Base', valor: 1800 }, { tipo: 'venc', desc: 'Salário Família', valor: 60 }, { tipo: 'venc', desc: 'Prêmio', valor: 140 }] }],
+    ['b', { liquido: 1000, inss: 90, fgts: 110, totalVenc: 1400, itens: [], base: { salarioBase: 1400 } }],
+    ['c', { liquido: 2000, inss: 200, fgts: 180, totalVenc: 2500, itens: [{ tipo: 'venc', desc: 'Salario', valor: 2300 }] }],
+    ['m', { liquido: 1900, inss: 150, fgts: 175, totalVenc: 2197, itens: [{ tipo: 'venc', desc: 'Salário Base', valor: 1690 }] }],
+  ]);
+  const r = C.totaisContracheques(slips, emps);
+  const bin = r.lojas.find((l) => l.id === 'bingen'), cor = r.lojas.find((l) => l.id === 'correas');
+  assert.equal(bin.salarios, 3200); assert.equal(bin.n, 2); assert.equal(bin.liquido, 2500);
+  assert.equal(cor.n, 0, 'motoboy fora da soma da Correas (e X sem contracheque)');
+  assert.equal(r.total.salarios, 5500);
+  assert.deepEqual(r.motoboys.map((m) => [m.id, m.salarios]), [['m', 1690]]);
+});

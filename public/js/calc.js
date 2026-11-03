@@ -791,3 +791,32 @@ export function notaFacil(cfg = {}, mes = {}) {
   const soma = (k) => round2(linhas.reduce((a, l) => a + l[k], 0));
   return { limite, linhas, total: { consumo: soma('consumo'), devido: soma('devido') } };
 }
+
+// ---------- totais dos contracheques importados ----------
+/** Salario do contracheque: soma dos itens de vencimento "Salário ..." (sem salário-família); senão o salário base do rodapé. */
+export function salarioDoContracheque(p) {
+  const itens = (p && p.itens) || [];
+  const sal = itens.filter((i) => i.tipo === 'venc' && /sal[aá]rio/i.test(i.desc || '') && !/fam[ií]lia|maternidade/i.test(i.desc || ''));
+  if (sal.length) return round2(sal.reduce((a, i) => a + num(i.valor), 0));
+  return round2(num(p?.base?.salarioBase));
+}
+/**
+ * Totais por loja (loja do registro) dos contracheques do mes, SEM os motoboys (vao a parte).
+ * slips: Map/obj {empId: payslip}; emps: lista de funcionarios.
+ * Retorna { lojas: [{id, nome, n, salarios, venc, liquido, inss, fgts}], total: {...}, motoboys: [{id, nome, loja, salarios, liquido}] }
+ */
+export function totaisContracheques(slips, emps) {
+  const get = (id) => (slips instanceof Map ? slips.get(id) : slips[id]);
+  const zero = () => ({ n: 0, salarios: 0, venc: 0, liquido: 0, inss: 0, fgts: 0 });
+  const soma = (t, p) => { t.n++; t.salarios += salarioDoContracheque(p); t.venc += num(p.totalVenc); t.liquido += num(p.liquido); t.inss += num(p.inss); t.fgts += num(p.fgts); };
+  const fecha = (t) => { for (const k of ['salarios', 'venc', 'liquido', 'inss', 'fgts']) t[k] = round2(t[k]); return t; };
+  const lojas = STORES.map((s) => ({ id: s.id, nome: s.nome, ...zero() }));
+  const total = zero(), motoboys = [];
+  for (const e of emps) {
+    const p = get(e.id); if (!p) continue;
+    if (ehMotoboy(e)) { motoboys.push({ id: e.id, nome: e.nome, loja: e.loja, salarios: salarioDoContracheque(p), liquido: round2(num(p.liquido)) }); continue; }
+    const l = lojas.find((x) => x.id === e.loja); if (!l) continue;
+    soma(l, p); soma(total, p);
+  }
+  return { lojas: lojas.map(fecha), total: fecha(total), motoboys };
+}

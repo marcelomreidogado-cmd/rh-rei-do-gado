@@ -95,3 +95,4 @@ label{display:grid;gap:3px;font-weight:500}label small{font-weight:400}.row{disp
 .folha tfoot tr.tot th{background:#f8fafc;font-size:12px;white-space:nowrap;border-top:2px solid var(--line);padding:6px 8px}.folha tfoot th.num{text-align:right}
 .tg-wrap{width:fit-content;max-width:100%}.tg-tab td,.tg-tab th{padding:5px 12px;white-space:nowrap}.tg-tab tfoot th{text-align:right;background:#f1f5f9}.tg-tab tfoot th:first-child{text-align:left}.store.tg h2 small{font-weight:400}
 .in.money.auto{color:#2563eb;font-style:italic}
+.tl-wrap{width:fit-content;max-width:100%}.tl-tab td,.tl-tab th{padding:5px 12px;white-space:nowrap}.tl-tab tfoot th{text-align:right;background:#f1f5f9}.tl-tab tfoot th:first-child{text-align:left}.tl-tab .tl-sal{font-weight:600}.store.tl h2 small{font-weight:400}

@@ -93,6 +93,10 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   loja ou cobrindo outra). Na 5x2 aparece como "Atend./Manip." com a/m no dia;
   no domingo, com contorno lilás. Jeferson foi marcado como híbrido
   (29/10/2026). No *Outro negócio* existe "Qualquer função (híbrido)".
+- **Contracheques → Totais por loja**: depois de importar os contracheques,
+  tabela por loja (do registro) com salários (itens "Salário" dos recibos),
+  total de vencimentos, líquido a pagar, INSS e FGTS, e o total — SEM o
+  motoboy, que aparece a parte logo abaixo.
 - **Salário, totais e líquido na folha**: coluna Salário (só leitura, vem do
   cadastro), linha de total em cada loja e o bloco *Total geral* (por loja e
   somado: salários, assiduidade, prêmio, vale, adiantamento, passagem e

@@ -38,8 +38,20 @@ export async function render(el, month) {
     <button class="btn" data-act="export" ${map.size ? '' : 'disabled'} title="Baixa CSV com líquido, INSS e FGTS">Exportar CSV</button>
     <button class="btn primary" data-act="import">📥 Importar contracheques (PDF)</button><input type="file" id="pf" accept="application/pdf,image/*" multiple hidden></div>
     ${map.size ? `<div class="totals"><div><small>Total líquido a pagar</small><b>R$ ${C.brl(tot.liquido, false)}</b></div><div><small>Total INSS</small><b>R$ ${C.brl(tot.inss, false)}</b></div><div><small>Total FGTS</small><b>R$ ${C.brl(tot.fgts, false)}</b></div></div>` : ''}
+    ${map.size ? totaisPorLoja(map) : ''}
     ${body || '<p class="muted">Crie o mês na aba Folha ou importe os contracheques.</p>'}`;
   wire();
+}
+
+/** Totais por loja dos contracheques importados — salarios sem o motoboy (ele aparece a parte). */
+function totaisPorLoja(map) {
+  const r = C.totaisContracheques(map, S.employees);
+  const m = (v) => (v ? C.money(v) : '—');
+  const linha = (l, th = false) => { const c = th ? 'th' : 'td'; return `<tr><${c} class="c-nome">${esc(l.nome)}</${c}><${c} class="num">${l.n}</${c}><${c} class="num tl-sal">${m(l.salarios)}</${c}><${c} class="num">${m(l.venc)}</${c}><${c} class="num">${m(l.liquido)}</${c}><${c} class="num">${m(l.inss)}</${c}><${c} class="num">${m(l.fgts)}</${c}></tr>`; };
+  return `<section class="store tl"><h2>Totais por loja${r.motoboys.length ? ' <small>sem motoboy</small>' : ''}</h2>
+    <div class="table-wrap tl-wrap"><table class="grid tl-tab"><thead><tr><th></th><th>Func.</th><th>Salários</th><th>Total vencimentos</th><th>Líquido a pagar</th><th>INSS</th><th>FGTS</th></tr></thead>
+    <tbody>${r.lojas.map((l) => linha(l)).join('')}</tbody><tfoot>${linha({ ...r.total, nome: 'Total' }, true)}</tfoot></table></div>
+    ${r.motoboys.length ? `<p class="muted small">Fora da soma (motoboy): ${r.motoboys.map((x) => `<b>${esc(x.nome.split(' ')[0].charAt(0) + x.nome.split(' ')[0].slice(1).toLowerCase())}</b> — salário ${esc(m(x.salarios))} · líquido ${esc(m(x.liquido))}`).join(' · ')}</p>` : ''}</section>`;
 }
 
 let wiredRoot = null;

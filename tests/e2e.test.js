@@ -549,6 +549,25 @@ test('E2E: importa o relatorio de ferias da contabilidade (OCR no navegador)', {
   assert.match(await txt('tr[data-emp="gustavo-henrique"]'), /31\/01\/2026[\s\S]*30\/12\/2026/);
 });
 
+test('E2E: contracheques importados — total de salarios por loja sem o motoboy', { skip, timeout: 60000 }, async () => {
+  await page.evaluate(async () => {
+    const D = window.__D;
+    const mk = '2026-10';
+    const sal = (v) => [{ tipo: 'venc', desc: 'Salário Base', valor: v }];
+    await D.savePayslip(mk, 'bruno-jose', { liquido: 1500, inss: 120, fgts: 150, totalVenc: 2000, itens: sal(1800) });
+    await D.savePayslip(mk, 'thais-carmo', { liquido: 1200, inss: 100, fgts: 120, totalVenc: 1600, itens: sal(1500) });
+    await D.savePayslip(mk, 'marcio-goncalves', { liquido: 1900, inss: 150, fgts: 175, totalVenc: 2197, itens: sal(1690) });
+  });
+  await page.click('#nav a[data-v=contracheques]'); await page.click('.mchip[data-m="2026-10"]'); await page.waitForSelector('section.tl');
+  const linhas = await page.$$eval('section.tl tbody tr', (trs) => trs.map((tr) => [...tr.children].map((c) => c.textContent.trim())));
+  const cor = linhas.find((l) => l[0] === 'Correas');
+  assert.equal(cor[1], '1'); assert.equal(cor[2], 'R$ 1.500,00', 'Correas sem o Marcio');
+  assert.match(await page.locator('section.tl tfoot').innerText(), /R\$ 3\.300,00/);
+  assert.match(await page.locator('section.tl').innerText(), /motoboy[\s\S]*Marcio[\s\S]*1\.690,00/i);
+  if (process.env.SHOT_DIR) await page.locator('section.tl').screenshot({ path: path.join(process.env.SHOT_DIR, 'totais-loja.png') });
+  await page.click('#nav a[data-v=folha]');
+});
+
 test('E2E: encerra e nao houve erros de JavaScript', { skip, timeout: 30000 }, async () => {
   await browser?.close(); srv?.close();
   assert.deepEqual(errors, []);
