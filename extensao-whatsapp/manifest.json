@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "RH Rei do Gado — WhatsApp",
+  "version": "1.0.0",
+  "description": "Envia o contracheque (imagem + mensagem) pelo WhatsApp Web com um clique na aba Contracheques do RH Rei do Gado.",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": ["https://web.whatsapp.com/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://rh-rei-do-gado.web.app/*", "https://rh-rei-do-gado.firebaseapp.com/*", "http://localhost/*", "http://127.0.0.1/*"],
+      "js": ["rh.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["wa.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

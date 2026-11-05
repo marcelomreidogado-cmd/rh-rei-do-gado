@@ -353,14 +353,7 @@ test('E2E: importa os contracheques reais (OCR no navegador), confere e envia po
   // (a sandbox de testes nao tem acesso a internet ate web.whatsapp.com; interceptamos a navegacao
   //  para conferir a URL pedida sem depender de rede externa)
   await ctx.route('https://web.whatsapp.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<html>ok</html>' }));
-  await page.click(`tr[data-emp="bruno-jose"] [data-act=wa]`); await page.waitForSelector('#wa_web');
-  const [popup] = await Promise.all([ctx.waitForEvent('page'), page.click('#wa_web')]);
-  await popup.waitForLoadState('domcontentloaded');
-  assert.match(popup.url(), /web\.whatsapp\.com\/send\?phone=5524992932577&text=Ol%C3%A1%2C%20Bruno!/);
-  await popup.close();
-  await ctx.unroute('https://web.whatsapp.com/**');
-  const clip = await page.evaluate(async () => { const it = await navigator.clipboard.read(); return it.map((i) => i.types).flat(); });
-  assert.ok(clip.includes('image/png'), 'imagem do contracheque copiada: ' + clip);
+  await ctx.unroute('https://web.whatsapp.com/**'); // envio pelo WhatsApp: ver tests/whatsapp-ext.test.js
   await page.click('tr[data-emp="bruno-jose"] [data-act=view]'); await page.waitForSelector('.slipimg');
   assert.ok((await page.locator('.slipimg').evaluate((i) => i.naturalWidth)) > 500);
   await page.screenshot({ path: process.env.SHOT_DIR ? path.join(process.env.SHOT_DIR, 'contracheque.png') : undefined });
@@ -569,26 +562,19 @@ test('E2E: contracheques importados — total de salarios por loja sem o motoboy
   await page.click('#nav a[data-v=folha]');
 });
 
-test('E2E: WhatsApp envia a imagem do contracheque e a mensagem (conversa aberta + imagem copiada)', { skip, timeout: 60000 }, async () => {
+test('E2E: WhatsApp sem a extensao mostra como instalar (um botao so)', { skip, timeout: 60000 }, async () => {
   await page.evaluate(async () => {
-    const c = document.createElement('canvas'); c.width = 600; c.height = 400; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 600, 400); g.fillStyle = '#000'; g.font = '30px sans-serif'; g.fillText('CONTRACHEQUE TESTE', 40, 200);
+    const c = document.createElement('canvas'); c.width = 600; c.height = 400; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 600, 400);
     await window.__D.savePayslip('2026-10', 'bruno-jose', { liquido: 945.93, inss: 158.21, fgts: 162.25, totalVenc: 1300, itens: [] }, c.toDataURL('image/jpeg', 0.8));
   });
   await page.click('#nav a[data-v=contracheques]'); await page.click('.mchip[data-m="2026-10"]'); await page.waitForSelector('tr[data-emp="bruno-jose"] [data-act=wa]');
-  await page.click('tr[data-emp="bruno-jose"] [data-act=wa]'); await page.waitForSelector('#wa_web');
-  assert.ok((await page.locator('.wa-envio .slipimg').evaluate((i) => i.naturalWidth)) === 600, 'imagem do contracheque no envio');
-  assert.match(await page.locator('#wamsg').inputValue(), /Bruno/);
-  await page.fill('#wamsg', 'Olá, Bruno! Segue o seu contracheque.');
-  await ctx.route('https://web.whatsapp.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<html>ok</html>' }));
-  const [popup] = await Promise.all([ctx.waitForEvent('page'), page.click('#wa_web')]);
-  await popup.waitForLoadState('domcontentloaded');
-  assert.match(popup.url(), /web\.whatsapp\.com\/send\?phone=55\d+&text=Ol%C3%A1%2C%20Bruno!%20Segue/);
-  await popup.close(); await ctx.unroute('https://web.whatsapp.com/**');
-  await page.waitForFunction(() => document.querySelector('#toast')?.textContent.includes('⌘V'));
-  const clip = await page.evaluate(async () => { const it = await navigator.clipboard.read(); return it.map((i) => i.types).flat(); });
-  assert.ok(clip.includes('image/png'), 'imagem copiada para colar no WhatsApp: ' + clip);
-  await page.click('.modal-foot button:has-text("Marcar como enviado")');
-  await page.waitForFunction(() => document.querySelector('tr[data-emp="bruno-jose"]')?.textContent.includes('enviado'));
+  await page.click('tr[data-emp="bruno-jose"] [data-act=wa]'); await page.waitForSelector('#wa_enviar');
+  assert.equal(await page.locator('.wa-envio button').count(), 1, 'um botao so');
+  assert.ok(await page.locator('#wa_enviar').isDisabled(), 'sem extensao o botao fica desligado');
+  assert.match(await page.locator('.wa-inst').innerText(), /chrome:\/\/extensions/);
+  const zip = await page.evaluate(async () => (await fetch('/extensao-whatsapp.zip')).status);
+  assert.equal(zip, 200, 'extensao para baixar');
+  await page.click('.modal-foot button:has-text("Fechar")');
   await page.click('#nav a[data-v=folha]');
 });
 

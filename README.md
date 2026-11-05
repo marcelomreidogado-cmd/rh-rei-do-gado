@@ -29,13 +29,13 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   com Tesseract.js — não sai nenhum dado do computador). O sistema confere
   as somas de cada contracheque, sinaliza o que precisa conferência manual,
   guarda o líquido a receber, o INSS e o FGTS de cada funcionário, e permite
-  enviar o contracheque (a imagem) pelo WhatsApp usando o telefone
-  cadastrado de cada um. O botão WhatsApp abre uma janela com a imagem e a
-  mensagem (editável): "Enviar pelo WhatsApp" compartilha imagem + mensagem
-  juntas pelo app (Mac/celular, quando o navegador permite compartilhar
-  arquivos); "Abrir a conversa no WhatsApp Web" abre a conversa do
-  funcionário com a mensagem escrita e a imagem já copiada (⌘V e Enter).
-  A imagem é preparada antes do clique para o navegador não bloquear.
+  enviar o contracheque pelo WhatsApp com UM botão: a extensão do Chrome
+  "RH Rei do Gado — WhatsApp" (pasta `extensao-whatsapp/`, também em
+  `/extensao-whatsapp.zip` no site) abre a conversa do funcionário no WhatsApp
+  Web, cola a imagem do contracheque, escreve a mensagem na legenda, clica em
+  Enviar e devolve o "enviado" para o RH. Instalação (uma vez): chrome://extensions
+  → Modo do desenvolvedor → Carregar sem compactação → pasta extensao-whatsapp.
+  Teste automático com WhatsApp simulado: `tests/whatsapp-ext.test.js`.
 - **Escala de domingo**: funcionários classificados como atendimento ou
   manipulação; o sistema sugere uma escala com rodízio (quem trabalhou menos
   domingos entra primeiro) respeitando afastamentos, e avisa quando falta
