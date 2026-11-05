@@ -1,7 +1,7 @@
 import * as C from '../calc.js';
 import * as D from '../data.js';
 import { S } from '../data.js';
-import { esc, $, $$, toast, openModal, confirmBox, copyImageDataUrl, downloadText } from '../ui.js';
+import { esc, $, $$, toast, openModal, confirmBox, downloadText, dataUrlToBlob } from '../ui.js';
 import { periodoToMonth } from '../payslip.js';
 
 let mk, root;
@@ -29,7 +29,7 @@ export async function render(el, month) {
       <td class="acts">
         <button class="btn sm" data-act="view" ${p ? '' : 'disabled'}>Ver</button>
         <button class="btn sm" data-act="edit">${p ? 'Editar' : 'Lançar'}</button>
-        <button class="btn sm success" data-act="wa" ${p && ph.ok ? '' : 'disabled'} title="${ph.ok ? 'Copia a imagem e abre a conversa no WhatsApp Web' : 'Cadastre o telefone na aba Funcionários'}">WhatsApp</button>
+        <button class="btn sm success" data-act="wa" ${p && ph.ok ? '' : 'disabled'} title="${ph.ok ? 'Enviar a imagem do contracheque e a mensagem' : 'Cadastre o telefone na aba Funcionários'}">WhatsApp</button>
         <button class="btn sm" data-act="sent" ${p ? '' : 'disabled'}>${p?.sent ? 'Desmarcar' : 'Marcar enviado'}</button>
       </td></tr>`;
   };
@@ -76,19 +76,68 @@ function wire() {
   });
 }
 
+/** Converte a imagem (data URL) em PNG — o formato que a area de transferencia aceita. */
+const toPngBlob = (dataUrl) => new Promise((res, rej) => {
+  const im = new Image();
+  im.onload = () => { const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext('2d').drawImage(im, 0, 0); c.toBlob((b) => (b ? res(b) : rej(new Error('png'))), 'image/png'); };
+  im.onerror = () => rej(new Error('imagem')); im.src = dataUrl;
+});
+
+/**
+ * Envio do contracheque: tudo (imagem e arquivo) e preparado ANTES do clique, para o navegador deixar
+ * copiar a imagem / compartilhar o arquivo no mesmo clique (senao bloqueia por seguranca).
+ * 1) "Enviar pelo app": compartilha imagem + mensagem juntas (WhatsApp do Mac/celular aparece na lista).
+ * 2) "WhatsApp Web": abre a conversa do funcionario com a mensagem escrita e a imagem copiada (⌘V cola).
+ */
 async function sendWhatsApp(empId) {
   const e = D.emp(empId), ph = C.normalizePhone(e.telefone, S.config.dddPadrao);
   const img = await D.payslipImage(mk, empId);
-  let copied = false;
-  if (img) copied = await copyImageDataUrl(img);
-  const url = `https://web.whatsapp.com/send?phone=${ph.wa}&text=${encodeURIComponent(msgFor(e))}`;
-  window.open(url, '_blank', 'noopener');
-  await D.patchPayslip(mk, empId, { waOpenedAt: new Date().toISOString() });
-  await D.log('whatsapp_aberto', `${mk} ${e.nome}`);
-  if (!img) toast('WhatsApp aberto. Este contracheque não tem imagem salva para colar.', 'err', 7000);
-  else if (copied) toast('Imagem copiada. No WhatsApp, clique na conversa e cole (Ctrl/⌘+V) para enviar o contracheque.', 'ok', 9000);
-  else { toast('Não consegui copiar a imagem automaticamente. Use “Ver” > “Baixar imagem” e anexe na conversa.', 'err', 9000); }
-  render(root, mk);
+  const nome1 = firstName(e.nome);
+  let png = null, file = null;
+  if (img) {
+    try { png = await toPngBlob(img); } catch (err) { png = null; }
+    try { file = new File([png || dataUrlToBlob(img)], `contracheque-${mk}-${nome1}.${png ? 'png' : 'jpg'}`, { type: png ? 'image/png' : dataUrlToBlob(img).type }); } catch (err) { file = null; }
+  }
+  const podeApp = !!(file && navigator.canShare && navigator.canShare({ files: [file] }));
+  const marcar = async (patch) => { await D.patchPayslip(mk, empId, patch); };
+  openModal({
+    title: `Enviar contracheque — ${e.nome}`, wide: true,
+    body: `<div class="grid2 top wa-envio"><div>${img ? `<img class="slipimg" src="${img}" alt="Contracheque de ${esc(e.nome)}">` : '<div class="warn-box">Este contracheque não tem imagem salva (foi lançado à mão). Importe o PDF da contabilidade para enviar a imagem.</div>'}</div>
+      <div><label>Mensagem<textarea class="in" id="wamsg" rows="3">${esc(msgFor(e))}</textarea></label>
+      <p class="muted small">Para ${esc(ph.display || '')}</p>
+      <div class="wa-btns">
+        ${podeApp ? '<button class="btn success block" type="button" id="wa_app">📤 Enviar pelo WhatsApp — imagem e mensagem juntas</button>' : ''}
+        <button class="btn ${podeApp ? '' : 'success'} block" type="button" id="wa_web" ${ph.ok ? '' : 'disabled'}>💬 Abrir a conversa no WhatsApp Web${img ? ' com a imagem copiada' : ''}</button>
+        ${img ? '<button class="btn block" type="button" id="wa_down">⬇ Baixar a imagem</button>' : ''}
+      </div>
+      <p class="muted small" id="wa_dica">${podeApp ? 'No primeiro botão, escolha <b>WhatsApp</b> e depois o contato.' : ''}${img ? `${podeApp ? ' No WhatsApp Web: ' : 'Na conversa que abrir: '}<b>⌘V</b> cola a imagem → <b>Enter</b>. A mensagem já fica escrita na conversa (se não for junto, <b>Enter</b> de novo).` : ''}</p></div></div>`,
+    actions: [{ label: 'Marcar como enviado', kind: 'primary', onClick: async () => { await marcar({ sent: true, sentAt: new Date().toISOString() }); render(root, mk); } }, { label: 'Fechar', onClick: () => render(root, mk) }],
+    onMount: (m) => {
+      const texto = () => m.$('#wamsg').value.trim();
+      const app = m.$('#wa_app');
+      if (app) app.onclick = () => {
+        navigator.share({ files: [file], text: texto(), title: `Contracheque ${C.monthLabel(mk)}` })
+          .then(async () => { await marcar({ sent: true, sentAt: new Date().toISOString(), waOpenedAt: new Date().toISOString() }); await D.log('whatsapp_compartilhado', `${mk} ${e.nome}`); toast(`Contracheque de ${nome1} compartilhado.`); m.close(); render(root, mk); })
+          .catch((err) => { if (err && err.name !== 'AbortError') toast('Não foi possível compartilhar: ' + err.message, 'err'); });
+      };
+      m.$('#wa_web').onclick = () => {
+        // no mesmo clique: copia a imagem (ja pronta) e abre a conversa — sem nada esperando no meio
+        let copiou = Promise.resolve(false);
+        if (png && navigator.clipboard && window.ClipboardItem) copiou = navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]).then(() => true).catch(() => false);
+        const url = `https://web.whatsapp.com/send?phone=${ph.wa}&text=${encodeURIComponent(texto())}`;
+        const w = window.open(url, 'whatsapp');
+        copiou.then(async (ok) => {
+          await marcar({ waOpenedAt: new Date().toISOString() }); await D.log('whatsapp_aberto', `${mk} ${e.nome}`);
+          if (!w) toast('O navegador bloqueou a nova aba. Permita pop-ups para este site e tente de novo.', 'err', 9000);
+          else if (!img) toast('Conversa aberta. Este contracheque não tem imagem — use “Baixar a imagem” depois de importar o PDF.', 'err', 8000);
+          else if (ok) toast(`Imagem copiada. Na conversa de ${nome1}: ⌘V e Enter.`, 'ok', 9000);
+          else toast('Não consegui copiar a imagem. Use “Baixar a imagem” e arraste para a conversa.', 'err', 9000);
+        });
+      };
+      const dn = m.$('#wa_down');
+      if (dn) dn.onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(file || dataUrlToBlob(img)); a.download = file ? file.name : `contracheque-${mk}-${nome1}.jpg`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); };
+    },
+  });
 }
 
 function exportCsv() {

@@ -29,8 +29,13 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   com Tesseract.js — não sai nenhum dado do computador). O sistema confere
   as somas de cada contracheque, sinaliza o que precisa conferência manual,
   guarda o líquido a receber, o INSS e o FGTS de cada funcionário, e permite
-  enviar o contracheque (a imagem) pelo WhatsApp Web usando o telefone
-  cadastrado de cada um.
+  enviar o contracheque (a imagem) pelo WhatsApp usando o telefone
+  cadastrado de cada um. O botão WhatsApp abre uma janela com a imagem e a
+  mensagem (editável): "Enviar pelo WhatsApp" compartilha imagem + mensagem
+  juntas pelo app (Mac/celular, quando o navegador permite compartilhar
+  arquivos); "Abrir a conversa no WhatsApp Web" abre a conversa do
+  funcionário com a mensagem escrita e a imagem já copiada (⌘V e Enter).
+  A imagem é preparada antes do clique para o navegador não bloquear.
 - **Escala de domingo**: funcionários classificados como atendimento ou
   manipulação; o sistema sugere uma escala com rodízio (quem trabalhou menos
   domingos entra primeiro) respeitando afastamentos, e avisa quando falta
