@@ -23,7 +23,8 @@ A fonte da verdade é o GitHub (não a pasta Downloads/rh-rei-do-gado, que fica 
      `/Users/marcelomaiasilva/Downloads/.rh-envio/envio.patch` (pasta oculta; .git não aceita escrita).
    - device_bash (tudo em $HOME do VM, NUNCA dentro de mnt/Downloads/rh-rei-do-gado, onde o git trava):
      ```
-     cd $HOME && rm -rf rh && T=$(tr -d ' \n\r' < $HOME/mnt/Downloads/token-github.txt) &&
+     cd $HOME && rm -rf rh && TF=$HOME/mnt/Downloads/.rh-envio/token-github.txt && [ -s $TF ] || TF=$HOME/mnt/Downloads/token-github.txt;
+     T=$(tr -d ' \n\r' < $TF) &&
      git clone -q https://x-access-token:$T@github.com/marcelomreidogado-cmd/rh-rei-do-gado.git rh &&
      cd rh && git config user.name Claude && git config user.email noreply@anthropic.com &&
      git am -q < $HOME/mnt/Downloads/.rh-envio/envio.patch && git push -q origin main 2>&1 | sed "s/$T/***/g"
@@ -37,7 +38,8 @@ Só pergunte antes se a mudança APAGAR dados no Firestore ou mexer em
 `firestore.rules.rh` / login / permissões. Em qualquer outro caso, decida e siga.
 Se o push falhar por autenticação: peça ao Marcelo um token novo (GitHub →
 Settings → Developer settings → Fine-grained tokens, só este repositório,
-Contents: Read and write) salvo em Downloads/token-github.txt
+Contents: Read and write) salvo em Downloads/.rh-envio/token-github.txt (pasta oculta; o arquivo solto em
+Downloads sumiu mais de uma vez)
 (link: https://github.com/settings/personal-access-tokens/new).
 
 ## Regras técnicas
