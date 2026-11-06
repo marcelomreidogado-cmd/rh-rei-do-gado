@@ -159,3 +159,41 @@ test('abertura extra na geracao: so o minimo trabalha na segunda e ganha folga d
   for (const p of ps) assert.equal(weeks[1].filter((d) => r.folgas[p.id].includes(d)).length, 2, `${p.id}: 2 folgas na semana`);
   assert.deepEqual(r.faltas, []);
 });
+
+test('turnos sugeridos: fecham 42h na semana entrando mais cedo, com almoco 1h + lanche 15 min, dentro do horario da loja', () => {
+  const weeks = C.semanasDoMes('2026-12');
+  const hor = { 0: ['09:00', '14:00'], 2: ['10:00', '19:00'], 3: ['10:00', '19:00'], 4: ['10:00', '19:00'], 5: ['10:00', '19:00'], 6: ['09:00', '19:00'] };
+  assert.equal(C.horasTurno('10:00', '19:00', 60, 15), 7.75);
+  assert.equal(C.horasTurno('09:00', '14:00', 60, 15), 4.75);
+  assert.equal(C.metaSemanal('2026-12-07'), 42); assert.equal(C.metaSemanal('2027-12-20'), 40); assert.equal(C.metaSemanal('2026-12-07', 40), 40);
+  const un = { a: { abre: FECHA_SEG, minimos: { atendimento: [1, 0, 1, 1, 1, 1, 1] }, horario: hor }, b: { abre: FECHA_SEG, minimos: { atendimento: [1, 0, 1, 1, 1, 1, 1] }, horario: hor } };
+  const ps = [P('x', 'a', 'atendimento'), P('y', 'a', 'atendimento')];
+  const folgas = { x: weeks.map((w) => w[3]), y: weeks.map((w, i) => (i === 1 ? w[6] : w[2])).concat(weeks[1][3]) }; // y: domingo + quinta na 2a semana
+  const cobre = { x: { [weeks[2][1]]: 'b' } }; // x cobre a loja b numa terca
+  const t = C.turnos5x2({ weeks, pessoas: ps, unidades: un, folgas, cobre, almoco: 60, lanche: 15 });
+  for (const id of ['x', 'y']) for (const s of t[id].semanas) if (s.dias === 5) assert.equal(s.horas, 42, `${id} semana ${s.inicio}`);
+  for (const [d, v] of Object.entries(t.x.dias)) {
+    assert.ok(v.fim === hor[C.weekday(d)][1], 'sai no fechamento da loja');
+    assert.ok(v.ini <= hor[C.weekday(d)][0] && v.ini >= '07:00', `entra no horario ou mais cedo: ${d} ${v.ini}`);
+    assert.ok(v.horas <= 9.5);
+  }
+  assert.ok(t.x.dias[weeks[2][1]], 'dia cobrindo outra loja tem turno');
+  // horario de 40h a partir de 16/12/2027
+  const t40 = C.turnos5x2({ weeks, pessoas: ps, unidades: un, folgas, jornada: 40 });
+  assert.equal(t40.x.semanas[0].horas, 40);
+});
+
+test('quem nao cobre outras lojas nunca e chamado; feriado muda horario e minimo do dia', () => {
+  const weeks = [C.semanasDoMes('2026-12')[0]];
+  const un = { a: { abre: FECHA_SEG, minimos: { atendimento: [1, 0, 1, 1, 1, 1, 1] } }, b: { abre: FECHA_SEG, minimos: { atendimento: [1, 0, 1, 1, 1, 1, 1] } } };
+  const ps = [P('a1', 'a', 'atendimento'), { ...P('b1', 'b', 'atendimento'), podeCobrir: false }, P('b2', 'b', 'atendimento')];
+  const folgas = { a1: ['2026-12-02'] };
+  const c1 = C.cobrir5x2({ weeks, pessoas: ps, unidades: un, folgas });
+  assert.ok(!c1.b1, 'b1 nao cobre');
+  assert.equal(c1.b2?.['2026-12-02'], 'a');
+  const fer = { ...un, a: { ...un.a, extras: { '2026-12-03': { ini: '09:00', fim: '14:00', tipo: 'feriado', minimos: { atendimento: 2 } } } } };
+  const nd = C.unidadesNoDia(fer, '2026-12-03').a;
+  assert.deepEqual(nd.horario[4], ['09:00', '14:00']); assert.equal(nd.minimos.atendimento[4], 2);
+  assert.ok(C.faltas5x2({ weeks, pessoas: ps, unidades: fer, folgas: {} }).some((x) => x.date === '2026-12-03' && x.unidade === 'a'), 'feriado pede 2 e so tem 1');
+  assert.deepEqual(C.feriadosNacionais(2026).filter((f) => f.date.startsWith('2026-11')).map((f) => f.date), ['2026-11-02', '2026-11-15', '2026-11-20']);
+});

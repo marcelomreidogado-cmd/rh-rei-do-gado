@@ -436,43 +436,60 @@ test('E2E: usuario so de Escala e Ferias ve apenas essas abas e nao carrega dado
   assert.ok((await page.$$eval('#nav a', (as) => as.length)) >= 7);
 });
 
-test('E2E: escala 5x2 — confirmar equipe, gerar sem folga no sabado nem na segunda, ajustar a mao e outro negocio', { skip, timeout: 120000 }, async () => {
+test('E2E: escala 5x2 — equipe da propria aba (com extra), cobertura com nome, 42h com entrada mais cedo, feriado e ajuste a mao', { skip, timeout: 150000 }, async () => {
   await page.click('#nav a[data-v=escala5x2]'); await page.click('.mchip[data-m="2026-12"]');
-  await page.waitForSelector('.x5-equipe');
-  // passo 1: confirmar a equipe (tira uma pessoa)
-  const caixas = page.locator('.x5-equipe input[type=checkbox]');
-  assert.ok(await caixas.count() >= 8);
-  const tirado = await caixas.first().getAttribute('value'); await caixas.first().uncheck();
+  await page.waitForSelector('.x5-equipe .x5-eq');
+  // passo 1: equipe da escala (lista propria da aba): tira uma pessoa do mes e inclui um extra
+  const linhas = page.locator('.x5-eq tr[data-eq]');
+  assert.ok(await linhas.count() >= 8);
+  const tirado = await linhas.first().getAttribute('data-eq'); await linhas.first().locator('.eq-mes').uncheck();
+  await page.click('[data-eq-add]');
+  const novo = page.locator('.x5-eq tr[data-eq]').last();
+  await novo.locator('.eq-nome').fill('Extra Teste'); await novo.locator('.eq-loja').selectOption('correas');
   await page.click('[data-act=gerar]'); await page.waitForSelector('table.x5grid');
   assert.equal(await page.locator(`td.c[data-p="${tirado}"]`).count(), 0, 'quem foi desmarcado nao entra');
+  assert.match(await page.locator('section.store:has(h2:has-text("Correas"))').innerText(), /Extra T\./);
   // segunda fechada (sem celulas clicaveis), nenhuma folga no sabado
   const res = await page.$$eval('td.c', (tds) => tds.map((t) => ({ d: t.dataset.d, f: t.classList.contains('f') })));
   const dow = (d) => new Date(d + 'T00:00:00Z').getUTCDay();
   assert.ok(res.length > 0 && res.every((x) => dow(x.d) !== 1), 'segunda fechada');
   assert.ok(res.filter((x) => x.f).every((x) => dow(x.d) !== 6), 'sem folga no sabado');
-  // cobertura entre lojas no dia (Correas tem 1 por funcao: alguem de outra loja cobre a folga)
+  // cobertura entre lojas: na loja coberta aparece a linha com o NOME de quem vem
   assert.ok(await page.locator('td.cob').count() > 0, 'tem cobertura entre lojas');
-  assert.ok(await page.locator('tr.vem').count() > 0);
-  // Jeferson e hibrido: aparece como Atend./Manip. e, nos dias em que trabalha, mostra a funcao do dia
-  const jef = page.locator('tr:has(td.nm:has-text("Jeferson"))');
+  const vem = page.locator('tr.vem td.nm').first();
+  assert.match(await vem.innerText(), /^[A-Z][a-zà-ú]+.*de (Bingen|Correas|Coronel)/);
+  assert.ok(await page.locator('tr.vem td.vem-c').count() > 0);
+  // Jeferson e hibrido
+  const jef = page.locator('tr:has(td.nm:has-text("Jeferson"))').first();
   assert.match(await jef.locator('td.nm').innerText(), /Atend\.\/Manip\./);
-  assert.ok(await jef.locator('td.c .x5-pap').count() > 0, 'hibrido mostra a/m');
-  // horario de funcionamento: ter a sab 08-18 e domingo 08-13 em todas as lojas -> carga horaria
+  // horario das lojas: ter-sex 10-19, sab 9-19, dom 9-14 -> turnos de 42h com entrada mais cedo
   await page.click('[data-act=ajustes]'); await page.waitForSelector('.x5-hor');
-  // um horario so para todas as lojas
-  for (const d of [2, 3, 4, 5, 6]) { await page.fill(`[data-hor="todas|${d}|0"]`, '08:00'); await page.fill(`[data-hor="todas|${d}|1"]`, d === 6 ? '20:00' : '18:00'); }
-  await page.fill('[data-hor="todas|0|0"]', '08:00'); await page.fill('[data-hor="todas|0|1"]', '13:00');
+  for (const d of [2, 3, 4, 5]) { await page.fill(`[data-hor="todas|${d}|0"]`, '10:00'); await page.fill(`[data-hor="todas|${d}|1"]`, '19:00'); }
+  await page.fill('[data-hor="todas|6|0"]', '09:00'); await page.fill('[data-hor="todas|6|1"]', '19:00');
+  await page.fill('[data-hor="todas|0|0"]', '09:00'); await page.fill('[data-hor="todas|0|1"]', '14:00');
+  assert.equal(await page.inputValue('#intervalo'), '60'); assert.equal(await page.inputValue('#lanche'), '15');
   await page.click('.modal-foot button:has-text("Salvar")'); await page.waitForSelector('th.tt:has-text("h/sem")');
-  assert.match(await page.locator('table.x5grid th').nth(3).innerText(), /8-18/);
-  assert.ok(await page.locator('td.c.hx').count() > 0, 'sabado de 12h passa de 10h');
-  assert.ok(await page.locator('.x5-carga').count() > 0, 'resumo da carga horaria');
+  assert.match(await page.locator('table.x5grid th').nth(3).innerText(), /10-19/);
+  assert.ok(await page.locator('td.c .x5-t').count() > 0, 'horario sugerido de entrada mais cedo');
+  const hs = await page.$$eval('section.store table.x5grid tbody tr:not(.cont):not(.vem):not(.vem-tit) td.tt:last-child', (t) => t.map((x) => x.textContent.trim()));
+  assert.ok(hs.filter((x) => x === '42h').length >= 6, 'semanas de 42h: ' + hs.join(' '));
+  assert.equal(await page.locator('td.tt.hacima').count(), 0, 'todos fecham a jornada');
   // horario proprio da pessoa
   const nome = page.locator('td.nm[data-hp]').first(); await nome.click(); await page.waitForSelector('[data-hor^="hp|"]');
   await page.fill('[data-hor="hp|3|0"]', '12:00'); await page.fill('[data-hor="hp|3|1"]', '18:00');
   await page.click('.modal-foot button:has-text("Salvar")'); await page.waitForSelector('td.nm .x5-hp');
+  // feriado de Natal (sexta 25/12): 9h as 14h e minimo 2 de atendimento
+  await page.click('[data-act=extra]'); await page.waitForSelector('#ex_d');
+  await page.click('[data-fer="2026-12-25"]');
+  assert.equal(await page.inputValue('#ex_i'), '09:00'); assert.equal(await page.inputValue('#ex_t'), 'feriado');
+  await page.fill('#ex_ma', '2');
+  await page.click('.modal-foot button:has-text("Salvar")'); await page.waitForSelector('.x5-ext.fer:has-text("Natal")');
+  assert.equal(await page.locator('th.feriado').count(), 3, 'feriado nas 3 lojas');
+  assert.match(await page.locator('th.feriado').first().innerText(), /9-14/);
   // abertura extra: segunda 07/12 na Coronel, 08-13, com observacao
   await page.click('[data-act=extra]'); await page.waitForSelector('#ex_d');
   await page.fill('#ex_d', '2026-12-07'); await page.dispatchEvent('#ex_d', 'change');
+  assert.equal(await page.inputValue('#ex_t'), 'extra');
   await page.locator('#ex_l input').evaluateAll((l) => l.forEach((i) => { i.checked = i.value === 'coronel'; }));
   await page.fill('#ex_i', '08:00'); await page.fill('#ex_f', '13:00'); await page.fill('#ex_o', 'véspera de feriado');
   await page.click('.modal-foot button:has-text("Salvar")'); await page.waitForSelector('.x5-ext:has-text("véspera de feriado")');
@@ -480,6 +497,10 @@ test('E2E: escala 5x2 — confirmar equipe, gerar sem folga no sabado nem na seg
   assert.ok(await cor.locator('th.extra').count() === 1, 'segunda 07/12 aberta na Coronel');
   assert.ok(await cor.locator('td.c[data-d="2026-12-07"]').count() > 0, 'celulas clicaveis na segunda extra');
   assert.equal(await page.locator('section.store:has(h2:has-text("Bingen")) td.c[data-d="2026-12-07"]').count(), 0, 'Bingen continua fechada');
+  // equipe dentro da escala: botao Equipe, incluir outro extra e gerar de novo
+  await page.click('[data-act=equipe]'); await page.waitForSelector('#eqmodal .x5-eq');
+  await page.click('#eqmodal [data-eq-add]'); await page.locator('#eqmodal tr[data-eq]').last().locator('.eq-nome').fill('Folguista Dois');
+  await page.click('.modal-foot button:has-text("Salvar e gerar de novo")'); await page.waitForSelector('td.nm:has-text("Folguista")');
   if (process.env.SHOT_DIR) await page.screenshot({ path: path.join(process.env.SHOT_DIR, 'escala5x2.png'), fullPage: true });
   // ajuste manual: clicar numa celula troca trabalho/folga
   const cel = page.locator('td.c:not(.f)').first(); const p = await cel.getAttribute('data-p'), d = await cel.getAttribute('data-d');

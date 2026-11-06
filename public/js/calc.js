@@ -529,7 +529,7 @@ export function unidadesNoDia(unidades, d) {
     const x = u.extras && u.extras[d];
     if (!x) { out[id] = u; continue; }
     const ref = (u.abre || []).includes(2) ? 2 : (u.abre || [])[0] ?? dow;
-    const minimos = {}; for (const [f, arr] of Object.entries(u.minimos || {})) { const a = [...(arr || [0, 0, 0, 0, 0, 0, 0])]; if (!(u.abre || []).includes(dow)) a[dow] = a[ref] || 0; minimos[f] = a; }
+    const minimos = {}; for (const [f, arr] of Object.entries(u.minimos || {})) { const a = [...(arr || [0, 0, 0, 0, 0, 0, 0])]; if (!(u.abre || []).includes(dow)) a[dow] = a[ref] || 0; if (x.minimos && x.minimos[f] != null && x.minimos[f] !== '') a[dow] = Math.max(0, Number(x.minimos[f]) || 0); minimos[f] = a; }
     const horario = { ...(u.horario || {}) }; if (x.ini && x.fim) horario[dow] = [x.ini, x.fim];
     out[id] = { ...u, abre: [...new Set([...(u.abre || []), dow])], minimos, horario };
   }
@@ -557,7 +557,7 @@ export function simulaDia({ pessoas, unidades, dow, fora, cobre: fixo = {}, comp
       for (const u of ids) for (const [f, n] of Object.entries(conta(u))) {
         if (!n) continue;
         const antes = {};
-        const doadores = presentes.filter((p) => !cobre[p.id] && p.unidade !== u && funcoesP(p).includes(f))
+        const doadores = presentes.filter((p) => !cobre[p.id] && p.unidade !== u && p.podeCobrir !== false && funcoesP(p).includes(f))
           .filter((p) => { const o = ondeEsta(p); antes[o] = antes[o] ?? somaFalta(conta(o)); return somaFalta(conta(o, p.id)) <= antes[o]; })
           .filter((p) => (conta(u, null, p)[f] || 0) < n)
           .sort((a, b) => (vezes[a.id] || 0) - (vezes[b.id] || 0) || funcoesP(a).length - funcoesP(b).length || a.nome.localeCompare(b.nome));
@@ -733,11 +733,78 @@ export function cobrir5x2({ weeks, pessoas, unidades, folgas, cobre: inicial = {
 // ---------- carga horaria (5x2) ----------
 const hm = (t) => { const m = /^(\d{1,2}):?(\d{2})?$/.exec(String(t || '').trim()); return m ? +m[1] + (+(m[2] || 0)) / 60 : null; };
 /** Horas trabalhadas num turno: duracao menos o intervalo (CLT art. 71: >6h = intervalo informado; >4h = 15 min). */
-export function horasTurno(ini, fim, intervaloMin = 60) {
+export function horasTurno(ini, fim, intervaloMin = 60, lancheMin = 0) {
   const a = hm(ini), b = hm(fim); if (a === null || b === null) return 0;
   let dur = b - a; if (dur <= 0) dur += 24;
-  if (dur > 6) dur -= (intervaloMin || 0) / 60; else if (dur > 4) dur -= 0.25;
+  if (dur > 6) dur -= ((intervaloMin || 0) + (lancheMin || 0)) / 60; else if (dur > 4) dur -= Math.max(15, lancheMin || 0) / 60;
   return Math.round(dur * 100) / 100;
+}
+/** Jornada semanal usada na escala: a informada nos ajustes, ou 42h na transicao e 40h a partir de 16/12/2027. */
+export const metaSemanal = (iso, informada) => (Number(informada) > 0 ? Number(informada) : iso < '2027-12-16' ? 42 : 40);
+const hhmm = (h) => { const t = Math.round(h * 60); return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; };
+
+/**
+ * Turnos sugeridos (5x2): cada dia trabalhado comeca com o horario da loja onde a pessoa esta (a dela ou a que foi
+ * cobrir); se a semana nao fecha a jornada (ex.: 42h), a pessoa ENTRA MAIS CEDO nos dias longos (de 15 em 15 min,
+ * espalhado pela semana, nunca antes de inicioMin e no maximo maxDia horas no dia); se passa, entra mais tarde.
+ * Desconta almoco + lanche (turno > 6h) ou so o lanche (4h a 6h). Horario proprio da pessoa e respeitado sem ajuste.
+ * Semana com afastamento nao e ajustada; semana com menos de 5 dias de trabalho tem a meta proporcional.
+ * Retorna {id: {dias: {data: {ini, fim, horas, cedo}}, semanas: [{inicio, horas, meta}]}}.
+ */
+export function turnos5x2({ weeks, pessoas, unidades, folgas, cobre = {}, unavailable = () => '', almoco = 60, lanche = 15, jornada = 0, horariosPessoa = {}, inicioMin = '07:00', maxDia = 9.5 }) {
+  const out = {};
+  const ini0 = hm(inicioMin) ?? 7;
+  for (const p of pessoas) {
+    const dias = {}, semanas = [];
+    for (const week of weeks) {
+      const meta = metaSemanal(week[0], jornada);
+      const trab = [];
+      let afastado = false;
+      for (const d of week) {
+        const dow = weekday(d);
+        if (unavailable(p.id, d)) { afastado = true; continue; }
+        if ((folgas[p.id] || []).includes(d)) continue;
+        const u = (cobre[p.id] || {})[d] || p.unidade;
+        const un = unidadesNoDia(unidades, d)[u];
+        if (!abreNo(un, dow)) continue;
+        const extra = !!(unidades[u]?.extras || {})[d];
+        const proprio = !extra && !(cobre[p.id] || {})[d] && (horariosPessoa[p.id] || {})[dow];
+        const h = proprio && proprio[0] && proprio[1] ? proprio : ((un.horario || {})[dow] || []);
+        const a = hm(h[0]), b = hm(h[1]);
+        if (a === null || b === null) continue;
+        trab.push({ d, a, b, abre: a, proprio: !!proprio, especial: extra, fixo: !!proprio || extra, curto: b - a <= 6 });
+      }
+      const horasDe = (t) => horasTurno(hhmm(t.a), hhmm(t.b), almoco, lanche);
+      // feriado / abertura extra: horario do dia fixo e FORA da conta da jornada (feriado trabalhado e pago a parte)
+      const normais = trab.filter((t) => !t.especial);
+      const soma = () => normais.reduce((s, t) => s + horasDe(t), 0);
+      const temProprio = trab.some((t) => t.proprio);
+      const alvo = meta * Math.min(normais.length, 5) / 5;
+      if (!afastado && !temProprio && normais.length) {
+        // dias que podem mudar: todos menos feriado/abertura extra; dia curto (ex.: domingo 9-14) cresce ate 6h,
+        // para nao passar a ter almoco
+        const ajust = trab.filter((t) => !t.fixo);
+        const cabe = (t) => t.a - 0.25 >= ini0 && horasDe({ ...t, a: t.a - 0.25 }) <= maxDia && (!t.curto || t.b - (t.a - 0.25) <= 6);
+        let guarda = 0;
+        while (ajust.length && guarda++ < 400) {
+          const falta = Math.round((alvo - soma()) * 4) / 4; // em quartos de hora
+          if (Math.abs(falta) < 0.25) break;
+          if (falta > 0) { // entra mais cedo: o dia com menos horas primeiro
+            const c = ajust.filter(cabe).sort((x, y) => horasDe(x) - horasDe(y) || x.d.localeCompare(y.d))[0];
+            if (!c) break; c.a -= 0.25;
+          } else { // entra mais tarde: o dia com mais horas primeiro
+            const c = ajust.filter((t) => t.a + 0.25 <= t.b - 4 && (t.curto || t.b - (t.a + 0.25) > 6)).sort((x, y) => horasDe(y) - horasDe(x) || x.d.localeCompare(y.d))[0];
+            if (!c) break; c.a += 0.25;
+          }
+        }
+      }
+      for (const t of trab) dias[t.d] = { ini: hhmm(t.a), fim: hhmm(t.b), horas: horasDe(t), cedo: t.a < t.abre, tarde: t.a > t.abre };
+      const especiais = trab.filter((t) => t.especial).reduce((s, t) => s + horasDe(t), 0);
+      semanas.push({ inicio: week[0], horas: Math.round((soma() + especiais) * 100) / 100, normais: Math.round(soma() * 100) / 100, especiais: Math.round(especiais * 100) / 100, meta: Math.round(alvo * 100) / 100, metaCheia: meta, afastado, dias: normais.length, proprio: temProprio });
+    }
+    out[p.id] = { dias, semanas };
+  }
+  return out;
 }
 /** Limite semanal da EC 141/2026: 44h ate 15/12/2026, 42h a partir de 16/12/2026, 40h a partir de 16/12/2027. */
 export const limiteSemanal = (iso) => (iso < '2026-12-16' ? 44 : iso < '2027-12-16' ? 42 : 40);
@@ -819,4 +886,23 @@ export function totaisContracheques(slips, emps) {
     soma(l, p); soma(total, p);
   }
   return { lojas: lojas.map(fecha), total: fecha(total), motoboys };
+}
+
+// ---------- feriados nacionais (para marcar na escala) ----------
+/** Domingo de Pascoa (algoritmo de Meeus/Jones/Butcher). */
+function pascoa(y) {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31), dia = ((h + l - 7 * m + 114) % 31) + 1;
+  return `${y}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+}
+/** Feriados nacionais do ano (e os moveis mais comuns no comercio): [{date, nome}] */
+export function feriadosNacionais(y) {
+  const p = pascoa(y);
+  return [
+    [`${y}-01-01`, 'Confraternização Universal'], [isoAddDays(p, -2), 'Sexta-feira Santa'], [`${y}-04-21`, 'Tiradentes'],
+    [`${y}-05-01`, 'Dia do Trabalho'], [isoAddDays(p, 60), 'Corpus Christi'], [`${y}-09-07`, 'Independência'],
+    [`${y}-10-12`, 'Nossa Senhora Aparecida'], [`${y}-11-02`, 'Finados'], [`${y}-11-15`, 'Proclamação da República'],
+    [`${y}-11-20`, 'Consciência Negra'], [`${y}-12-25`, 'Natal'],
+  ].map(([date, nome]) => ({ date, nome })).sort((a, b) => a.date.localeCompare(b.date));
 }

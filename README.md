@@ -92,6 +92,17 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   pessoa, quem vem cobrir; clicar num dia alterna trabalha → folga → cobre
   outra loja. Dados em rh_sundays
   (5x2-cfg, 5x2-AAAA-MM, 5x2-outro), sem mudar regras.
+- **Escala 5x2 (v1.17)**: a equipe é uma lista da própria aba (botão
+  *👥 Equipe*): nome, loja, função, "cobre outras lojas", quem entra no mês e
+  *＋ Incluir extra* (gente que não é funcionário). Na loja coberta aparece
+  "Vem cobrir de outra loja" com o NOME de cada um e o horário de entrada nos
+  dias em que vem. Turnos sugeridos: horário da loja do dia, com almoço 1h +
+  lanche 15 min, e entrada mais cedo (de 15 em 15 min) até fechar a jornada
+  semanal — 42h na transição, 40h a partir de 16/12/2027 (editável em
+  Ajustes). *📅 Feriado / dia especial*: feriados nacionais do mês num clique,
+  horário do dia (padrão 9h–14h) e mínimo de pessoas por loja; também abre
+  loja num dia em que ela fecha. Horas de feriado ficam fora da conta da
+  jornada (pagas à parte).
 - **Híbrido nas escalas**: em Funcionários (ou Escala → Equipe por loja), a
   função nas escalas pode ser *Híbrido* — a pessoa faz atendimento ou
   manipulação e, em cada dia, entra onde estiver faltando gente (na própria
