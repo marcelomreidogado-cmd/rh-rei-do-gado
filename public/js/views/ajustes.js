@@ -1,5 +1,7 @@
 import * as C from '../calc.js';
 import * as D from '../data.js';
+/** Caixinhas das abas (Folha, Escala...) que o usuario pode ver. */
+const chipsAbas = (grupo, marcadas, de = grupo) => `<div class="abas-chips" data-abas-de="${de}">${D.ABAS.map(([k, v]) => `<label><input type="checkbox" value="${k}" ${marcadas.includes(k) ? 'checked' : ''}><span>${v}</span></label>`).join('')}</div>`;
 import { S } from '../data.js';
 import { esc, $, toast, confirmBox, downloadText } from '../ui.js';
 
@@ -23,7 +25,7 @@ export function renderConfig(root, auth) {
     <div class="grid3" style="margin-top:10px"><label>ID (login)<input class="in" id="u_id" autocomplete="off" autocapitalize="none" placeholder="ex.: joana"></label>
       <label>Senha (mín. 6)<input class="in" id="u_pw" type="password" autocomplete="new-password"></label>
       <label>Repetir senha<input class="in" id="u_pw2" type="password" autocomplete="new-password"></label>
-      <label class="span3">Acesso<select class="in" id="u_perfil">${Object.entries(D.PERFIS).map(([k, v]) => `<option value="${k}">${v}${k === 'escala_ferias' ? ' (não vê folha, contracheques, funcionários, configurações nem histórico)' : ''}</option>`).join('')}</select></label></div>
+      <div class="span3"><span class="muted small">Abas que pode ver</span>${chipsAbas('u_abas', D.ABAS.map((a) => a[0]))}</div></div>
     ${D.S.rulesV2 ? '' : '<div class="warn-box"><b>Para criar usuário “Só Escala e Férias”</b>, atualize antes as regras do Firestore (passo a passo enviado pelo Claude / README). Sem isso o banco não consegue limitar o que essa pessoa vê.</div>'}
     <button class="btn primary" id="u_add" style="margin-top:8px">＋ Incluir usuário</button></section>
   <section class="card"><h2>Segurança</h2><ul>
@@ -40,11 +42,12 @@ export function renderConfig(root, auth) {
     const box = $('#users', root);
     try {
       const list = await D.listAdmins();
-      box.innerHTML = `<div class="table-wrap"><table class="grid mini"><thead><tr><th>ID</th><th>Acesso</th><th>Incluído em</th><th>Por</th><th></th></tr></thead><tbody>${list.map((u) => `<tr><td><b>${esc(u.id || '(sem ID)')}</b>${u.id === S.user?.id ? ' <span class="badge">você</span>' : ''}</td><td>${u.id === S.user?.id || !u.uid ? esc(D.PERFIS[u.perfil] || D.PERFIS.total) : `<select class="in" data-perfil="${esc(u.id)}">${Object.entries(D.PERFIS).map(([k, v]) => `<option value="${k}" ${(u.perfil || 'total') === k ? 'selected' : ''}>${v}</option>`).join('')}</select>`}</td><td>${u.criadoEm ? esc(new Date(u.criadoEm).toLocaleDateString('pt-BR')) : '—'}</td><td>${esc(u.criadoPor || '')}</td><td>${u.id === S.user?.id || !u.uid ? '' : `<button class="btn sm danger" data-rmu="${esc(u.id)}">Remover acesso</button>`}</td></tr>`).join('')}</tbody></table></div>`;
+      box.innerHTML = `<div class="table-wrap"><table class="grid mini"><thead><tr><th>ID</th><th>Abas que pode ver</th><th>Incluído em</th><th>Por</th><th></th></tr></thead><tbody>${list.map((u) => `<tr><td><b>${esc(u.id || '(sem ID)')}</b>${u.id === S.user?.id ? ' <span class="badge">você</span>' : ''}</td><td>${u.id === S.user?.id || !u.uid ? `<span class="muted small">${esc(D.abasDe(u).map((k) => D.ABAS.find((a) => a[0] === k)[1]).join(' · '))}</span>` : chipsAbas(`abas-${u.id}`, D.abasDe(u), u.id)}</td><td>${u.criadoEm ? esc(new Date(u.criadoEm).toLocaleDateString('pt-BR')) : '—'}</td><td>${esc(u.criadoPor || '')}</td><td>${u.id === S.user?.id || !u.uid ? '' : `<button class="btn sm danger" data-rmu="${esc(u.id)}">Remover acesso</button>`}</td></tr>`).join('')}</tbody></table></div>`;
       box.onchange = async (ev) => {
-        const sel = ev.target.closest('[data-perfil]'); if (!sel) return;
-        const u = list.find((x) => x.id === sel.dataset.perfil);
-        try { await D.setAdminPerfil(u.uid, sel.value); toast(`Acesso de "${u.id}": ${D.PERFIS[sel.value]}. Vale a partir do próximo login dele.`); } catch (e) { toast(e.code === 'permission-denied' ? 'As regras do Firestore ainda não permitem mudar o acesso — atualize as regras.' : e.message, 'err', 8000); loadUsers(); }
+        const grp = ev.target.closest('[data-abas-de]'); if (!grp) return;
+        const u = list.find((x) => x.id === grp.dataset.abasDe);
+        const abas = [...grp.querySelectorAll('input:checked')].map((i) => i.value);
+        try { await D.setAdminAbas(u.uid, abas); toast(`"${u.id}" passa a ver: ${abas.map((k) => D.ABAS.find((a) => a[0] === k)[1]).join(', ')}. Vale no próximo login dele.`, 'ok', 6000); } catch (e) { toast(e.code === 'permission-denied' ? 'As regras do Firestore ainda não permitem mudar o acesso — atualize as regras.' : e.message, 'err', 8000); loadUsers(); }
       };
       box.onclick = async (ev) => {
         const b = ev.target.closest('[data-rmu]'); if (!b) return;
@@ -62,8 +65,8 @@ export function renderConfig(root, auth) {
     if (pw !== $('#u_pw2', root).value) return toast('As senhas não conferem.', 'err');
     if (pw.length < 6) return toast('A senha precisa ter pelo menos 6 caracteres.', 'err');
     const b = $('#u_add', root); b.disabled = true;
-    const perfil = $('#u_perfil', root).value;
-    try { await D.addAdmin(auth, id, pw, perfil); toast(`Usuário "${id.trim().toLowerCase()}" liberado (${D.PERFIS[perfil]}). Já pode entrar com esse ID e senha.`); ['#u_id', '#u_pw', '#u_pw2'].forEach((s) => { $(s, root).value = ''; }); loadUsers(); }
+    const abas = [...root.querySelectorAll('[data-abas-de="u_abas"] input:checked')].map((i) => i.value);
+    try { await D.addAdmin(auth, id, pw, abas); toast(`Usuário "${id.trim().toLowerCase()}" liberado. Já pode entrar com esse ID e senha.`); ['#u_id', '#u_pw', '#u_pw2'].forEach((s) => { $(s, root).value = ''; }); loadUsers(); }
     catch (e) { toast(e.message, 'err', 9000); }
     b.disabled = false;
   };

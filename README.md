@@ -129,6 +129,14 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   devido no mês (consumo − 850) e os totais. Pessoas e valor editáveis no ✏️.
   Controle interno: não vai no e-mail da contabilidade.
 - **Valores da folha** aparecem em reais (R$ 1.234,56), na tela e no e-mail.
+- **Abas por usuário (v1.18)**: em Configurações → Usuários do sistema,
+  marque para cada usuário as abas que ele vê (Folha, Contracheques, Escala de
+  domingo, Escala 5x2, Férias, Funcionários, Configurações, Histórico). Quem só
+  tem Escala/Escala 5x2/Férias fica com acesso restrito também no banco (não lê
+  salário nem CPF); quem tem outra aba recebe acesso total ao banco e só a tela
+  é limitada. Escala 5x2: depois de cada domingo, coluna **h** com as horas da
+  semana de cada pessoa — verde = fechou a meta (42h), vermelho = quanto falta,
+  laranja = quanto passa.
 - **Usuários do sistema**: em Configurações → Usuários do sistema, um
   administrador inclui (ID + senha) ou remove o acesso de outras pessoas.
   Remover tira o acesso, mas o login continua no Firebase: para liberar o

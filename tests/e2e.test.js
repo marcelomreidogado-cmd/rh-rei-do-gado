@@ -414,9 +414,14 @@ test('E2E: configuracoes — incluir e remover usuario do sistema', { skip, time
 test('E2E: usuario so de Escala e Ferias ve apenas essas abas e nao carrega dados sensiveis', { skip, timeout: 90000 }, async () => {
   await page.click('#nav a[data-v=config]'); await page.waitForSelector('#users table');
   await page.fill('#u_id', 'escala1'); await page.fill('#u_pw', 'senha123'); await page.fill('#u_pw2', 'senha123');
-  await page.selectOption('#u_perfil', 'escala_ferias');
+  // escolhe as abas: so Escala de domingo e Ferias (sem a 5x2)
+  await page.locator('[data-abas-de="u_abas"] input').evaluateAll((l) => l.forEach((i) => { i.checked = ['escala', 'ferias'].includes(i.value); }));
   await page.click('#u_add'); await page.waitForSelector('#users tr:has-text("escala1")');
-  assert.equal(await page.locator('#users tr:has-text("escala1") [data-perfil]').inputValue(), 'escala_ferias');
+  const marcadas = await page.locator('#users tr:has-text("escala1") [data-abas-de] input:checked').evaluateAll((l) => l.map((i) => i.value));
+  assert.deepEqual(marcadas, ['escala', 'ferias']);
+  // depois libera tambem a Escala 5x2 para ele
+  await page.locator('#users tr:has-text("escala1") [data-abas-de] input[value="escala5x2"]').check();
+  await page.waitForFunction(() => document.querySelector('#toast')?.textContent.includes('Escala 5x2'));
   await page.click('#logout'); await page.waitForSelector('#lf');
   await page.fill('#lid', 'escala1'); await page.fill('#lpw', 'senha123'); await page.click('#lgo');
   await page.waitForSelector('#nav');
@@ -468,16 +473,22 @@ test('E2E: escala 5x2 — equipe da propria aba (com extra), cobertura com nome,
   await page.fill('[data-hor="todas|6|0"]', '09:00'); await page.fill('[data-hor="todas|6|1"]', '19:00');
   await page.fill('[data-hor="todas|0|0"]', '09:00'); await page.fill('[data-hor="todas|0|1"]', '14:00');
   assert.equal(await page.inputValue('#intervalo'), '60'); assert.equal(await page.inputValue('#lanche'), '15');
-  await page.click('.modal-foot button:has-text("Salvar")'); await page.waitForSelector('th.tt:has-text("h/sem")');
+  await page.click('.modal-foot button:has-text("Salvar")'); await page.waitForSelector('th.ws');
   assert.match(await page.locator('table.x5grid th').nth(3).innerText(), /10-19/);
   assert.ok(await page.locator('td.c .x5-t').count() > 0, 'horario sugerido de entrada mais cedo');
-  const hs = await page.$$eval('section.store table.x5grid tbody tr:not(.cont):not(.vem):not(.vem-tit) td.tt:last-child', (t) => t.map((x) => x.textContent.trim()));
-  assert.ok(hs.filter((x) => x === '42h').length >= 6, 'semanas de 42h: ' + hs.join(' '));
-  assert.equal(await page.locator('td.tt.hacima').count(), 0, 'todos fecham a jornada');
+  // uma coluna de horas depois de cada domingo (dez/2026: 4 domingos + fim do mes = 5 por loja)
+  assert.equal(await page.locator('section.store:has(h2:has-text("Bingen")) th.ws').count(), 5);
+  const ok = await page.locator('td.ws.ok').count(), ruins = await page.locator('td.ws.falta, td.ws.passa').count();
+  assert.ok(ok >= 20, `semanas de 42h: ${ok}`); assert.equal(ruins, 0, 'todos fecham a jornada');
+  assert.match(await page.locator('td.ws.ok').first().innerText(), /^42h$/);
+  assert.match(await page.locator('td.ws.ok').first().getAttribute('title'), /42h de 42h/);
   // horario proprio da pessoa
   const nome = page.locator('td.nm[data-hp]').first(); await nome.click(); await page.waitForSelector('[data-hor^="hp|"]');
   await page.fill('[data-hor="hp|3|0"]', '12:00'); await page.fill('[data-hor="hp|3|1"]', '18:00');
   await page.click('.modal-foot button:has-text("Salvar")'); await page.waitForSelector('td.nm .x5-hp');
+  // com horario proprio (entra 12h na quarta) a semana mostra quanto falta
+  const semP = page.locator('tr:has(td.nm .x5-hp) td.ws.info').first();
+  assert.ok(await semP.count() > 0 || await page.locator('tr:has(td.nm .x5-hp) td.ws.falta').count() > 0);
   // feriado de Natal (sexta 25/12): 9h as 14h e minimo 2 de atendimento
   await page.click('[data-act=extra]'); await page.waitForSelector('#ex_d');
   await page.click('[data-fer="2026-12-25"]');

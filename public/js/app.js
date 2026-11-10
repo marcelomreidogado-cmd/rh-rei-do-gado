@@ -57,6 +57,7 @@ async function onUser(user) {
     if (!adm) { await auth.signOut(); showLogin(`A senha está certa, mas o ID "${user.id}" não tem acesso liberado ao RH (foi removido ou a inclusão não terminou). Peça para incluir de novo em Configurações → Usuários do sistema.`); return; }
     S.user = user;
     S.perfil = D.PERFIS[adm.perfil] ? adm.perfil : 'total';
+    S.abas = D.abasDe(adm);
     await D.loadAll();
     initMonth();
     startIdle();
@@ -76,8 +77,9 @@ function startIdle() {
 }
 
 function initMonth() {
-  const allow = D.PERFIL_VIEWS[S.perfil];
+  const allow = S.abas && S.abas.length ? S.abas : D.PERFIL_VIEWS[S.perfil];
   VIEWS = allow ? ALL_VIEWS.filter((v) => allow.includes(v[0])) : ALL_VIEWS;
+  if (!VIEWS.length) VIEWS = ALL_VIEWS.filter((v) => D.ABAS_LIVRES.includes(v[0]));
   if (!VIEWS.some((v) => v[0] === view)) view = VIEWS[0][0];
   const today = new Date();
   const cur = C.monthKey(today.getFullYear(), today.getMonth() + 1);

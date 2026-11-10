@@ -11,6 +11,13 @@ export const COL = {
 // Perfis de acesso: 'total' (tudo) ou 'escala_ferias' (so as abas Escala de domingo e Ferias)
 export const PERFIS = { total: 'Acesso total', escala_ferias: 'Só Escala e Férias' };
 export const PERFIL_VIEWS = { escala_ferias: ['escala', 'escala5x2', 'ferias'] };
+/** Abas que o administrador escolhe para cada usuario. */
+export const ABAS = [['folha', 'Folha'], ['contracheques', 'Contracheques'], ['escala', 'Escala de domingo'], ['escala5x2', 'Escala 5x2'], ['ferias', 'Férias'], ['funcionarios', 'Funcionários'], ['config', 'Configurações'], ['historico', 'Histórico']];
+/** Abas que nao precisam de salario/CPF: quem so tem estas fica com acesso restrito tambem no banco. */
+export const ABAS_LIVRES = PERFIL_VIEWS.escala_ferias;
+export const perfilDasAbas = (abas) => (abas.length && abas.every((a) => ABAS_LIVRES.includes(a)) ? 'escala_ferias' : 'total');
+/** Abas liberadas para um usuario (rh_admins/{uid}): a lista escolhida; senao a do perfil antigo; senao todas. */
+export const abasDe = (adm) => { const v = ABAS.map((a) => a[0]); const l = Array.isArray(adm?.abas) && adm.abas.length ? adm.abas : PERFIL_VIEWS[adm?.perfil] || v; return v.filter((k) => l.includes(k)); };
 const EQUIPE_FIELDS = ['nome', 'loja', 'lojaTrabalho', 'categoria', 'funcao', 'admissao', 'entrada', 'ativo', 'demissao'];
 const FERIAS_FIELDS = ['ferias', 'feriasVenc', 'feriasVencOrigem', 'feriasVencEm'];
 const pick = (o, keys) => Object.fromEntries(keys.map((k) => [k, o[k] ?? null]));
@@ -392,8 +399,11 @@ export async function sundayHistory(mk) {
 
 // ---------- usuarios do sistema (logins) ----------
 export async function listAdmins() { return (await S.store.list(COL.admins)).sort((a, b) => String(a.id).localeCompare(String(b.id))); }
-export async function addAdmin(auth, id, pass, perfil = 'total') {
-  if (!PERFIS[perfil]) throw new Error('Perfil inválido.');
+export async function addAdmin(auth, id, pass, abas = ABAS.map((a) => a[0])) {
+  if (typeof abas === 'string') abas = PERFIL_VIEWS[abas] || ABAS.map((a) => a[0]); // compatibilidade: perfil
+  abas = ABAS.map((a) => a[0]).filter((k) => abas.includes(k));
+  if (!abas.length) throw new Error('Marque pelo menos uma aba.');
+  const perfil = perfilDasAbas(abas);
   if (perfil !== 'total' && !S.rulesV2) throw new Error('Para criar usuário só de Escala e Férias, atualize antes as regras do Firestore (veja o aviso nesta tela). Sem isso o banco não consegue limitar o acesso.');
   const login = String(id).trim().toLowerCase();
   if (!/^[a-z0-9._-]{3,30}$/.test(login)) throw new Error('ID deve ter 3 a 30 caracteres: letras, números, ponto, traço ou _ (sem espaço e sem acento).');
@@ -405,9 +415,9 @@ export async function addAdmin(auth, id, pass, perfil = 'total') {
   }
   const ja = await S.store.get(COL.admins, uid).catch(() => null);
   if (ja) throw new Error(`O ID "${login}" já está na lista de usuários.`);
-  try { await S.store.set(COL.admins, uid, { id: login, uid, perfil, criadoEm: nowIso(), criadoPor: S.user?.id || '' }); }
+  try { await S.store.set(COL.admins, uid, { id: login, uid, perfil, abas, criadoEm: nowIso(), criadoPor: S.user?.id || '' }); }
   catch (e) { throw new Error(e.code === 'permission-denied' ? 'O login foi criado, mas as regras do Firestore ainda não permitem liberar o acesso. Atualize as regras (README → “Regras do Firestore”) e clique em Incluir de novo com o mesmo ID.' : e.message); }
-  await log('usuario_incluido', `${login} (${PERFIS[perfil]})`);
+  await log('usuario_incluido', `${login} (${abas.join(', ')})`);
   return uid;
 }
 export async function setAdminPerfil(uid, perfil) {
@@ -415,6 +425,17 @@ export async function setAdminPerfil(uid, perfil) {
   if (perfil !== 'total' && !S.rulesV2) throw new Error('Atualize antes as regras do Firestore.');
   await S.store.set(COL.admins, uid, { perfil }, true);
   await log('usuario_perfil', `${uid}: ${PERFIS[perfil]}`);
+}
+/** Troca as abas que o usuario ve (o perfil do banco acompanha: so abas livres = acesso restrito). */
+export async function setAdminAbas(uid, abas) {
+  if (uid === S.user?.uid) throw new Error('Você não pode mudar o seu próprio acesso.');
+  abas = ABAS.map((a) => a[0]).filter((k) => abas.includes(k));
+  if (!abas.length) throw new Error('Marque pelo menos uma aba.');
+  const perfil = perfilDasAbas(abas);
+  if (perfil !== 'total' && !S.rulesV2) throw new Error('Atualize antes as regras do Firestore.');
+  await S.store.set(COL.admins, uid, { perfil, abas }, true);
+  await log('usuario_abas', `${uid}: ${abas.join(', ')}`);
+  return perfil;
 }
 export async function removeAdmin(uid) {
   if (uid === S.user?.uid) throw new Error('Você não pode remover o seu próprio acesso.');
