@@ -92,6 +92,13 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   pessoa, quem vem cobrir; clicar num dia alterna trabalha → folga → cobre
   outra loja. Dados em rh_sundays
   (5x2-cfg, 5x2-AAAA-MM, 5x2-outro), sem mudar regras.
+- **Escala 5x2 (v1.19)**: a grade fica limpa (só Col/F/Cos/✓, sem horários
+  nas células). Acima das lojas, o quadro **Horário sugerido** mostra o turno
+  de referência por dia da semana (Seg–Dom, "Folga" em verde, "Fechado"
+  hachurado e total da semana): uma linha para a semana em que trabalha
+  domingo e outra para a semana de folga no domingo. Fim de semana usa o
+  horário da loja; ter–sex entra mais cedo (de 5 em 5 min) até 42h
+  (média 8h24/dia). Almoço 1h + lanche 15 min.
 - **Escala 5x2 (v1.17)**: a equipe é uma lista da própria aba (botão
   *👥 Equipe*): nome, loja, função, "cobre outras lojas", quem entra no mês e
   *＋ Incluir extra* (gente que não é funcionário). Na loja coberta aparece

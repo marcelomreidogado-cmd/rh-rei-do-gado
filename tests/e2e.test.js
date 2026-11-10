@@ -474,8 +474,14 @@ test('E2E: escala 5x2 — equipe da propria aba (com extra), cobertura com nome,
   await page.fill('[data-hor="todas|0|0"]', '09:00'); await page.fill('[data-hor="todas|0|1"]', '14:00');
   assert.equal(await page.inputValue('#intervalo'), '60'); assert.equal(await page.inputValue('#lanche'), '15');
   await page.click('.modal-foot button:has-text("Salvar")'); await page.waitForSelector('th.ws');
-  assert.match(await page.locator('table.x5grid th').nth(3).innerText(), /10-19/);
-  assert.ok(await page.locator('td.c .x5-t').count() > 0, 'horario sugerido de entrada mais cedo');
+  assert.match(await page.locator('table.x5grid th').nth(3).getAttribute('title'), /10:00–19:00/);
+  // horario sugerido fora da grade (semana-tipo), grade limpa sem horarios
+  assert.equal(await page.locator('td.c .x5-t, th .x5-h').count(), 0, 'grade sem horarios');
+  const hs = page.locator('.hs-card');
+  assert.match(await hs.innerText(), /42h por semana · média 8h24 por dia · almoço 1h \+ lanche 15 min/);
+  const linhaDom = await hs.locator('tbody tr').nth(0).innerText(), linhaFolga = await hs.locator('tbody tr').nth(1).innerText();
+  assert.match(linhaDom, /Semana que trabalha domingo[\s\S]*Fechado[\s\S]*8:15 às 19\n[\s\S]*9h30 de trabalho[\s\S]*9 às 19\n[\s\S]*9 às 14\n[\s\S]*42h/);
+  assert.match(linhaFolga, /Semana de folga no domingo[\s\S]*9:25 às 19\n[\s\S]*8h20 de trabalho[\s\S]*Folga[\s\S]*42h05/);
   // uma coluna de horas depois de cada domingo (dez/2026: 4 domingos + fim do mes = 5 por loja)
   assert.equal(await page.locator('section.store:has(h2:has-text("Bingen")) th.ws').count(), 5);
   const ok = await page.locator('td.ws.ok').count(), ruins = await page.locator('td.ws.falta, td.ws.passa').count();
@@ -496,7 +502,7 @@ test('E2E: escala 5x2 — equipe da propria aba (com extra), cobertura com nome,
   await page.fill('#ex_ma', '2');
   await page.click('.modal-foot button:has-text("Salvar")'); await page.waitForSelector('.x5-ext.fer:has-text("Natal")');
   assert.equal(await page.locator('th.feriado').count(), 3, 'feriado nas 3 lojas');
-  assert.match(await page.locator('th.feriado').first().innerText(), /9-14/);
+  assert.match(await page.locator('th.feriado').first().getAttribute('title'), /09:00–14:00|9:00–14:00/);
   // abertura extra: segunda 07/12 na Coronel, 08-13, com observacao
   await page.click('[data-act=extra]'); await page.waitForSelector('#ex_d');
   await page.fill('#ex_d', '2026-12-07'); await page.dispatchEvent('#ex_d', 'change');

@@ -171,7 +171,9 @@ test('turnos sugeridos: fecham 42h na semana entrando mais cedo, com almoco 1h +
   const folgas = { x: weeks.map((w) => w[3]), y: weeks.map((w, i) => (i === 1 ? w[6] : w[2])).concat(weeks[1][3]) }; // y: domingo + quinta na 2a semana
   const cobre = { x: { [weeks[2][1]]: 'b' } }; // x cobre a loja b numa terca
   const t = C.turnos5x2({ weeks, pessoas: ps, unidades: un, folgas, cobre, almoco: 60, lanche: 15 });
-  for (const id of ['x', 'y']) for (const s of t[id].semanas) if (s.dias === 5) assert.equal(s.horas, 42, `${id} semana ${s.inicio}`);
+  for (const id of ['x', 'y']) for (const s of t[id].semanas) if (s.dias === 5) assert.ok(s.horas >= 42 && s.horas < 42.09, `${id} semana ${s.inicio}: ${s.horas}`);
+  // sabado e domingo ficam no horario da loja; so ter-sex entram mais cedo
+  for (const [d, v] of Object.entries(t.x.dias)) if ([0, 6].includes(C.weekday(d))) assert.equal(v.ini, hor[C.weekday(d)][0]);
   for (const [d, v] of Object.entries(t.x.dias)) {
     assert.ok(v.fim === hor[C.weekday(d)][1], 'sai no fechamento da loja');
     assert.ok(v.ini <= hor[C.weekday(d)][0] && v.ini >= '07:00', `entra no horario ou mais cedo: ${d} ${v.ini}`);
@@ -180,7 +182,7 @@ test('turnos sugeridos: fecham 42h na semana entrando mais cedo, com almoco 1h +
   assert.ok(t.x.dias[weeks[2][1]], 'dia cobrindo outra loja tem turno');
   // horario de 40h a partir de 16/12/2027
   const t40 = C.turnos5x2({ weeks, pessoas: ps, unidades: un, folgas, jornada: 40 });
-  assert.equal(t40.x.semanas[0].horas, 40);
+  assert.ok(t40.x.semanas[0].horas >= 40 && t40.x.semanas[0].horas < 40.09, 'fecha 40h (passa no maximo 5 min)');
 });
 
 test('quem nao cobre outras lojas nunca e chamado; feriado muda horario e minimo do dia', () => {

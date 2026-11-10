@@ -61,7 +61,8 @@ function modelo() {
   return { unidades, funcoes: FUN_REI, pessoas, semFolga: cfg.semFolga || [6], domingo3: cfg.domingo3 !== false, folgas: st.mes?.folgas || null, cobre: st.mes?.cobre || {}, unavailable, ...cargaCfg(cfg) };
 }
 /** Almoco, lanche e jornada semanal (vazio = 42h na transicao, 40h a partir de 16/12/2027). */
-const cargaCfg = (c) => ({ almoco: c.almoco ?? c.intervalo ?? 60, lanche: c.lanche ?? 15, jornada: Number(c.jornada) || 0, inicioMin: c.inicioMin || '07:00', horariosPessoa: c.horariosPessoa || {} });
+// almoco: 1h (o valor antigo "intervalo" de 75 min juntava almoco + lanche; so vale o que foi salvo depois da v1.19)
+const cargaCfg = (c) => ({ almoco: c.almocoOk ? (c.almoco ?? 60) : 60, lanche: c.lanche ?? 15, jornada: Number(c.jornada) || 0, inicioMin: c.inicioMin || '07:00', horariosPessoa: c.horariosPessoa || {} });
 
 /**
  * Equipe da escala 5x2 (Rei do Gado): lista PROPRIA da aba (nome, loja, funcao, cobre outras lojas). Na primeira vez
@@ -196,7 +197,7 @@ function telaEscala() {
   };
   const ext = extrasMes().filter((x) => x.date.slice(0, 7) === mk).sort((a, b) => a.date.localeCompare(b.date));
   const linhaExtras = ext.length ? `<div class="x5-extras">${ext.map((x) => `<span class="x5-ext ${x.tipo === 'feriado' ? 'fer' : ''}"><b>${x.tipo === 'feriado' ? 'Feriado' : 'Abre'} ${C.DIAS_SEM[C.weekday(x.date)]} ${C.fmtDM(x.date)}</b> · ${esc((x.lojas || []).map((l) => m.unidades[l]?.nome || l).join(', '))}${x.ini && x.fim ? ` · ${esc(curtoH(x.ini))}–${esc(curtoH(x.fim))}` : ''}${x.minimos && (x.minimos.atendimento || x.minimos.manipulacao) ? ` · mín. ${x.minimos.atendimento ?? '–'} atend. + ${x.minimos.manipulacao ?? '–'} manip.` : ''}${x.obs ? ` · <i>${esc(x.obs)}</i>` : ''} <button class="icon-btn" data-act="rmextra" data-id="${esc(x.id)}" title="Tirar">✕</button></span>`).join('')}</div>` : '';
-  return `${resumo}${linhaExtras}
+  return `${resumo}${linhaExtras}${carga ? painelHorario(m, weeks, ext) : ''}
     ${Object.entries(m.unidades).map(([u, un]) => {
       const gente = m.pessoas.filter((p) => p.unidade === u).sort((a, b) => ehHib(a) - ehHib(b) || Object.keys(m.funcoes).indexOf(a.funcao) - Object.keys(m.funcoes).indexOf(b.funcao) || a.nome.localeCompare(b.nome));
       if (!gente.length) return '';
@@ -204,7 +205,7 @@ function telaEscala() {
       const nd = (d) => C.unidadesNoDia(m.unidades, d)[u];
       const contaSem = (p) => weeks.map((w) => w.filter((d) => !aD(d) || (m.folgas[p.id] || []).includes(d) || m.unavailable(p.id, d)).length);
       return `<section class="store x5"><h2>${esc(un.nome)}</h2><div class="table-wrap"><table class="x5grid"><thead><tr><th class="nm"></th>${diasCols.map((d) => { if (d[0] === 'S') return semCol('th', d.slice(1)); const w = C.weekday(d); const ab = aD(d); const ex = (un.extras || {})[d]; const h = (nd(d).horario || {})[w]; const hTxt = ab && h && h[0] && h[1] ? `${h[0]}–${h[1]}` : '';
-        return `<th class="${ab ? '' : 'fech'} ${ex ? (ex.tipo === 'feriado' ? 'feriado' : 'extra') : ''} ${w === 1 ? 'sem' : ''} ${w === 0 ? 'dom' : ''}" title="${ab ? `${ex ? (ex.tipo === 'feriado' ? 'Feriado' : 'Abertura extra') : 'Aberta'}${hTxt ? ` ${hTxt}` : ''}${ex?.obs ? ` — ${ex.obs}` : ''}` : 'fechado'}"><small>${C.DIAS_SEM[w][0]}</small>${d.slice(8)}${hTxt ? `<small class="x5-h">${esc(curtoH(h[0]))}-${esc(curtoH(h[1]))}</small>` : ''}</th>`; }).join('')}<th class="tt" title="Folgas no mês (sem contar dia fechado)">Folgas</th><th class="tt" title="Domingos de folga no mês">Dom.</th></tr></thead><tbody>
+        return `<th class="${ab ? '' : 'fech'} ${ex ? (ex.tipo === 'feriado' ? 'feriado' : 'extra') : ''} ${w === 1 ? 'sem' : ''} ${w === 0 ? 'dom' : ''}" title="${ab ? `${ex ? (ex.tipo === 'feriado' ? 'Feriado' : 'Abertura extra') : 'Aberta'}${hTxt ? ` ${hTxt}` : ''}${ex?.obs ? ` — ${ex.obs}` : ''}` : 'fechado'}"><small>${C.DIAS_SEM[w][0]}</small>${d.slice(8)}</th>`; }).join('')}<th class="tt" title="Folgas no mês (sem contar dia fechado)">Folgas</th><th class="tt" title="Domingos de folga no mês">Dom.</th></tr></thead><tbody>
       ${gente.map((p) => { const fs = (m.folgas[p.id] || []).filter((d) => d.slice(0, 7) === mk);
         const ruins = weeks.map((w, i) => ({ w, n: contaSem(p)[i] })).filter((x) => x.n !== 2 && x.w.every((d) => !m.unavailable(p.id, d)));
         const sab = fs.filter((d) => m.semFolga.includes(C.weekday(d)));
@@ -216,13 +217,13 @@ function telaEscala() {
         const f = (m.folgas[p.id] || []).includes(d);
         const vai = (m.cobre[p.id] || {})[d];
         const tn = cg?.dias[d];
-        if (vai && m.unidades[vai]) return `<td class="c cob ${sem} ${dom}" data-p="${esc(p.id)}" data-d="${d}" title="Cobrindo ${esc(m.unidades[vai].nome)}${tn ? ` · ${tn.ini}–${tn.fim} (${C.fmtH(tn.horas)})` : ''} — clique para mudar">${esc(sigla(m.unidades[vai].nome))}${tn && (tn.cedo || tn.tarde) ? `<small class="x5-t">${esc(curtoH(tn.ini))}</small>` : ''}</td>`;
+        if (vai && m.unidades[vai]) return `<td class="c cob ${sem} ${dom}" data-p="${esc(p.id)}" data-d="${d}" title="Cobrindo ${esc(m.unidades[vai].nome)}${tn ? ` · ${tn.ini}–${tn.fim} (${C.fmtH(tn.horas)})` : ''} — clique para mudar">${esc(sigla(m.unidades[vai].nome))}</td>`;
         // hibrido trabalhando: mostra se no dia faz atendimento (a) ou manipulacao (m)
         const papel = !f && ehHib(p) ? C.contagem5x2({ pessoas: m.pessoas, unidade: u, unidades: m.unidades, d, folgas: m.folgas, cobre: m.cobre, unavailable: m.unavailable }).papel[p.id] : '';
         const pTxt = papel ? (m.funcoes[papel] || papel) : '';
         const hd = tn?.horas || 0; const hx = hd > C.MAX_DIARIO;
         const tTxt = tn && !f ? `${tn.ini}–${tn.fim} · ${C.fmtH(hd)} (almoço ${m.almoco} min + lanche ${m.lanche} min)${tn.cedo ? ' · entra mais cedo para fechar a jornada' : ''} · ` : '';
-        return `<td class="c ${f ? 'f' : ''} ${hx ? 'hx' : ''} ${sem} ${dom}" data-p="${esc(p.id)}" data-d="${d}" title="${f ? 'Folga — clique para cobrir outra loja ou trabalhar' : esc(tTxt) + (pTxt ? `Faz ${esc(pTxt.toLowerCase())} — ` : '') + 'Clique para dar folga'}">${f ? 'F' : `${pTxt ? `<span class="x5-pap">${esc(pTxt[0].toLowerCase())}</span>` : ''}${tn && (tn.cedo || tn.tarde) ? `<small class="x5-t">${esc(curtoH(tn.ini))}</small>` : ''}`}</td>`; }).join('')}<td class="tt">${fs.length}</td><td class="tt">${fs.filter((d) => C.weekday(d) === 0).length}</td></tr>`; }).join('')}
+        return `<td class="c ${f ? 'f' : ''} ${hx ? 'hx' : ''} ${sem} ${dom}" data-p="${esc(p.id)}" data-d="${d}" title="${f ? 'Folga — clique para cobrir outra loja ou trabalhar' : esc(tTxt) + (pTxt ? `Faz ${esc(pTxt.toLowerCase())} — ` : '') + 'Clique para dar folga'}">${f ? 'F' : pTxt ? `<span class="x5-pap">${esc(pTxt[0].toLowerCase())}</span>` : ''}</td>`; }).join('')}<td class="tt">${fs.length}</td><td class="tt">${fs.filter((d) => C.weekday(d) === 0).length}</td></tr>`; }).join('')}
       ${Object.keys(m.funcoes).filter((f) => gente.some((p) => C.funcoesP(p).includes(f))).map((f) => `<tr class="cont"><td class="nm">${esc(m.funcoes[f])} na loja</td>${diasCols.map((d) => { if (d[0] === 'S') return semCol('v'); const w = C.weekday(d); if (!aD(d)) return `<td class="fech ${w === 1 ? 'sem' : ''}"></td>`;
         const tem = C.naUnidade5x2({ pessoas: m.pessoas, unidade: u, unidades: m.unidades, funcao: f, d, folgas: m.folgas, cobre: m.cobre, unavailable: m.unavailable }); const min = ((nd(d).minimos || {})[f] || [])[w] || 0;
         return `<td class="${tem < min ? 'baixo' : ''} ${w === 0 ? 'dom' : ''}" title="mínimo ${min}">${tem}</td>`; }).join('')}<td></td><td></td></tr>`).join('')}
@@ -233,9 +234,65 @@ function telaEscala() {
           if (!aD(d)) return `<td class="fech ${sem}"></td>`;
           if ((m.cobre[p.id] || {})[d] !== u) return `<td class="${sem} ${dom}"></td>`;
           const tn = carga?.[p.id]?.dias[d];
-          return `<td class="vem-c ${sem} ${dom}" title="${esc(p.nome)} vem de ${esc(m.unidades[p.unidade].nome)}${tn ? ` · ${tn.ini}–${tn.fim}` : ''}">${tn ? esc(curtoH(tn.ini)) : '✓'}</td>`; }).join('')}<td></td><td></td></tr>`).join(''); })()}
+          return `<td class="vem-c ${sem} ${dom}" title="${esc(p.nome)} vem de ${esc(m.unidades[p.unidade].nome)}${tn ? ` · ${tn.ini}–${tn.fim}` : ''}">✓</td>`; }).join('')}<td></td><td></td></tr>`).join(''); })()}
       </tbody></table></div></section>`; }).join('')}
-    <p class="x5-leg">Clique num dia para trocar: <b>trabalha → folga → cobre outra loja</b>. <span class="lg f">F</span> folga <span class="lg cob">${esc(sigla(Object.values(m.unidades)[0]?.nome || 'Loja'))}</span> cobrindo outra loja <span class="lg af">A</span> afastado <span class="lg fech"></span> fechado <span class="lg baixo">2</span> abaixo do mínimo ${carga ? `<span class="lg t">8:45</span> entra mais cedo · coluna <b>h</b> depois de cada domingo = horas da semana (meta ${C.metaSemanal(weeks[0][0], m.jornada)}h): <span class="lg wsf">−2h</span> falta <span class="lg wsp">+1h</span> passa <span class="lg fer">&nbsp;</span> feriado` : '· <a href="#" data-act="ajustes">cadastre o horário de funcionamento</a> para ver a carga horária'} ${modo === 'rei' ? '· <a href="#" data-act="refazer">alterar equipe</a>' : ''} · <a href="#" data-act="gerar">gerar de novo</a></p>`;
+    <p class="x5-leg">Clique num dia para trocar: <b>trabalha → folga → cobre outra loja</b>. <span class="lg f">F</span> folga <span class="lg cob">${esc(sigla(Object.values(m.unidades)[0]?.nome || 'Loja'))}</span> cobrindo outra loja <span class="lg af">A</span> afastado <span class="lg fech"></span> fechado <span class="lg baixo">2</span> abaixo do mínimo ${carga ? `coluna <b>h</b> depois de cada domingo = horas da semana (meta ${C.metaSemanal(weeks[0][0], m.jornada)}h): <span class="lg wsf">−2h</span> falta <span class="lg wsp">+1h</span> passa <span class="lg fer">&nbsp;</span> feriado` : '· <a href="#" data-act="ajustes">cadastre o horário de funcionamento</a> para ver a carga horária'} ${modo === 'rei' ? '· <a href="#" data-act="refazer">alterar equipe</a>' : ''} · <a href="#" data-act="gerar">gerar de novo</a></p>`;
+}
+
+const minDe = (t) => { const [h, mi] = String(t).split(':').map(Number); return h * 60 + (mi || 0); };
+const hDe = (min) => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;
+/**
+ * Horario sugerido (fora da grade): como fica a semana de 42h com o horario das lojas. Sabado e domingo no horario
+ * da loja; nos dias de semana todos entram no mesmo horario, mais cedo o necessario para fechar a jornada.
+ * Duas semanas-tipo: a que trabalha domingo e a de folga no domingo (a cada 3 semanas).
+ */
+function painelHorario(m, weeks, ext) {
+  const u = Object.values(m.unidades).find((x) => Object.values(x.horario || {}).some((h) => h && h[0] && h[1]));
+  if (!u) return '';
+  const hor = u.horario, abre = new Set(u.abre || []);
+  const ok = (d) => abre.has(d) && hor[d] && hor[d][0] && hor[d][1];
+  const meta = C.metaSemanal(weeks[Math.min(1, weeks.length - 1)][0], m.jornada);
+  const H = (a, b) => { const sp = minDe(b) - minDe(a); return (sp - (sp > 360 ? m.almoco + m.lanche : sp > 240 ? Math.max(15, m.lanche) : 0)) / 60; }; // em minutos exatos
+  const ORD = [1, 2, 3, 4, 5, 6, 0];
+  const fds = [6, 0].filter(ok), uteis = [1, 2, 3, 4, 5].filter(ok);
+  const fechados = ORD.filter((d) => !abre.has(d)).length;
+  const minIni = minDe(m.inicioMin || '07:00');
+  /** mesmo horario nos dias de semana para fechar a meta: retorna {d: {ini, fim, horas}} */
+  const util = (n, horasFds) => {
+    const need = (meta - horasFds) / n; const o = {};
+    for (const d of uteis) {
+      const fim = hor[d][1]; let ini = minDe(hor[d][0]);
+      while (H(hDe(ini), fim) < need - 1e-6 && ini - 5 >= minIni) ini -= 5;
+      while (ini + 5 < minDe(fim) - 60 && H(hDe(ini + 5), fim) >= need - 1e-6) ini += 5;
+      o[d] = { ini: hDe(ini), fim, horas: H(hDe(ini), fim) };
+    }
+    return o;
+  };
+  const tipos = [];
+  const folgasUteisA = Math.max(0, 2 - fechados - (fds.includes(0) ? 0 : 0));
+  const nA = uteis.length - folgasUteisA;
+  if (nA > 0) {
+    const hF = fds.reduce((a, d) => a + H(hor[d][0], hor[d][1]), 0);
+    tipos.push({ nome: fds.includes(0) ? 'Semana que trabalha domingo' : 'Semana', nota: folgasUteisA ? `folga fixa em ${folgasUteisA} dia${folgasUteisA > 1 ? 's' : ''} de ${C.DIAS_SEM[uteis[0]].toLowerCase()} a ${C.DIAS_SEM[uteis[uteis.length - 1]].toLowerCase()}` : '', u: util(nA, hF), fdsFolga: [], n: nA, hF });
+  }
+  if (fds.includes(0) && m.domingo3 !== false) {
+    const nB = uteis.length - Math.max(0, folgasUteisA - 1);
+    const hF = fds.filter((d) => d !== 0).reduce((a, d) => a + H(hor[d][0], hor[d][1]), 0);
+    tipos.push({ nome: 'Semana de folga no domingo', nota: 'a cada 3 semanas', u: util(nB, hF), fdsFolga: [0], n: nB, hF });
+  }
+  const cel = (t, d) => {
+    if (!abre.has(d)) return '<td class="hs-fech">Fechado</td>';
+    if (t.fdsFolga.includes(d)) return '<td class="hs-folga">Folga</td>';
+    const x = t.u[d] || (ok(d) ? { ini: hor[d][0], fim: hor[d][1], horas: H(hor[d][0], hor[d][1]) } : null);
+    if (!x) return '<td></td>';
+    return `<td><b>${esc(curtoH(x.ini))} às ${esc(curtoH(x.fim))}</b><small>${esc(C.fmtH(x.horas))} de trabalho</small></td>`;
+  };
+  const total = (t) => t.hF + uteis.reduce((a, d) => a + (t.u[d]?.horas || 0), 0) * t.n / uteis.length;
+  const fer = ext.filter((x) => x.tipo === 'feriado');
+  return `<section class="hs-card"><div class="hs-top"><h3>Horário sugerido</h3><span>${meta}h por semana · média ${esc(C.fmtH(meta / 5))} por dia · almoço ${m.almoco >= 60 ? C.fmtH(m.almoco / 60) : m.almoco + ' min'} + lanche ${m.lanche} min</span></div>
+    <div class="table-wrap"><table class="hs"><thead><tr><th></th>${ORD.map((d) => `<th>${C.DIAS_SEM[d]}</th>`).join('')}<th>Semana</th></tr></thead><tbody>
+    ${tipos.map((t) => `<tr><th class="hs-nome">${esc(t.nome)}${t.nota ? `<small>${esc(t.nota)}</small>` : ''}</th>${ORD.map((d) => cel(t, d)).join('')}<td class="hs-tot"><b>${esc(C.fmtH(total(t)))}</b><small>${t.n + (t.hF ? (t.fdsFolga.length ? 1 : fds.length) : 0)} dias</small></td></tr>`).join('')}
+    </tbody></table></div>${fer.length ? `<p class="hs-fer">Feriado${fer.length > 1 ? 's' : ''}: ${fer.map((x) => `${C.fmtDM(x.date)} ${esc(curtoH(x.ini))} às ${esc(curtoH(x.fim))}`).join(' · ')} — fora da conta da semana (pago à parte).</p>` : ''}</section>`;
 }
 
 function resumoFaltas(faltas, m, avisos = []) {
@@ -408,7 +465,7 @@ const campoIntervalo = (c) => { const k = cargaCfg(c || {}); return `<div class=
   <label class="inline">Jornada semanal <input class="in" type="number" id="jornada" min="20" max="44" step="1" value="${k.jornada || ''}" placeholder="${C.metaSemanal(C.monthStart(mk))}" style="width:70px"> h</label>
   <label class="inline">Entrar no máximo a partir de <input class="in" type="time" step="900" id="inicioMin" value="${esc(k.inicioMin)}"></label></div>
   <p class="muted small">Jornada vazia = ${C.metaSemanal('2027-01-01')}h na transição e ${C.metaSemanal('2028-01-01')}h a partir de 16/12/2027. A escala sugere entrar mais cedo quando o horário da loja não fecha a jornada.</p>`; };
-const lerCarga = (m) => ({ almoco: Math.max(0, +m.$('#intervalo').value || 0), intervalo: Math.max(0, +m.$('#intervalo').value || 0), lanche: Math.max(0, +m.$('#lanche').value || 0), jornada: Math.max(0, +m.$('#jornada').value || 0), inicioMin: m.$('#inicioMin').value || '07:00' });
+const lerCarga = (m) => ({ almocoOk: true, almoco: Math.max(0, +m.$('#intervalo').value || 0), intervalo: Math.max(0, +m.$('#intervalo').value || 0), lanche: Math.max(0, +m.$('#lanche').value || 0), jornada: Math.max(0, +m.$('#jornada').value || 0), inicioMin: m.$('#inicioMin').value || '07:00' });
 
 function abrirAjustes() {
   const c = st.cfg;

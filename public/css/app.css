@@ -106,3 +106,16 @@ label{display:grid;gap:3px;font-weight:500}label small{font-weight:400}.row{disp
 .x5grid .ws{min-width:38px;font-size:11px;font-weight:600;text-align:center;border-left:1px solid #cbd5e1;border-right:2px solid #cbd5e1;background:#f8fafc;line-height:1.05}.x5grid th.ws{color:var(--muted)}.x5grid td.ws small{display:block;font-size:9px}
 .x5grid td.ws.ok{color:#15803d}.x5grid td.ws.falta{color:#b91c1c;background:#fef2f2}.x5grid td.ws.passa{color:#c2410c;background:#fff7ed}.x5grid td.ws.info{color:var(--muted)}.lg.wsf{color:#b91c1c;background:#fef2f2;padding:0 3px}.lg.wsp{color:#c2410c;background:#fff7ed;padding:0 3px}
 .x5grid td.ws small.wfer{color:#6d28d9;font-weight:500}
+.hs-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:10px 0 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.hs-top{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:10px}.hs-top h3{margin:0;font-size:17px}.hs-top span{color:var(--muted);font-size:13px}
+table.hs{border-collapse:separate;border-spacing:6px;width:100%;min-width:760px;table-layout:fixed}
+table.hs thead th{background:#e0e7ff;color:#3730a3;font-size:13px;font-weight:700;border-radius:8px;padding:8px 4px;text-align:center}
+table.hs thead th:first-child{background:transparent;width:170px}
+table.hs td{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:9px 4px;text-align:center;vertical-align:middle}
+table.hs td b{display:block;font-size:15px;color:#0f172a;white-space:nowrap}table.hs td small{display:block;font-size:11px;color:#64748b;margin-top:2px}
+table.hs td.hs-folga{background:#d1fae5;border-color:#6ee7b7;color:#065f46;font-weight:700;font-size:15px}
+table.hs td.hs-fech{background:repeating-linear-gradient(45deg,#f1f5f9,#f1f5f9 5px,#fff 5px,#fff 10px);color:#94a3b8;font-size:12px}
+table.hs th.hs-nome{text-align:left;font-size:13px;font-weight:600;color:#0f172a;padding-right:6px}table.hs th.hs-nome small{display:block;font-weight:400;color:#64748b;font-size:11px}
+table.hs td.hs-tot{background:#eef2ff;border-color:#c7d2fe}table.hs td.hs-tot b{color:#3730a3}
+.hs-fer{margin:6px 0 0;color:#6d28d9;font-size:12px}
+@media print{.hs-card{box-shadow:none;break-inside:avoid}}

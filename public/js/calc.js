@@ -781,21 +781,21 @@ export function turnos5x2({ weeks, pessoas, unidades, folgas, cobre = {}, unavai
       const temProprio = trab.some((t) => t.proprio);
       const alvo = meta * Math.min(normais.length, 5) / 5;
       if (!afastado && !temProprio && normais.length) {
-        // dias que podem mudar: todos menos feriado/abertura extra; dia curto (ex.: domingo 9-14) cresce ate 6h,
-        // para nao passar a ter almoco
-        const ajust = trab.filter((t) => !t.fixo);
-        const cabe = (t) => t.a - 0.25 >= ini0 && horasDe({ ...t, a: t.a - 0.25 }) <= maxDia && (!t.curto || t.b - (t.a - 0.25) <= 6);
+        // dias que mudam: os de semana (ter-sex); sabado e domingo ficam no horario da loja ("final de semana e
+        // diferente"). Ajuste de 5 em 5 minutos, sempre no dia com menos horas -> horarios iguais na semana.
+        const P = 5 / 60;
+        const fds = (t) => [0, 6].includes(weekday(t.d));
+        let ajust = trab.filter((t) => !t.fixo && !fds(t));
+        if (!ajust.length) ajust = trab.filter((t) => !t.fixo);
+        const cabe = (t) => t.a - P >= ini0 - 1e-9 && horasDe({ ...t, a: t.a - P }) <= maxDia + 1e-9 && (!t.curto || t.b - (t.a - P) <= 6 + 1e-9);
         let guarda = 0;
-        while (ajust.length && guarda++ < 400) {
-          const falta = Math.round((alvo - soma()) * 4) / 4; // em quartos de hora
-          if (Math.abs(falta) < 0.25) break;
-          if (falta > 0) { // entra mais cedo: o dia com menos horas primeiro
-            const c = ajust.filter(cabe).sort((x, y) => horasDe(x) - horasDe(y) || x.d.localeCompare(y.d))[0];
-            if (!c) break; c.a -= 0.25;
-          } else { // entra mais tarde: o dia com mais horas primeiro
-            const c = ajust.filter((t) => t.a + 0.25 <= t.b - 4 && (t.curto || t.b - (t.a + 0.25) > 6)).sort((x, y) => horasDe(y) - horasDe(x) || x.d.localeCompare(y.d))[0];
-            if (!c) break; c.a += 0.25;
-          }
+        while (ajust.length && guarda++ < 2000 && soma() < alvo - 1e-6) { // entra mais cedo ate fechar a jornada
+          const c = ajust.filter(cabe).sort((x, y) => horasDe(x) - horasDe(y) || x.d.localeCompare(y.d))[0];
+          if (!c) break; c.a = Math.round((c.a - P) * 12) / 12;
+        }
+        while (ajust.length && guarda++ < 4000 && soma() > alvo + P - 1e-6) { // passa: entra mais tarde
+          const c = ajust.filter((t) => t.a + P <= t.b - 4 && (t.curto || t.b - (t.a + P) > 6)).sort((x, y) => horasDe(y) - horasDe(x) || x.d.localeCompare(y.d))[0];
+          if (!c) break; c.a = Math.round((c.a + P) * 12) / 12;
         }
       }
       for (const t of trab) dias[t.d] = { ini: hhmm(t.a), fim: hhmm(t.b), horas: horasDe(t), cedo: t.a < t.abre, tarde: t.a > t.abre };
