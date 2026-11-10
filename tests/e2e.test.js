@@ -525,10 +525,34 @@ test('E2E: escala 5x2 — equipe da propria aba (com extra), cobertura com nome,
   await page.click('#eqmodal [data-eq-add]'); await page.locator('#eqmodal tr[data-eq]').last().locator('.eq-nome').fill('Folguista Dois');
   await page.click('.modal-foot button:has-text("Salvar e gerar de novo")'); await page.waitForSelector('td.nm:has-text("Folguista")');
   if (process.env.SHOT_DIR) await page.screenshot({ path: path.join(process.env.SHOT_DIR, 'escala5x2.png'), fullPage: true });
-  // ajuste manual: clicar numa celula troca trabalho/folga
-  const cel = page.locator('td.c:not(.f)').first(); const p = await cel.getAttribute('data-p'), d = await cel.getAttribute('data-d');
-  await cel.click(); await page.waitForSelector(`td.c.f[data-p="${p}"][data-d="${d}"]`);
-  await page.click(`td.c[data-p="${p}"][data-d="${d}"]`); await page.waitForSelector(`td.c.cob[data-p="${p}"][data-d="${d}"]`); // folga -> cobre outra loja
+  // 5x2 visivel na grade: segunda fechada aparece como F (folga) e toda semana completa tem 2 folgas por pessoa
+  const bg = page.locator('section.store:has(h2:has-text("Bingen")) tbody tr:not(.cont):not(.vem):not(.vem-tit)');
+  const semanas = await bg.first().evaluate((tr) => { const out = []; let n = 0, dias = 0; for (const td of tr.querySelectorAll('td')) { if (td.classList.contains('ws')) { out.push({ n, dias }); n = 0; dias = 0; continue; } if (!td.dataset.d && !td.classList.contains('ff')) continue; dias++; if (td.classList.contains('f') || td.classList.contains('ff')) n++; } return out; });
+  assert.ok(semanas.filter((x) => x.dias === 7).every((x) => x.n === 2), `2 folgas por semana: ${JSON.stringify(semanas)}`);
+  assert.equal(await bg.first().locator('td.ff').first().innerText(), 'F');
+  // ajuste à mão: clicar no dia abre o menu (trabalha / folga / cobrir loja X com o que falta nela)
+  const cel = page.locator('td.c:not(.f):not(.cob)').first(); const p = await cel.getAttribute('data-p'), d = await cel.getAttribute('data-d');
+  await cel.click(); await page.waitForSelector('.x5-ops');
+  assert.match(await page.locator('.modal').innerText(), /Trabalha em[\s\S]*Folga[\s\S]*Cobrir /);
+  await page.click('.x5-op:has-text("Folga")'); await page.waitForSelector(`td.c.f[data-p="${p}"][data-d="${d}"]`);
+  await page.click(`td.c[data-p="${p}"][data-d="${d}"]`); await page.click('.x5-op:has-text("Cobrir ")'); await page.waitForSelector(`td.c.cob[data-p="${p}"][data-d="${d}"]`);
+  // modo "Eu escolho": tira as coberturas automaticas; clicar no numero da loja escolhe quem vem cobrir
+  await page.click('[data-act=cobmodo][data-v=manual]'); await page.click('.modal-foot button:has-text("Tirar e começar do zero")');
+  await page.waitForSelector('[data-act=cobmodo][data-v=manual].on');
+  assert.equal(await page.locator('td.c.cob, tr.vem').count(), 0, 'sem coberturas automaticas');
+  const baixo = page.locator('tr.cont td.cc.baixo').first();
+  assert.ok(await baixo.count() > 0, 'sem cobertura aparece falta em vermelho');
+  const bd = await baixo.getAttribute('data-d');
+  await baixo.click(); await page.waitForSelector('.x5-sit.falta');
+  if (process.env.SHOT_DIR) await page.screenshot({ path: path.join(process.env.SHOT_DIR, 'escala5x2-cobrir.png') });
+  assert.match(await page.locator('.modal').innerText(), /Quem pode vir[\s\S]* fica com \d+ de \d+/);
+  const quem = await page.locator('[data-vem]').first().getAttribute('data-vem');
+  await page.locator('[data-vem]').first().click();
+  await page.waitForSelector(`td.c.cob[data-p="${quem}"][data-d="${bd}"]`);
+  assert.equal(await page.locator(`td.c.cob[data-p="${quem}"][data-d="${bd}"]`).innerText() !== '', true);
+  // gerar de novo no modo manual mantem sem coberturas automaticas; volta para o automatico
+  await page.click('[data-act=cobmodo][data-v=auto]'); await page.click('.modal-foot button:has-text("Refazer automático")');
+  await page.waitForSelector('[data-act=cobmodo][data-v=auto].on'); await page.waitForSelector('tr.vem');
   // outro negocio: cadastro livre
   await page.click('[data-act=modo][data-m=outro]'); await page.waitForSelector('[data-act=ajustes]');
   await page.click('.empty [data-act=ajustes]'); await page.waitForSelector('#cad');

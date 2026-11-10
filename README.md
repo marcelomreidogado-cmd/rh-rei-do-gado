@@ -92,6 +92,12 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   pessoa, quem vem cobrir; clicar num dia alterna trabalha → folga → cobre
   outra loja. Dados em rh_sundays
   (5x2-cfg, 5x2-AAAA-MM, 5x2-outro), sem mudar regras.
+- **Escala 5x2 (v1.20)**: a segunda (loja fechada) aparece como **F** na grade, então
+  cada semana mostra as 2 folgas; a coluna Folgas conta as duas. Clicar no dia de uma
+  pessoa abre um menu (trabalha / folga / cobrir loja X, mostrando quanto cada loja tem
+  e o mínimo). "Quem cobre outra loja": **Automático** ou **✋ Eu escolho** — no modo
+  manual o sistema só sugere as folgas, e clicar no número de uma loja (vermelho = falta)
+  lista quem de outra loja está trabalhando no dia e com quantos a loja dele fica.
 - **Escala 5x2 (v1.19)**: a grade fica limpa (só Col/F/Cos/✓, sem horários
   nas células). Acima das lojas, o quadro **Horário sugerido** mostra o turno
   de referência por dia da semana (Seg–Dom, "Folga" em verde, "Fechado"
