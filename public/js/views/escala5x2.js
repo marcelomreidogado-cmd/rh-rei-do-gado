@@ -273,25 +273,26 @@ function painelHorario(m, weeks, ext) {
   const nA = uteis.length - folgasUteisA;
   if (nA > 0) {
     const hF = fds.reduce((a, d) => a + H(hor[d][0], hor[d][1]), 0);
-    tipos.push({ nome: fds.includes(0) ? 'Semana que trabalha domingo' : 'Semana', nota: folgasUteisA ? `folga fixa em ${folgasUteisA} dia${folgasUteisA > 1 ? 's' : ''} de ${C.DIAS_SEM[uteis[0]].toLowerCase()} a ${C.DIAS_SEM[uteis[uteis.length - 1]].toLowerCase()}` : '', u: util(nA, hF), fdsFolga: [], n: nA, hF });
+    tipos.push({ nome: fds.includes(0) ? 'Semana que trabalha domingo' : 'Semana', nota: '', u: util(nA, hF), fdsFolga: [], folgaUtil: uteis.slice(0, folgasUteisA), n: nA, hF });
   }
   if (fds.includes(0) && m.domingo3 !== false) {
     const nB = uteis.length - Math.max(0, folgasUteisA - 1);
     const hF = fds.filter((d) => d !== 0).reduce((a, d) => a + H(hor[d][0], hor[d][1]), 0);
-    tipos.push({ nome: 'Semana de folga no domingo', nota: 'a cada 3 semanas', u: util(nB, hF), fdsFolga: [0], n: nB, hF });
+    tipos.push({ nome: 'Semana de folga no domingo', nota: 'a cada 3 semanas', u: util(nB, hF), fdsFolga: [0], folgaUtil: uteis.slice(0, Math.max(0, folgasUteisA - 1)), n: nB, hF });
   }
   const cel = (t, d) => {
-    if (!abre.has(d)) return '<td class="hs-fech">Fechado</td>';
+    if (!abre.has(d)) return '<td class="hs-folga">Folga<small>loja fechada</small></td>';
     if (t.fdsFolga.includes(d)) return '<td class="hs-folga">Folga</td>';
+    if (t.folgaUtil.includes(d)) return `<td class="hs-folga">Folga<small>1 dia de ${esc(C.DIAS_SEM[uteis[0]].toLowerCase())} a ${esc(C.DIAS_SEM[uteis[uteis.length - 1]].toLowerCase())}</small></td>`;
     const x = t.u[d] || (ok(d) ? { ini: hor[d][0], fim: hor[d][1], horas: H(hor[d][0], hor[d][1]) } : null);
     if (!x) return '<td></td>';
     return `<td><b>${esc(curtoH(x.ini))} às ${esc(curtoH(x.fim))}</b><small>${esc(C.fmtH(x.horas))} de trabalho</small></td>`;
   };
-  const total = (t) => t.hF + uteis.reduce((a, d) => a + (t.u[d]?.horas || 0), 0) * t.n / uteis.length;
+  const total = (t) => t.hF + uteis.filter((d) => !t.folgaUtil.includes(d)).reduce((a, d) => a + (t.u[d]?.horas || 0), 0);
   const fer = ext.filter((x) => x.tipo === 'feriado');
   return `<section class="hs-card"><div class="hs-top"><h3>Horário sugerido</h3><span>${meta}h por semana · média ${esc(C.fmtH(meta / 5))} por dia · almoço ${m.almoco >= 60 ? C.fmtH(m.almoco / 60) : m.almoco + ' min'} + lanche ${m.lanche} min</span></div>
     <div class="table-wrap"><table class="hs"><thead><tr><th></th>${ORD.map((d) => `<th>${C.DIAS_SEM[d]}</th>`).join('')}<th>Semana</th></tr></thead><tbody>
-    ${tipos.map((t) => `<tr><th class="hs-nome">${esc(t.nome)}${t.nota ? `<small>${esc(t.nota)}</small>` : ''}</th>${ORD.map((d) => cel(t, d)).join('')}<td class="hs-tot"><b>${esc(C.fmtH(total(t)))}</b><small>${t.n + (t.hF ? (t.fdsFolga.length ? 1 : fds.length) : 0)} dias</small></td></tr>`).join('')}
+    ${tipos.map((t) => `<tr><th class="hs-nome">${esc(t.nome)}${t.nota ? `<small>${esc(t.nota)}</small>` : ''}</th>${ORD.map((d) => cel(t, d)).join('')}<td class="hs-tot"><b>${esc(C.fmtH(total(t)))}</b><small>${ORD.filter((d) => abre.has(d) && !t.fdsFolga.includes(d) && !t.folgaUtil.includes(d)).length} dias · 2 folgas</small></td></tr>`).join('')}
     </tbody></table></div>${fer.length ? `<p class="hs-fer">Feriado${fer.length > 1 ? 's' : ''}: ${fer.map((x) => `${C.fmtDM(x.date)} ${esc(curtoH(x.ini))} às ${esc(curtoH(x.fim))}`).join(' · ')} — fora da conta da semana (pago à parte).</p>` : ''}</section>`;
 }
 

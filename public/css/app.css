@@ -119,3 +119,4 @@ table.hs th.hs-nome{text-align:left;font-size:13px;font-weight:600;color:#0f172a
 table.hs td.hs-tot{background:#eef2ff;border-color:#c7d2fe}table.hs td.hs-tot b{color:#3730a3}
 .hs-fer{margin:6px 0 0;color:#6d28d9;font-size:12px}
 @media print{.hs-card{box-shadow:none;break-inside:avoid}}
+table.hs td.hs-folga small{font-weight:500;color:#047857}

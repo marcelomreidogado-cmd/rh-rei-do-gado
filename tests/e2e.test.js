@@ -480,8 +480,14 @@ test('E2E: escala 5x2 — equipe da propria aba (com extra), cobertura com nome,
   const hs = page.locator('.hs-card');
   assert.match(await hs.innerText(), /42h por semana · média 8h24 por dia · almoço 1h \+ lanche 15 min/);
   const linhaDom = await hs.locator('tbody tr').nth(0).innerText(), linhaFolga = await hs.locator('tbody tr').nth(1).innerText();
-  assert.match(linhaDom, /Semana que trabalha domingo[\s\S]*Fechado[\s\S]*8:15 às 19\n[\s\S]*9h30 de trabalho[\s\S]*9 às 19\n[\s\S]*9 às 14\n[\s\S]*42h/);
-  assert.match(linhaFolga, /Semana de folga no domingo[\s\S]*9:25 às 19\n[\s\S]*8h20 de trabalho[\s\S]*Folga[\s\S]*42h05/);
+  assert.match(linhaDom, /Semana que trabalha domingo[\s\S]*Folga\n?loja fechada[\s\S]*Folga\n?1 dia de ter a sex[\s\S]*8:15 às 19\n[\s\S]*9h30 de trabalho[\s\S]*9 às 19\n[\s\S]*9 às 14\n[\s\S]*42h\n?5 dias · 2 folgas/);
+  // 5x2 visivel: cada linha tem 5 dias de trabalho e 2 folgas
+  for (const i of [0, 1]) {
+    const tr = hs.locator('tbody tr').nth(i);
+    assert.equal(await tr.locator('td.hs-folga').count(), 2, `linha ${i}: 2 folgas`);
+    assert.equal(await tr.locator('td:not(.hs-folga):not(.hs-tot) b').count(), 5, `linha ${i}: 5 dias de trabalho`);
+  }
+  assert.match(linhaFolga, /Semana de folga no domingo[\s\S]*9:25 às 19\n[\s\S]*8h20 de trabalho[\s\S]*Folga[\s\S]*42h05\n?5 dias · 2 folgas/);
   // uma coluna de horas depois de cada domingo (dez/2026: 4 domingos + fim do mes = 5 por loja)
   assert.equal(await page.locator('section.store:has(h2:has-text("Bingen")) th.ws').count(), 5);
   const ok = await page.locator('td.ws.ok').count(), ruins = await page.locator('td.ws.falta, td.ws.passa').count();
