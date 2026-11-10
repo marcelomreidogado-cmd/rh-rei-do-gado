@@ -199,3 +199,47 @@ test('quem nao cobre outras lojas nunca e chamado; feriado muda horario e minimo
   assert.ok(C.faltas5x2({ weeks, pessoas: ps, unidades: fer, folgas: {} }).some((x) => x.date === '2026-12-03' && x.unidade === 'a'), 'feriado pede 2 e so tem 1');
   assert.deepEqual(C.feriadosNacionais(2026).filter((f) => f.date.startsWith('2026-11')).map((f) => f.date), ['2026-11-02', '2026-11-15', '2026-11-20']);
 });
+
+// ---------- loja de shopping (10h-22h seg-sab, 11h-21h dom): turnos de abertura e fechamento ----------
+const SHOP = { 0: ['11:00', '21:00'], 1: ['10:00', '22:00'], 2: ['10:00', '22:00'], 3: ['10:00', '22:00'], 4: ['10:00', '22:00'], 5: ['10:00', '22:00'], 6: ['10:00', '22:00'] };
+const fini = { fini: { nome: 'Fini', abre: [0, 1, 2, 3, 4, 5, 6], horario: SHOP, minimos: { atendimento: [2, 2, 2, 2, 2, 3, 4] } } };
+
+test('turnos do dia: loja longa vira abertura + fechamento de 8h24; loja curta e turno unico', () => {
+  const o = { meta: 42, almoco: 60, lanche: 15 };
+  assert.deepEqual(C.turnosDoHorario('10:00', '22:00', o), [['10:00', '19:39'], ['12:21', '22:00']]);
+  assert.equal(C.horasTurno('10:00', '19:39', 60, 15), 8.4);
+  assert.deepEqual(C.turnosDoHorario('11:00', '21:00', o), [['11:00', '21:00']]); // 8h45: uma pessoa cobre
+  assert.deepEqual(C.turnosDoHorario('10:00', '19:00', o), [['10:00', '19:00']]); // Rei do Gado continua turno unico
+  assert.equal(C.turnosDoHorario('07:00', '23:00', { meta: 30, almoco: 60, lanche: 15 }).length, 3); // sobra buraco no meio -> intermediario
+});
+
+test('shopping 10h-22h: todo dia alguem abre e alguem fecha, mesmo turno na semana, 42h por semana', () => {
+  const weeks = C.semanasDoMes('2026-12');
+  const gente = ['ana', 'bia', 'caio', 'duda', 'eva', 'fabi'].map((n) => P(n, 'fini', 'atendimento'));
+  const r = C.gerar5x2({ weeks, pessoas: gente, unidades: fini, semFolga: [6] });
+  const meta = 42, almoco = 60, lanche = 15;
+  const turnosDe = (u, d) => { const h = fini[u].horario[C.weekday(d)]; return C.turnosDoHorario(h[0], h[1], { meta, almoco, lanche }); };
+  const at = C.atribuiTurnos({ weeks, pessoas: gente, unidades: fini, folgas: r.folgas, turnosDe });
+  const turnoDe = (pid, d, u) => { const T = turnosDe(u, d); if (T.length < 2) return null; const i = at[pid][d] ?? 0; const h = fini[u].horario[C.weekday(d)]; return { ini: T[i][0], fim: T[i][1], idx: i, k: T.length, lado: i === 0 ? 'fim' : 'ini' }; };
+  const cg = C.turnos5x2({ weeks, pessoas: gente, unidades: fini, folgas: r.folgas, almoco, lanche, turnoDe });
+  for (const w of weeks) for (const d of w) {
+    if (C.weekday(d) === 0) continue; // domingo: turno unico 11-21
+    const pres = gente.filter((p) => !(r.folgas[p.id] || []).includes(d));
+    const ab = pres.filter((p) => at[p.id][d] === 0), fe = pres.filter((p) => at[p.id][d] === 1);
+    assert.ok(ab.length >= 1 && fe.length >= 1, `${d}: abre ${ab.length}, fecha ${fe.length}`);
+    for (const p of ab) assert.equal(cg[p.id].dias[d].ini, '10:00', `${d} ${p.id} abre as 10`);
+    for (const p of fe) assert.equal(cg[p.id].dias[d].fim, '22:00', `${d} ${p.id} fecha as 22`);
+    for (const p of pres) assert.ok(cg[p.id].dias[d].horas <= 9.5, `${d} ${p.id} ${cg[p.id].dias[d].horas}h`);
+  }
+  let trocasTot = 0;
+  for (const p of gente) {
+    for (const s of cg[p.id].semanas) if (s.dias === 5) assert.ok(Math.abs(s.normais - 42) <= 5 / 60 + 1e-9, `${p.id} semana ${s.inicio}: ${s.normais}`);
+    // mesmo turno na semana (dias de seg a sab)
+    for (const w of weeks) { const seq = w.map((d) => at[p.id][d]).filter((x) => x !== undefined); const trocas = seq.filter((x, i) => i && x !== seq[i - 1]).length; trocasTot += trocas; assert.ok(trocas <= 1, `${p.id} troca ${trocas}x de turno na semana ${w[0]}`); }
+  }
+  assert.ok(trocasTot <= 6, `trocas de turno no meio da semana: ${trocasTot}`);
+  // reveza: quem abriu numa semana fecha na outra (na maioria das trocas de semana)
+  let mud = 0, tot = 0;
+  for (const p of gente) { const t = weeks.map((w) => w.map((d) => at[p.id][d]).find((x) => x !== undefined)); for (let i = 1; i < t.length; i++) if (t[i] !== undefined && t[i - 1] !== undefined) { tot++; if (t[i] !== t[i - 1]) mud++; } }
+  assert.ok(mud / tot >= 0.5, `revezamento ${mud}/${tot}`);
+});

@@ -92,6 +92,16 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   pessoa, quem vem cobrir; clicar num dia alterna trabalha → folga → cobre
   outra loja. Dados em rh_sundays
   (5x2-cfg, 5x2-AAAA-MM, 5x2-outro), sem mudar regras.
+- **Escala 5x2 (v1.21) — turnos**: quando a loja fica aberta mais do que uma pessoa
+  aguenta (ex.: shopping 10h–22h), o sistema monta **Abertura** (abre a loja, 8h24 de
+  trabalho) e **Fechamento** (fecha a loja, 8h24); se ainda sobrar buraco, um
+  intermediário. Loja que cabe num turno (Rei do Gado, domingo de shopping 11h–21h)
+  continua com todos no mesmo horário. O quadro mostra os turnos por dia e "Pessoas no
+  dia" pelo mínimo cadastrado (ex.: sáb 4 = 2 abrem + 2 fecham). Na grade cada dia
+  mostra **Abre/Fecha**; a pessoa fica no mesmo turno a semana toda e reveza na seguinte;
+  turno sem ninguém fica vermelho. Clique no dia troca o turno à mão. **✏️ Meu horário**:
+  o Marcelo escreve os turnos (até 3 por dia) e a escala e as horas da semana passam a
+  usar esses. Feriado vem com o horário de domingo da loja.
 - **Escala 5x2 (v1.20)**: a segunda (loja fechada) aparece como **F** na grade, então
   cada semana mostra as 2 folgas; a coluna Folgas conta as duas. Clicar no dia de uma
   pessoa abre um menu (trabalha / folga / cobrir loja X, mostrando quanto cada loja tem

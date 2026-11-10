@@ -561,6 +561,53 @@ test('E2E: escala 5x2 — equipe da propria aba (com extra), cobertura com nome,
   await page.click('.modal-foot button:has-text("Salvar")');
   await page.click('[data-act=gerar]'); await page.waitForSelector('table.x5grid');
   assert.match(await page.locator('table.x5grid').innerText(), /Ana[\s\S]*Bia[\s\S]*Caio/);
+  // loja de SHOPPING (Fini Petrópolis): seg-sab 10h-22h, dom 11h-21h, minimo 2/2/2/2/3/4/2 -> turnos de abertura e fechamento
+  await page.click('[data-act=ajustes]'); await page.waitForSelector('#cad');
+  for (let i = 0; i < 3; i++) await page.click('#cad [data-add=p]');
+  const nm2 = page.locator('#cad [data-pn]'); for (let i = 3; i < 6; i++) await nm2.nth(i).fill(['Duda', 'Eva', 'Fabi'][i - 3]);
+  await page.locator('#cad .x5-un').fill('Fini Petrópolis');
+  for (const w of [1, 2, 3, 4, 5, 6, 0]) {
+    const [a1, b1] = w === 0 ? ['11:00', '21:00'] : ['10:00', '22:00'];
+    await page.locator(`#cad input[data-hor$="|${w}|0"]`).fill(a1); await page.locator(`#cad input[data-hor$="|${w}|1"]`).fill(b1);
+    await page.locator(`#cad input[data-min$="|${w}"]`).fill(String({ 1: 2, 2: 2, 3: 2, 4: 2, 5: 3, 6: 4, 0: 2 }[w]));
+  }
+  await page.click('.modal-foot button:has-text("Salvar")'); await page.waitForSelector('table.hs');
+  const hsT = await page.locator('.hs-card').innerText();
+  assert.match(hsT, /Horário sugerido · Fini Petrópolis/);
+  assert.match(hsT, /Abertura[\s\S]*10 às 19:39\n[\s\S]*8h24 de trabalho/, 'abertura comeca quando a loja abre');
+  assert.match(hsT, /Fechamento[\s\S]*12:21 às 22\n[\s\S]*8h24 de trabalho/, 'fechamento termina quando a loja fecha');
+  assert.match(hsT, /11 às 21\n[\s\S]*8h45 de trabalho[\s\S]*todos no mesmo horário/, 'domingo 11h-21h cabe num turno');
+  assert.match(hsT, /Pessoas no dia[\s\S]*4\n?2 abre · 2 fecha/, 'sabado 4 = 2 abrem + 2 fecham');
+  assert.equal(await page.locator('table.hs td.hs-alerta').count(), 0);
+  // grade: todo dia de seg a sab tem alguem abrindo e alguem fechando; 42h por semana
+  const sh = page.locator('section.store:has(h2:has-text("Fini"))');
+  assert.ok(await sh.locator('td.tn.ta').count() > 20 && await sh.locator('td.tn.tf').count() > 20, 'turnos na grade');
+  const diasTn = await sh.locator('tbody tr').first().evaluate(() => [...document.querySelectorAll('section.store td.c[data-d]')].map((t) => t.dataset.d));
+  for (const d of [...new Set(diasTn)].filter((x) => x.startsWith('2026-12') && new Date(x + 'T12:00').getDay() !== 0)) {
+    const ab = await sh.locator(`td.tn.ta[data-d="${d}"]`).count(), fe = await sh.locator(`td.tn.tf[data-d="${d}"]`).count();
+    assert.ok(ab >= 1 && fe >= 1, `${d}: abre ${ab} fecha ${fe}`);
+  }
+  assert.match(await sh.locator('td.tn.ta').first().getAttribute('title'), /Abertura 10:00–19:\d\d/);
+  assert.match(await sh.locator('td.tn.tf').first().getAttribute('title'), /Fechamento \d\d:\d\d–22:00/);
+  assert.equal(await sh.locator('td.ws.falta, td.ws.passa').count(), 0, 'todas as semanas fecham 42h');
+  // ajuste a mao do turno: quem abre passa a fechar no dia
+  const ca = sh.locator('td.tn.ta').first(); const cp = await ca.getAttribute('data-p'), cd = await ca.getAttribute('data-d');
+  await ca.click(); await page.click('.x5-op:has-text("Fechamento em")'); await page.waitForSelector(`td.tn.tf[data-p="${cp}"][data-d="${cd}"]`);
+  if (process.env.SHOT_DIR) await page.screenshot({ path: path.join(process.env.SHOT_DIR, 'escala5x2-shopping.png'), fullPage: true });
+  // ✏️ Meu horário: escrevo os meus turnos e a escala passa a usar
+  await page.click('[data-act=tmodo][data-v=manual]'); await page.waitForSelector('.x5-mh');
+  assert.equal(await page.locator('[data-mh="1|0|0"]').inputValue(), '10:00', 'vem preenchido com a sugestao');
+  for (const w of [1, 2, 3, 4, 5, 6]) { await page.fill(`[data-mh="${w}|0|1"]`, '19:40'); await page.fill(`[data-mh="${w}|1|0"]`, '12:20'); }
+  assert.match(await page.locator('[data-mhh="1|0"]').innerText(), /8h25 de trabalho/);
+  if (process.env.SHOT_DIR) await page.screenshot({ path: path.join(process.env.SHOT_DIR, 'escala5x2-meuhorario.png') });
+  await page.click('.modal-foot button:has-text("Salvar e usar")'); await page.waitForSelector('.hs-card h3:has-text("Meu horário")');
+  assert.match(await page.locator('.hs-card').innerText(), /10 às 19:40[\s\S]*12:20 às 22/);
+  assert.match(await sh.locator('td.tn.ta').first().getAttribute('title'), /Abertura 10:00–19:40/);
+  await page.click('[data-act=tmodo][data-v=auto]'); await page.waitForSelector('.hs-card h3:has-text("Horário sugerido")');
+  // feriado no shopping vem com o horario de domingo (11h-21h)
+  await page.click('[data-act=extra]'); await page.waitForSelector('#ex_i');
+  assert.equal(await page.locator('#ex_i').inputValue(), '11:00'); assert.equal(await page.locator('#ex_f').inputValue(), '21:00');
+  await page.click('.modal-head [data-close]');
   await page.click('[data-act=modo][data-m=rei]'); await page.waitForSelector('table.x5grid');
 });
 

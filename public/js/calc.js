@@ -744,6 +744,78 @@ export const metaSemanal = (iso, informada) => (Number(informada) > 0 ? Number(i
 const hhmm = (h) => { const t = Math.round(h * 60); return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; };
 
 /**
+ * Turnos de um dia de funcionamento (5x2). Se UMA pessoa cobre a loja do abrir ao fechar sem passar de maxDia horas
+ * de trabalho, turno unico (todos no horario da loja). Se nao (ex.: shopping 10h-22h), turno de ABERTURA (abre a loja)
+ * e de FECHAMENTO (fecha a loja), cada um com a jornada media do dia (meta/5, ex.: 8h24) + almoco + lanche; se sobrar
+ * um buraco no meio, entra um INTERMEDIARIO. Retorna [[ini, fim], ...] em HH:MM.
+ */
+export function turnosDoHorario(ini, fim, { meta = 42, almoco = 60, lanche = 15, maxDia = 9.5 } = {}) {
+  const a = hm(ini), b = hm(fim); if (a === null || b === null || b <= a) return [];
+  if (horasTurno(ini, fim, almoco, lanche) <= maxDia + 1e-9) return [[hhmm(a), hhmm(b)]];
+  const dia = meta / 5;
+  const L = dia + (dia > 6 ? (almoco + lanche) / 60 : dia > 4 ? Math.max(15, lanche) / 60 : 0);
+  const t = [[hhmm(a), hhmm(a + L)], [hhmm(b - L), hhmm(b)]];
+  if (a + L < b - L - 1e-9) { const mid = (a + b) / 2; t.splice(1, 0, [hhmm(mid - L / 2), hhmm(mid + L / 2)]); }
+  return t;
+}
+export const NOMES_TURNO = (k) => (k === 2 ? ['Abertura', 'Fechamento'] : k === 3 ? ['Abertura', 'Intermediário', 'Fechamento'] : Array.from({ length: k }, (_, i) => (k === 1 ? 'Turno' : `Turno ${i + 1}`)));
+export const SIGLA_TURNO = (k) => (k === 2 ? ['Abre', 'Fecha'] : k === 3 ? ['Abre', 'Meio', 'Fecha'] : Array.from({ length: k }, (_, i) => `T${i + 1}`));
+
+/**
+ * Quem faz qual turno em cada dia (so dias com 2 ou mais turnos). Cada turno com pelo menos 1 pessoa (abertura primeiro),
+ * o resto dividido por igual (sobra vai para o fechamento), por funcao. A pessoa fica no MESMO turno a semana toda e
+ * troca na semana seguinte (quem abriu passa a fechar). turnosDe(u, d) -> [[ini, fim], ...].
+ * Retorna {pid: {data: indiceDoTurno}}.
+ */
+export function atribuiTurnos({ weeks, pessoas, unidades, folgas, cobre = {}, unavailable = () => '', turnosDe }) {
+  const out = {}; for (const p of pessoas) out[p.id] = {};
+  const principal = {}; // pid -> turno da semana anterior
+  const ondeEsta = (p, d) => (unavailable(p.id, d) || (folgas[p.id] || []).includes(d) ? null : (cobre[p.id] || {})[d] || p.unidade);
+  const alvo = (n, k) => { const base = Math.floor(n / k), rem = n % k; return Array.from({ length: k }, (_, t) => base + (n >= k ? (t >= k - rem ? 1 : 0) : (t < n ? 1 : 0)) - (n < k ? base : 0)); };
+  weeks.forEach((week) => {
+    for (const u of Object.keys(unidades)) {
+      const dias = week.map((d) => ({ d, k: abreEm(unidades[u], d) ? (turnosDe(u, d) || []).length : 0 })).filter((x) => x.k >= 2);
+      if (!dias.length) continue;
+      for (const x of dias) x.pres = pessoas.filter((p) => ondeEsta(p, x.d) === u);
+      const gente = pessoas.filter((p) => dias.some((x) => x.pres.includes(p)));
+      if (!gente.length) continue;
+      const K = Math.max(...dias.map((x) => x.k));
+      // nota de um plano (cada pessoa num turno a semana toda): turno vazio pesa muito; depois equilibrio; depois revezar
+      const nota = (a) => {
+        let n = 0;
+        for (const x of dias) {
+          const c = Array(x.k).fill(0); for (const p of x.pres) c[Math.min(a.get(p), x.k - 1)]++;
+          const tg = alvo(x.pres.length, x.k);
+          for (let t = 0; t < x.k; t++) { if (tg[t] > 0 && c[t] === 0) n += 100; n += 3 * Math.abs(c[t] - tg[t]); }
+        }
+        for (const p of gente) { const pr = principal[p.id]; if (pr !== undefined && a.get(p) === pr) n += 1; else if (pr === undefined && a.get(p) !== pessoas.indexOf(p) % K) n += 0.01; }
+        return n;
+      };
+      let melhor = null, mn = Infinity;
+      if (K ** gente.length <= 20000) {
+        const a = new Map();
+        const rec = (i) => { if (i === gente.length) { const v = nota(a); if (v < mn) { mn = v; melhor = new Map(a); } return; } for (let t = 0; t < K; t++) { a.set(gente[i], t); rec(i + 1); } };
+        rec(0);
+      } else { // equipe grande: reveza pelo turno anterior, metade em cada
+        melhor = new Map(gente.map((p, i) => [p, principal[p.id] !== undefined ? (principal[p.id] + 1) % K : i % K]));
+      }
+      for (const x of dias) {
+        for (const p of x.pres) out[p.id][x.d] = Math.min(melhor.get(p), x.k - 1);
+        // conserto do dia: turno vazio recebe alguem do turno mais cheio
+        const tg = alvo(x.pres.length, x.k);
+        for (let t = 0; t < x.k; t++) {
+          if (tg[t] === 0 || x.pres.some((p) => out[p.id][x.d] === t)) continue;
+          const c = Array(x.k).fill(0); for (const p of x.pres) c[out[p.id][x.d]]++;
+          const de = c.indexOf(Math.max(...c)); const p = x.pres.filter((q) => out[q.id][x.d] === de).pop();
+          if (p && c[de] > 1) out[p.id][x.d] = t;
+        }
+      }
+      for (const p of gente) principal[p.id] = melhor.get(p);
+    }
+  });
+  return out;
+}
+/**
  * Turnos sugeridos (5x2): cada dia trabalhado comeca com o horario da loja onde a pessoa esta (a dela ou a que foi
  * cobrir); se a semana nao fecha a jornada (ex.: 42h), a pessoa ENTRA MAIS CEDO nos dias longos (de 15 em 15 min,
  * espalhado pela semana, nunca antes de inicioMin e no maximo maxDia horas no dia); se passa, entra mais tarde.
@@ -751,7 +823,7 @@ const hhmm = (h) => { const t = Math.round(h * 60); return `${String(Math.floor(
  * Semana com afastamento nao e ajustada; semana com menos de 5 dias de trabalho tem a meta proporcional.
  * Retorna {id: {dias: {data: {ini, fim, horas, cedo}}, semanas: [{inicio, horas, meta}]}}.
  */
-export function turnos5x2({ weeks, pessoas, unidades, folgas, cobre = {}, unavailable = () => '', almoco = 60, lanche = 15, jornada = 0, horariosPessoa = {}, inicioMin = '07:00', maxDia = 9.5 }) {
+export function turnos5x2({ weeks, pessoas, unidades, folgas, cobre = {}, unavailable = () => '', almoco = 60, lanche = 15, jornada = 0, horariosPessoa = {}, inicioMin = '07:00', maxDia = 9.5, turnoDe = null }) {
   const out = {};
   const ini0 = hm(inicioMin) ?? 7;
   for (const p of pessoas) {
@@ -769,10 +841,18 @@ export function turnos5x2({ weeks, pessoas, unidades, folgas, cobre = {}, unavai
         if (!abreNo(un, dow)) continue;
         const extra = !!(unidades[u]?.extras || {})[d];
         const proprio = !extra && !(cobre[p.id] || {})[d] && (horariosPessoa[p.id] || {})[dow];
-        const h = proprio && proprio[0] && proprio[1] ? proprio : ((un.horario || {})[dow] || []);
+        const hl = (un.horario || {})[dow] || [];
+        // turno do dia (abertura/fechamento ou o horario escolhido pelo Marcelo): abertura ajusta a SAIDA, os outros a ENTRADA
+        const tt = !proprio && turnoDe ? turnoDe(p.id, d, u) : null;
+        if (tt) {
+          const a = hm(tt.ini), b = hm(tt.fim); if (a === null || b === null) continue;
+          trab.push({ d, a, b, abre: a, proprio: false, especial: extra, fixo: !!tt.fixo || extra, curto: false, lado: tt.lado || 'ini', min: hm(hl[0]) ?? a, max: hm(hl[1]) ?? b, turno: tt.idx, nTurnos: tt.k });
+          continue;
+        }
+        const h = proprio && proprio[0] && proprio[1] ? proprio : hl;
         const a = hm(h[0]), b = hm(h[1]);
         if (a === null || b === null) continue;
-        trab.push({ d, a, b, abre: a, proprio: !!proprio, especial: extra, fixo: !!proprio || extra, curto: b - a <= 6 });
+        trab.push({ d, a, b, abre: a, proprio: !!proprio, especial: extra, fixo: !!proprio || extra, curto: b - a <= 6, lado: 'ini', min: ini0 });
       }
       const horasDe = (t) => horasTurno(hhmm(t.a), hhmm(t.b), almoco, lanche);
       // feriado / abertura extra: horario do dia fixo e FORA da conta da jornada (feriado trabalhado e pago a parte)
@@ -787,18 +867,23 @@ export function turnos5x2({ weeks, pessoas, unidades, folgas, cobre = {}, unavai
         const fds = (t) => [0, 6].includes(weekday(t.d));
         let ajust = trab.filter((t) => !t.fixo && !fds(t));
         if (!ajust.length) ajust = trab.filter((t) => !t.fixo);
-        const cabe = (t) => t.a - P >= ini0 - 1e-9 && horasDe({ ...t, a: t.a - P }) <= maxDia + 1e-9 && (!t.curto || t.b - (t.a - P) <= 6 + 1e-9);
+        const r60 = (x) => Math.round(x * 60) / 60;
+        const mais = (t) => (t.lado === 'fim' ? { ...t, b: r60(t.b + P) } : { ...t, a: r60(t.a - P) });
+        const menos = (t) => (t.lado === 'fim' ? { ...t, b: r60(t.b - P) } : { ...t, a: r60(t.a + P) });
+        const cabe = (t) => { const n = mais(t); if (horasDe(n) > maxDia + 1e-9) return false;
+          return t.lado === 'fim' ? n.b <= t.max + 1e-9 : n.a >= t.min - 1e-9 && (!t.curto || n.b - n.a <= 6 + 1e-9); };
+        const cabeMenos = (t) => { const n = menos(t); return n.b - n.a >= 4 - 1e-9 && (t.curto || n.b - n.a > 6); };
         let guarda = 0;
-        while (ajust.length && guarda++ < 2000 && soma() < alvo - 1e-6) { // entra mais cedo ate fechar a jornada
+        while (ajust.length && guarda++ < 2000 && soma() < alvo - 1e-6) { // mais horas: entra mais cedo (abertura: sai mais tarde)
           const c = ajust.filter(cabe).sort((x, y) => horasDe(x) - horasDe(y) || x.d.localeCompare(y.d))[0];
-          if (!c) break; c.a = Math.round((c.a - P) * 12) / 12;
+          if (!c) break; Object.assign(c, mais(c));
         }
-        while (ajust.length && guarda++ < 4000 && soma() > alvo + P - 1e-6) { // passa: entra mais tarde
-          const c = ajust.filter((t) => t.a + P <= t.b - 4 && (t.curto || t.b - (t.a + P) > 6)).sort((x, y) => horasDe(y) - horasDe(x) || x.d.localeCompare(y.d))[0];
-          if (!c) break; c.a = Math.round((c.a + P) * 12) / 12;
+        while (ajust.length && guarda++ < 4000 && soma() > alvo + P - 1e-6) { // passa: entra mais tarde (abertura: sai mais cedo)
+          const c = ajust.filter(cabeMenos).sort((x, y) => horasDe(y) - horasDe(x) || x.d.localeCompare(y.d))[0];
+          if (!c) break; Object.assign(c, menos(c));
         }
       }
-      for (const t of trab) dias[t.d] = { ini: hhmm(t.a), fim: hhmm(t.b), horas: horasDe(t), cedo: t.a < t.abre, tarde: t.a > t.abre };
+      for (const t of trab) dias[t.d] = { ini: hhmm(t.a), fim: hhmm(t.b), horas: horasDe(t), cedo: t.a < t.abre, tarde: t.a > t.abre, turno: t.turno, nTurnos: t.nTurnos };
       const especiais = trab.filter((t) => t.especial).reduce((s, t) => s + horasDe(t), 0);
       semanas.push({ inicio: week[0], horas: Math.round((soma() + especiais) * 100) / 100, normais: Math.round(soma() * 100) / 100, especiais: Math.round(especiais * 100) / 100, meta: Math.round(alvo * 100) / 100, metaCheia: meta, afastado, dias: normais.length, proprio: temProprio });
     }
