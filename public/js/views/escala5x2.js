@@ -226,7 +226,7 @@ function telaEscala() {
         const pTxt = papel ? (m.funcoes[papel] || papel) : '';
         const hd = tn?.horas || 0; const hx = hd > C.MAX_DIARIO;
         const kT = !f ? tz.k(u, d) : 0; const iT = kT > 1 ? (tz.atrib[p.id] || {})[d] ?? 0 : -1;
-        if (iT >= 0) return `<td class="c tn t${kT === 2 && iT === 1 ? 'f' : iT === 0 ? 'a' : 'm'} ${hx ? 'hx' : ''} ${sem} ${dom}" data-p="${esc(p.id)}" data-d="${d}" title="${esc(C.NOMES_TURNO(kT)[iT])}${tn ? ` ${tn.ini}–${tn.fim} · ${C.fmtH(hd)} de trabalho` : ''}${pTxt ? ` · faz ${esc(pTxt.toLowerCase())}` : ''} — clique para mudar">${esc(C.SIGLA_TURNO(kT)[iT])}</td>`;
+        if (iT >= 0) return `<td class="c tn t${iT === 0 ? 'a' : iT === kT - 1 ? 'f' : 'm'} ${hx ? 'hx' : ''} ${sem} ${dom}" data-p="${esc(p.id)}" data-d="${d}" title="${esc(C.NOMES_TURNO(kT)[iT])}${tn ? ` ${tn.ini}–${tn.fim} · ${C.fmtH(hd)} de trabalho` : ''}${pTxt ? ` · faz ${esc(pTxt.toLowerCase())}` : ''} — clique para mudar">${esc(C.SIGLA_TURNO(kT)[iT])}</td>`;
         const tTxt = tn && !f ? `${tn.ini}–${tn.fim} · ${C.fmtH(hd)} (almoço ${m.almoco} min + lanche ${m.lanche} min)${tn.cedo ? ' · entra mais cedo para fechar a jornada' : ''} · ` : '';
         return `<td class="c ${f ? 'f' : ''} ${hx ? 'hx' : ''} ${sem} ${dom}" data-p="${esc(p.id)}" data-d="${d}" title="${f ? 'Folga — clique para cobrir outra loja ou trabalhar' : esc(tTxt) + (pTxt ? `Faz ${esc(pTxt.toLowerCase())} — ` : '') + 'Clique para dar folga'}">${f ? 'F' : pTxt ? `<span class="x5-pap">${esc(pTxt[0].toLowerCase())}</span>` : ''}</td>`; }).join('')}<td class="tt">${fs.length + dias.filter((d) => !aD(d) && !m.unavailable(p.id, d)).length}</td><td class="tt">${fs.filter((d) => C.weekday(d) === 0).length}</td></tr>`; }).join('')}
       ${Object.keys(m.funcoes).filter((f) => gente.some((p) => C.funcoesP(p).includes(f))).map((f) => `<tr class="cont"><td class="nm">${esc(m.funcoes[f])} na loja</td>${diasCols.map((d) => { if (d[0] === 'S') return semCol('v'); const w = C.weekday(d); if (!aD(d)) return `<td class="fech ${w === 1 ? 'sem' : ''}"></td>`;
@@ -242,7 +242,7 @@ function telaEscala() {
           const tn = carga?.[p.id]?.dias[d];
           return `<td class="vem-c ${sem} ${dom}" title="${esc(p.nome)} vem de ${esc(m.unidades[p.unidade].nome)}${tn ? ` · ${tn.ini}–${tn.fim}` : ''}">✓</td>`; }).join('')}<td></td><td></td></tr>`).join(''); })()}
       </tbody></table></div></section>`; }).join('')}
-    <p class="x5-leg">Clique no dia da pessoa para escolher <b>trabalha, folga ou cobrir outra loja</b> · clique no número da loja para escolher <b>quem vem cobrir</b>. <span class="lg f">F</span> folga <span class="lg ff">F</span> folga (loja fechada)${tz.temMulti ? ' <span class="lg tna">Abre</span> abertura <span class="lg tnf">Fecha</span> fechamento (horários no quadro acima)' : ''} <span class="lg cob">${esc(sigla(Object.values(m.unidades)[0]?.nome || 'Loja'))}</span> cobrindo outra loja <span class="lg af">A</span> afastado  <span class="lg baixo">2</span> abaixo do mínimo ${carga ? `coluna <b>h</b> depois de cada domingo = horas da semana (meta ${C.metaSemanal(weeks[0][0], m.jornada)}h): <span class="lg wsf">−2h</span> falta <span class="lg wsp">+1h</span> passa <span class="lg fer">&nbsp;</span> feriado` : '· <a href="#" data-act="ajustes">cadastre o horário de funcionamento</a> para ver a carga horária'} ${modo === 'rei' ? '· <a href="#" data-act="refazer">alterar equipe</a>' : ''} · <a href="#" data-act="gerar">gerar de novo</a></p>`;
+    <p class="x5-leg">Clique no dia da pessoa para escolher <b>trabalha, folga ou cobrir outra loja</b> · clique no número da loja para escolher <b>quem vem cobrir</b>. <span class="lg f">F</span> folga <span class="lg ff">F</span> folga (loja fechada)${tz.temMulti ? ' <span class="lg tna">Abre</span> abertura <span class="lg tnm">Meio</span> intermediário <span class="lg tnf">Fecha</span> fechamento (horários no quadro acima)' : ''} <span class="lg cob">${esc(sigla(Object.values(m.unidades)[0]?.nome || 'Loja'))}</span> cobrindo outra loja <span class="lg af">A</span> afastado  <span class="lg baixo">2</span> abaixo do mínimo ${carga ? `coluna <b>h</b> depois de cada domingo = horas da semana (meta ${C.metaSemanal(weeks[0][0], m.jornada)}h): <span class="lg wsf">−2h</span> falta <span class="lg wsp">+1h</span> passa <span class="lg fer">&nbsp;</span> feriado` : '· <a href="#" data-act="ajustes">cadastre o horário de funcionamento</a> para ver a carga horária'} ${modo === 'rei' ? '· <a href="#" data-act="refazer">alterar equipe</a>' : ''} · <a href="#" data-act="gerar">gerar de novo</a></p>`;
 }
 
 const minDe = (t) => { const [h, mi] = String(t).split(':').map(Number); return h * 60 + (mi || 0); };
@@ -286,7 +286,8 @@ function turnosCtx(m, weeks) {
     const n = k(u, d); if (n < 2) return '';
     const pres = m.pessoas.filter((p) => !m.unavailable(p.id, d) && !(m.folgas[p.id] || []).includes(d) && ((m.cobre[p.id] || {})[d] || p.unidade) === u);
     if (pres.length < 1) return '';
-    for (let i = 0; i < n; i++) if (!pres.some((p) => Math.min(atrib[p.id]?.[d] ?? 0, n - 1) === i)) return C.NOMES_TURNO(n)[i];
+    const tg = C.distribuiTurnos(pres.length, n);
+    for (let i = 0; i < n; i++) if (tg[i] > 0 && !pres.some((p) => Math.min(atrib[p.id]?.[d] ?? 0, n - 1) === i)) return C.NOMES_TURNO(n)[i];
     return '';
   };
   return { T, atrib, turnoDe, k, temMulti, vazio };
@@ -313,31 +314,47 @@ function painelHorario(m, weeks, ext) {
     const cab = `<div class="hs-top"><h3>${tc.modo === 'manual' ? 'Meu horário' : 'Horário sugerido'}${varios || modo === 'outro' ? ` · ${esc(ids.map((i) => m.unidades[i].nome).join(', '))}` : ''}</h3><span>${meta}h por semana · média ${esc(C.fmtH(meta / 5))} por dia · almoço ${m.almoco >= 60 ? C.fmtH(m.almoco / 60) : m.almoco + ' min'} + lanche ${m.lanche} min</span>
       <span class="spacer"></span><div class="seg sm"><button class="${tc.modo === 'auto' ? 'on' : ''}" data-act="tmodo" data-v="auto">Sugestão do sistema</button><button class="${tc.modo === 'manual' ? 'on' : ''}" data-act="tmodo" data-v="manual">✏️ Meu horário</button></div>${tc.modo === 'manual' ? '<button class="btn sm" data-act="meuhorario">Editar</button>' : ''}</div>`;
     if (!multi && tc.modo !== 'manual' && ORD7.some((w) => !abre.has(w))) return painelSemana(m, weeks, ext, un, cab);
-    return painelTurnos(m, ext, un, cab, turnosDow);
+    return painelTurnos(m, ext, un, cab, turnosDow, ids);
   }).join('');
 }
 const H2 = (m, a, b) => { const sp = minDe(b) - minDe(a); return (sp - (sp > 360 ? m.almoco + m.lanche : sp > 240 ? Math.max(15, m.lanche) : 0)) / 60; };
 /** Pessoas no dia divididas pelos turnos (minimo cadastrado; sobra vai para o fechamento). */
 const divide = (n, k) => { const base = Math.floor(n / k), rem = n % k; return Array.from({ length: k }, (_, t) => base + (t >= k - rem ? 1 : 0)); };
-function painelTurnos(m, ext, un, cab, turnosDow) {
+function painelTurnos(m, ext, un, cab, turnosDow, idsU = []) {
   const K = Math.max(1, ...ORD7.map((w) => (turnosDow(w) || []).length));
   const nomes = C.NOMES_TURNO(K);
   const minDia = (w) => Object.values(un.minimos || {}).reduce((a, arr) => a + ((arr || [])[w] || 0), 0);
-  const linhas = nomes.map((nome, i) => `<tr><th class="hs-nome">${esc(nome)}${K > 1 ? `<small>${i === 0 ? 'abre a loja' : i === K - 1 ? 'fecha a loja' : 'meio do dia'}</small>` : ''}</th>${ORD7.map((w) => {
+  const linhas = nomes.map((nome, i) => `<tr><th class="hs-nome">${esc(nome)}${K > 1 ? `<small>${i === 0 ? 'abre a loja' : i === K - 1 ? 'fecha a loja' : 'dia com 3 ou mais pessoas'}</small>` : ''}</th>${ORD7.map((w) => {
     const t = turnosDow(w);
     if (!t) return i === 0 ? `<td class="hs-fech" rowspan="${K}">Fechado</td>` : '';
     if (!t.length) return i === 0 ? `<td rowspan="${K}" class="muted">sem horário</td>` : '';
     if (t.length < K) { if (i > 0) return ''; return `<td rowspan="${K}" class="hs-um">${t.map((x) => `<b>${esc(curtoH(x[0]))} às ${esc(curtoH(x[1]))}</b><small>${esc(C.fmtH(H2(m, x[0], x[1])))} de trabalho</small>`).join('')}<small class="hs-todos">${t.length === 1 ? 'todos no mesmo horário' : ''}</small></td>`; }
     const x = t[i]; const h = H2(m, x[0], x[1]);
-    return `<td class="${h > 9.5 ? 'hs-alerta' : ''}"><b>${esc(curtoH(x[0]))} às ${esc(curtoH(x[1]))}</b><small>${esc(C.fmtH(h))} de trabalho</small></td>`; }).join('')}</tr>`).join('');
+    const opc = t.length === 3 && i === 1 && C.distribuiTurnos(minDia(w), 3)[1] === 0; // intermediario so com 3+ pessoas
+    return `<td class="${h > 9.5 ? 'hs-alerta' : ''} ${opc ? 'hs-opc' : ''}" ${opc ? 'title="Com o mínimo do dia (2 pessoas) ninguém fica no intermediário; entra quando tiver 3 ou mais"' : ''}><b>${esc(curtoH(x[0]))} às ${esc(curtoH(x[1]))}</b><small>${esc(C.fmtH(h))} de trabalho</small></td>`; }).join('')}</tr>`).join('');
   const pessoas = `<tr class="hs-pes"><th class="hs-nome">Pessoas no dia<small>pelo mínimo cadastrado</small></th>${ORD7.map((w) => { const t = turnosDow(w); if (!t) return '<td></td>'; const n = minDia(w); if (!t.length) return '<td></td>';
     if (t.length < 2) return `<td><b>${n}</b></td>`;
-    const dv = divide(n, t.length); const falta = n < t.length;
-    return `<td class="${falta ? 'hs-alerta' : ''}" title="${falta ? `Com ${n} pessoa(s) não dá para ter alguém em cada turno` : ''}"><b>${n}</b><small>${dv.map((q, i) => `${q} ${C.SIGLA_TURNO(t.length)[i].toLowerCase()}`).join(' · ')}</small></td>`; }).join('')}</tr>`;
+    const dv = C.distribuiTurnos(n, t.length); const falta = n < Math.min(2, t.length);
+    return `<td class="${falta ? 'hs-alerta' : ''}" title="${falta ? `Com ${n} pessoa(s) não dá para ter alguém em cada turno` : ''}"><b>${n}</b><small>${dv.map((q, i) => (q ? `${q} ${C.SIGLA_TURNO(t.length)[i].toLowerCase()}` : '')).filter(Boolean).join(' · ')}</small></td>`; }).join('')}</tr>`;
+  // quantas pessoas a escala do mes coloca em cada dia da semana (media) e equipe minima para cobrir o minimo
+  const diasMes = []; for (let d = C.monthStart(mk); d <= C.monthEnd(mk); d = C.isoAddDays(d, 1)) diasMes.push(d);
+  const presentes = (d) => m.pessoas.filter((p) => !m.unavailable(p.id, d) && !(m.folgas?.[p.id] || []).includes(d) && idsU.includes((m.cobre[p.id] || {})[d] || p.unidade)).length;
+  const media = (w) => { const ds = diasMes.filter((d) => C.weekday(d) === w && !(un.extras || {})[d]); return ds.length ? ds.reduce((a, d) => a + presentes(d), 0) / ds.length : 0; };
+  const naEscala = m.folgas ? `<tr class="hs-pes hs-real"><th class="hs-nome">Na escala do mês<small>média de pessoas no dia</small></th>${ORD7.map((w) => { if (!turnosDow(w)) return '<td></td>'; const v = media(w), n = minDia(w);
+    return `<td class="${v + 1e-9 < n ? 'hs-alerta' : v > n + 0.4 ? 'hs-mais' : ''}"><b>${esc(v.toFixed(1).replace('.', ',').replace(',0', ''))}</b>${v > n + 0.4 ? `<small>+${esc((v - n).toFixed(1).replace('.', ',').replace(',0', ''))} reforço</small>` : ''}</td>`; }).join('')}</tr>` : '';
+  const weeksM = C.semanasDoMes(mk);
+  const equipe = Object.entries(un.minimos || {}).filter(([, arr]) => (arr || []).some((x) => x > 0)).map(([f]) => {
+    const precisa = C.equipeMinima({ weeks: weeksM, unidade: un, funcao: f, semFolga: m.semFolga, domingo3: m.domingo3 });
+    const tem = m.pessoas.filter((p) => idsU.includes(p.unidade) && C.funcoesP(p).includes(f) && !diasMes.every((d) => m.unavailable(p.id, d))).length;
+    if (precisa == null) return '';
+    const dif = tem - precisa;
+    return `<span class="hs-eq ${dif < 0 ? 'falta' : ''}"><b>${esc(m.funcoes[f] || f)}:</b> ${precisa} pessoa${precisa > 1 ? 's' : ''} cobrem o mínimo com 2 folgas por semana${m.domingo3 !== false && (un.abre || []).includes(0) ? ' e domingo a cada 3 semanas' : ''} · na equipe: ${tem}${dif > 0 ? ` — ${dif} a mais reforça${dif > 1 ? 'm' : ''} os dias mais cheios` : dif < 0 ? ` — falta${dif < -1 ? 'm' : ''} ${-dif}` : ''}</span>`;
+  }).filter(Boolean).join('');
   const fer = ext.filter((x) => x.tipo === 'feriado');
   return `<section class="hs-card">${cab}
-    <div class="table-wrap"><table class="hs"><thead><tr><th></th>${ORD7.map((w) => `<th>${C.DIAS_SEM[w]}</th>`).join('')}</tr></thead><tbody>${linhas}${pessoas}</tbody></table></div>
-    <p class="hs-nota">Cada pessoa trabalha 5 dias e folga 2 por semana (dias na escala abaixo).${K > 1 ? ' Fica no mesmo turno a semana toda e reveza na seguinte (quem abriu passa a fechar).' : ''}</p>
+    <div class="table-wrap"><table class="hs"><thead><tr><th></th>${ORD7.map((w) => `<th>${C.DIAS_SEM[w]}</th>`).join('')}</tr></thead><tbody>${linhas}${pessoas}${naEscala}</tbody></table></div>
+    ${equipe ? `<p class="hs-equipe">${equipe}</p>` : ''}
+    <p class="hs-nota">Cada pessoa trabalha 5 dias e folga 2 por semana (dias na escala abaixo).${K > 1 ? ' Abertura e fechamento ficam a semana toda e revezam na seguinte (quem abriu passa a fechar); em dia com 3 ou mais pessoas, quem sobra vai para o intermediário, em rodízio.' : ''}</p>
     ${fer.length ? `<p class="hs-fer">Feriado${fer.length > 1 ? 's' : ''}: ${fer.map((x) => `${C.fmtDM(x.date)} ${esc(curtoH(x.ini))} às ${esc(curtoH(x.fim))}`).join(' · ')} — fora da conta da semana (pago à parte).</p>` : ''}</section>`;
 }
 
@@ -356,7 +373,7 @@ function abrirMeuHorario() {
       <div class="table-wrap"><table class="x5-min x5-mh"><thead><tr><th></th>${ORD7.map((w) => `<th>${C.DIAS_SEM[w]}</th>`).join('')}</tr></thead><tbody>
       ${lin.map((i) => `<tr><td>${['Turno 1', 'Turno 2', 'Turno 3'][i]}</td>${ORD7.map((w) => { const x = (ini(w) || [])[i] || ['', '']; const dis = abre.has(w) ? '' : 'disabled';
         return `<td><input class="in" type="time" step="60" data-mh="${w}|${i}|0" value="${esc(x[0])}" ${dis}><input class="in" type="time" step="60" data-mh="${w}|${i}|1" value="${esc(x[1])}" ${dis}><small class="mh-h" data-mhh="${w}|${i}"></small></td>`; }).join('')}</tr>`).join('')}
-      </tbody></table></div><p class="lack" id="mh_err"></p>`,
+      ${linhaRepetir()}</tbody></table></div><p class="lack" id="mh_err"></p>`,
     onMount: (md) => {
       const conta = () => { for (const w of ORD7) for (const i of lin) { const a = md.$(`[data-mh="${w}|${i}|0"]`).value, b = md.$(`[data-mh="${w}|${i}|1"]`).value; const el = md.$(`[data-mhh="${w}|${i}"]`); el.textContent = a && b && b > a ? `${C.fmtH(H2(m, a, b))} de trabalho` : ''; } };
       md.el.addEventListener('input', conta); conta();
@@ -671,9 +688,24 @@ function abrirExtra() {
 
 // ---------- ajustes (Rei do Gado) ----------
 const chipsDias = (name, sel) => `<div class="x5-dias">${ORDEM_DIAS.map((d) => `<label><input type="checkbox" name="${name}" value="${d}" ${sel.includes(d) ? 'checked' : ''}><span>${C.DIAS_SEM[d]}</span></label>`).join('')}</div>`;
-const tabelaMin = (prefix, funcoes, minimos, abre) => `<table class="x5-min"><thead><tr><th></th>${ORDEM_DIAS.map((d) => `<th>${C.DIAS_SEM[d]}</th>`).join('')}</tr></thead><tbody>${Object.entries(funcoes).map(([f, nome]) => `<tr><td>${esc(nome)}</td>${ORDEM_DIAS.map((d) => `<td><input class="in" type="number" min="0" max="30" data-min="${esc(prefix)}|${esc(f)}|${d}" value="${(minimos[f] || [])[d] ?? 1}" ${abre.includes(d) ? '' : 'disabled'}></td>`).join('')}</tr>`).join('')}</tbody></table>`;
+const linhaRepetir = (n = ORDEM_DIAS.length) => `<tr class="x5-rep"><td></td>${ORDEM_DIAS.slice(0, n).map((d) => `<td><button type="button" class="x5-repbtn" data-rep="${d}" title="Copiar ${C.DIAS_SEM[d]} para os outros dias abertos">⇉ repetir</button></td>`).join('')}</tr>`;
+const tabelaMin = (prefix, funcoes, minimos, abre) => `<table class="x5-min"><thead><tr><th></th>${ORDEM_DIAS.map((d) => `<th>${C.DIAS_SEM[d]}</th>`).join('')}</tr></thead><tbody>${Object.entries(funcoes).map(([f, nome]) => `<tr><td>${esc(nome)}</td>${ORDEM_DIAS.map((d) => `<td><input class="in" type="number" min="0" max="30" data-min="${esc(prefix)}|${esc(f)}|${d}" value="${(minimos[f] || [])[d] ?? 1}" ${abre.includes(d) ? '' : 'disabled'}></td>`).join('')}</tr>`).join('')}${linhaRepetir()}</tbody></table>`;
+/** Botao "⇉ repetir": copia os campos daquele dia (na mesma tabela) para os outros dias que estao liberados. */
+if (typeof document !== 'undefined' && !window.__x5rep) {
+  window.__x5rep = true;
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-rep]'); if (!b) return;
+    ev.preventDefault(); ev.stopPropagation();
+    const tab = b.closest('table'), d = b.dataset.rep;
+    const campos = [...tab.querySelectorAll('input[data-min], input[data-hor], input[data-mh]')];
+    const chave = (i) => { if (i.dataset.min) { const [pre, f, dd] = i.dataset.min.split('|'); return [`${pre}|${f}`, dd]; } if (i.dataset.hor) { const [pre, dd, k] = i.dataset.hor.split('|'); return [`${pre}|${k}`, dd]; } const [dd, t, k] = i.dataset.mh.split('|'); return [`${t}|${k}`, dd]; };
+    const fonte = {}; for (const i of campos) { const [k, dd] = chave(i); if (dd === d) fonte[k] = i.value; }
+    for (const i of campos) { const [k, dd] = chave(i); if (dd !== d && !i.disabled && k in fonte) { i.value = fonte[k]; i.dispatchEvent(new Event('input', { bubbles: true })); } }
+    b.textContent = '✓ copiado'; setTimeout(() => { b.textContent = '⇉ repetir'; }, 1200);
+  }, true);
+}
 /** Horario de funcionamento: linha Abre e Fecha por dia da semana (placeholder = valor da loja, quando houver). */
-const tabelaHorario = (prefix, horario, abre, base = null) => `<table class="x5-min x5-hor"><thead><tr><th></th>${ORDEM_DIAS.map((d) => `<th>${C.DIAS_SEM[d]}</th>`).join('')}</tr></thead><tbody>${[['Abre', 0], ['Fecha', 1]].map(([lab, k]) => `<tr><td>${lab}</td>${ORDEM_DIAS.map((d) => `<td><input class="in" type="time" step="900" data-hor="${esc(prefix)}|${d}|${k}" value="${esc((horario[d] || [])[k] || '')}" ${base ? `placeholder="${esc(((base[d] || [])[k]) || '')}"` : ''} ${abre.includes(d) ? '' : 'disabled'}></td>`).join('')}</tr>`).join('')}</tbody></table>`;
+const tabelaHorario = (prefix, horario, abre, base = null) => `<table class="x5-min x5-hor"><thead><tr><th></th>${ORDEM_DIAS.map((d) => `<th>${C.DIAS_SEM[d]}</th>`).join('')}</tr></thead><tbody>${[['Abre', 0], ['Fecha', 1]].map(([lab, k]) => `<tr><td>${lab}</td>${ORDEM_DIAS.map((d) => `<td><input class="in" type="time" step="900" data-hor="${esc(prefix)}|${d}|${k}" value="${esc((horario[d] || [])[k] || '')}" ${base ? `placeholder="${esc(((base[d] || [])[k]) || '')}"` : ''} ${abre.includes(d) ? '' : 'disabled'}></td>`).join('')}</tr>`).join('')}${linhaRepetir()}</tbody></table>`;
 const lerHorario = (m, prefix) => { const o = {}; m.$$(`input[data-hor^="${prefix}|"]`).forEach((i) => { const [, d, k] = i.dataset.hor.split('|'); if (i.disabled || !i.value) return; (o[d] = o[d] || ['', ''])[+k] = i.value; }); for (const d of Object.keys(o)) if (!o[d][0] || !o[d][1]) delete o[d]; return o; };
 const lerDias = (m, name) => m.$$(`input[name="${name}"]:checked`).map((i) => +i.value);
 const lerMin = (m, prefix, funcoes) => { const o = {}; for (const f of Object.keys(funcoes)) o[f] = [0, 0, 0, 0, 0, 0, 0]; m.$$(`input[data-min^="${prefix}|"]`).forEach((i) => { const [, f, d] = i.dataset.min.split('|'); if (o[f]) o[f][+d] = Math.max(0, Math.floor(+i.value || 0)); }); return o; };

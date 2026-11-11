@@ -595,7 +595,9 @@ export function gerar5x2({ weeks, pessoas, unidades, semFolga = [6], domingo3 = 
   const rede = (dow, fora) => simulaDia({ pessoas, unidades, dow, fora }).total;
   const sobra = (u, dow, fora) => { // gente a mais na unidade no dia (desempate)
     const un = unidades[u]; if (!abreNo(un, dow)) return 0;
-    return pessoas.filter((p) => p.unidade === u && !fora.has(p.id)).length - Object.values(minimosDia(un, dow)).reduce((a, n) => a + n, 0);
+    // folga vai para o dia com MAIS sobra em relacao ao movimento (minimo): quem sobra reforca os dias mais cheios
+    const min = Object.values(minimosDia(un, dow)).reduce((a, n) => a + n, 0);
+    return (pessoas.filter((p) => p.unidade === u && !fora.has(p.id)).length - min) / Math.max(1, min);
   };
   // unidades com menos gente primeiro (as folgas delas dependem de cobertura); fixos antes dos hibridos
   const tam = (u) => pessoas.filter((p) => p.unidade === u).length;
@@ -754,9 +756,36 @@ export function turnosDoHorario(ini, fim, { meta = 42, almoco = 60, lanche = 15,
   if (horasTurno(ini, fim, almoco, lanche) <= maxDia + 1e-9) return [[hhmm(a), hhmm(b)]];
   const dia = meta / 5;
   const L = dia + (dia > 6 ? (almoco + lanche) / 60 : dia > 4 ? Math.max(15, lanche) / 60 : 0);
-  const t = [[hhmm(a), hhmm(a + L)], [hhmm(b - L), hhmm(b)]];
-  if (a + L < b - L - 1e-9) { const mid = (a + b) / 2; t.splice(1, 0, [hhmm(mid - L / 2), hhmm(mid + L / 2)]); }
-  return t;
+  // abertura, INTERMEDIARIO (centrado no dia: entra quando o movimento cresce, sai depois do pico) e fechamento.
+  // O intermediario so recebe gente em dia com 3 ou mais pessoas (ver distribuiTurnos).
+  const mid = (a + b) / 2;
+  return [[hhmm(a), hhmm(a + L)], [hhmm(mid - L / 2), hhmm(mid + L / 2)], [hhmm(b - L), hhmm(b)]];
+}
+/**
+ * Quantas pessoas em cada turno com n pessoas no dia. 2 turnos: metade (sobra no fechamento). 3 turnos (abertura,
+ * intermediario, fechamento): 1 abre e 1 fecha; de 3 pessoas em diante o resto vai para o intermediario (4 = 1+2+1,
+ * 6 = 2+2+2, 8 = 2+4+2). Com 2 pessoas: 1 abre e 1 fecha; com 1: so abre.
+ */
+export function distribuiTurnos(n, k) {
+  if (k <= 1) return [n];
+  if (k === 2) return n <= 1 ? [n, 0] : [Math.floor(n / 2), Math.ceil(n / 2)];
+  if (k === 3) { if (n <= 1) return [n, 0, 0]; if (n === 2) return [1, 0, 1]; const e = Math.max(1, Math.round(n / 4)); return [e, n - 2 * e, e]; }
+  const base = Math.floor(n / k), rem = n % k; return Array.from({ length: k }, (_, t) => base + (t >= k - rem ? 1 : 0));
+}
+
+/**
+ * Menor equipe (de uma funcao numa loja) que cobre o minimo de todos os dias do mes na 5x2: 2 folgas por semana,
+ * sem folga nos dias de semFolga e domingo de folga a cada 3 semanas. Retorna o numero ou null se passar de max.
+ */
+export function equipeMinima({ weeks, unidade, funcao, semFolga = [6], domingo3 = true, max = 30 }) {
+  const un = { u: { ...unidade, minimos: { [funcao]: (unidade.minimos || {})[funcao] || [] } } };
+  if (!Object.values(un.u.minimos[funcao]).some((x) => x > 0)) return 0;
+  for (let n = 1; n <= max; n++) {
+    const gente = Array.from({ length: n }, (_, i) => ({ id: 'p' + i, nome: 'P' + String(i).padStart(2, '0'), unidade: 'u', funcao }));
+    const r = gerar5x2({ weeks, pessoas: gente, unidades: un, semFolga, domingo3 });
+    if (!r.faltas.length && !r.avisos.length) return n;
+  }
+  return null;
 }
 export const NOMES_TURNO = (k) => (k === 2 ? ['Abertura', 'Fechamento'] : k === 3 ? ['Abertura', 'Intermediário', 'Fechamento'] : Array.from({ length: k }, (_, i) => (k === 1 ? 'Turno' : `Turno ${i + 1}`)));
 export const SIGLA_TURNO = (k) => (k === 2 ? ['Abre', 'Fecha'] : k === 3 ? ['Abre', 'Meio', 'Fecha'] : Array.from({ length: k }, (_, i) => `T${i + 1}`));
@@ -769,9 +798,9 @@ export const SIGLA_TURNO = (k) => (k === 2 ? ['Abre', 'Fecha'] : k === 3 ? ['Abr
  */
 export function atribuiTurnos({ weeks, pessoas, unidades, folgas, cobre = {}, unavailable = () => '', turnosDe }) {
   const out = {}; for (const p of pessoas) out[p.id] = {};
-  const principal = {}; // pid -> turno da semana anterior
+  const principal = {}; // pid -> lado da semana anterior (0 = abre, 1 = fecha)
+  const meios = {}; // pid -> quantas vezes ficou no intermediario (rodizio justo)
   const ondeEsta = (p, d) => (unavailable(p.id, d) || (folgas[p.id] || []).includes(d) ? null : (cobre[p.id] || {})[d] || p.unidade);
-  const alvo = (n, k) => { const base = Math.floor(n / k), rem = n % k; return Array.from({ length: k }, (_, t) => base + (n >= k ? (t >= k - rem ? 1 : 0) : (t < n ? 1 : 0)) - (n < k ? base : 0)); };
   weeks.forEach((week) => {
     for (const u of Object.keys(unidades)) {
       const dias = week.map((d) => ({ d, k: abreEm(unidades[u], d) ? (turnosDe(u, d) || []).length : 0 })).filter((x) => x.k >= 2);
@@ -779,35 +808,42 @@ export function atribuiTurnos({ weeks, pessoas, unidades, folgas, cobre = {}, un
       for (const x of dias) x.pres = pessoas.filter((p) => ondeEsta(p, x.d) === u);
       const gente = pessoas.filter((p) => dias.some((x) => x.pres.includes(p)));
       if (!gente.length) continue;
-      const K = Math.max(...dias.map((x) => x.k));
-      // nota de um plano (cada pessoa num turno a semana toda): turno vazio pesa muito; depois equilibrio; depois revezar
+      // 1) cada pessoa fica num LADO a semana toda (abertura ou fechamento) e troca na seguinte
       const nota = (a) => {
         let n = 0;
         for (const x of dias) {
-          const c = Array(x.k).fill(0); for (const p of x.pres) c[Math.min(a.get(p), x.k - 1)]++;
-          const tg = alvo(x.pres.length, x.k);
-          for (let t = 0; t < x.k; t++) { if (tg[t] > 0 && c[t] === 0) n += 100; n += 3 * Math.abs(c[t] - tg[t]); }
+          const c = [0, 0]; for (const p of x.pres) c[a.get(p)]++;
+          const tg = distribuiTurnos(x.pres.length, 2);
+          for (let t = 0; t < 2; t++) { if (tg[t] > 0 && c[t] === 0) n += 100; n += 3 * Math.abs(c[t] - tg[t]); }
         }
-        for (const p of gente) { const pr = principal[p.id]; if (pr !== undefined && a.get(p) === pr) n += 1; else if (pr === undefined && a.get(p) !== pessoas.indexOf(p) % K) n += 0.01; }
+        for (const p of gente) { const pr = principal[p.id]; if (pr !== undefined && a.get(p) === pr) n += 1; else if (pr === undefined && a.get(p) !== pessoas.indexOf(p) % 2) n += 0.01; }
         return n;
       };
       let melhor = null, mn = Infinity;
-      if (K ** gente.length <= 20000) {
+      if (2 ** gente.length <= 20000) {
         const a = new Map();
-        const rec = (i) => { if (i === gente.length) { const v = nota(a); if (v < mn) { mn = v; melhor = new Map(a); } return; } for (let t = 0; t < K; t++) { a.set(gente[i], t); rec(i + 1); } };
+        const rec = (i) => { if (i === gente.length) { const v = nota(a); if (v < mn) { mn = v; melhor = new Map(a); } return; } for (let t = 0; t < 2; t++) { a.set(gente[i], t); rec(i + 1); } };
         rec(0);
-      } else { // equipe grande: reveza pelo turno anterior, metade em cada
-        melhor = new Map(gente.map((p, i) => [p, principal[p.id] !== undefined ? (principal[p.id] + 1) % K : i % K]));
-      }
+      } else melhor = new Map(gente.map((p, i) => [p, principal[p.id] !== undefined ? 1 - principal[p.id] : i % 2]));
       for (const x of dias) {
-        for (const p of x.pres) out[p.id][x.d] = Math.min(melhor.get(p), x.k - 1);
-        // conserto do dia: turno vazio recebe alguem do turno mais cheio
-        const tg = alvo(x.pres.length, x.k);
-        for (let t = 0; t < x.k; t++) {
-          if (tg[t] === 0 || x.pres.some((p) => out[p.id][x.d] === t)) continue;
-          const c = Array(x.k).fill(0); for (const p of x.pres) c[out[p.id][x.d]]++;
-          const de = c.indexOf(Math.max(...c)); const p = x.pres.filter((q) => out[q.id][x.d] === de).pop();
-          if (p && c[de] > 1) out[p.id][x.d] = t;
+        const lado = new Map(x.pres.map((p) => [p, melhor.get(p)]));
+        // conserto do dia: lado vazio recebe alguem do outro lado
+        for (let t = 0; t < 2; t++) {
+          const tg = distribuiTurnos(x.pres.length, 2);
+          if (tg[t] > 0 && ![...lado.values()].includes(t)) { const p = x.pres.filter((q) => lado.get(q) === 1 - t).pop(); if (p && x.pres.length > 1) lado.set(p, t); }
+        }
+        // 2) com 3 turnos: quem passa da conta de abertura/fechamento do dia vai para o INTERMEDIARIO
+        const tg = distribuiTurnos(x.pres.length, x.k);
+        const fim = x.k - 1;
+        for (const p of x.pres) out[p.id][x.d] = lado.get(p) === 0 ? 0 : fim;
+        if (x.k >= 3) {
+          for (const [t, alvoT] of [[0, tg[0]], [fim, tg[fim]]]) {
+            const nele = x.pres.filter((p) => out[p.id][x.d] === t).sort((a, b) => (meios[a.id] || 0) - (meios[b.id] || 0) || pessoas.indexOf(a) - pessoas.indexOf(b));
+            for (const p of nele.slice(0, Math.max(0, nele.length - alvoT))) { out[p.id][x.d] = 1; meios[p.id] = (meios[p.id] || 0) + 1; }
+          }
+          // intermediario abaixo do alvo (lado desequilibrado): puxa de quem tem sobra
+          let falta = tg[1] - x.pres.filter((p) => out[p.id][x.d] === 1).length;
+          for (const t of [fim, 0]) { while (falta > 0) { const c = x.pres.filter((p) => out[p.id][x.d] === t); if (c.length <= tg[t]) break; const p = c.sort((a, b) => (meios[a.id] || 0) - (meios[b.id] || 0))[0]; out[p.id][x.d] = 1; meios[p.id] = (meios[p.id] || 0) + 1; falta--; } }
         }
       }
       for (const p of gente) principal[p.id] = melhor.get(p);

@@ -566,22 +566,29 @@ test('E2E: escala 5x2 — equipe da propria aba (com extra), cobertura com nome,
   for (let i = 0; i < 3; i++) await page.click('#cad [data-add=p]');
   const nm2 = page.locator('#cad [data-pn]'); for (let i = 3; i < 6; i++) await nm2.nth(i).fill(['Duda', 'Eva', 'Fabi'][i - 3]);
   await page.locator('#cad .x5-un').fill('Fini Petrópolis');
-  for (const w of [1, 2, 3, 4, 5, 6, 0]) {
-    const [a1, b1] = w === 0 ? ['11:00', '21:00'] : ['10:00', '22:00'];
-    await page.locator(`#cad input[data-hor$="|${w}|0"]`).fill(a1); await page.locator(`#cad input[data-hor$="|${w}|1"]`).fill(b1);
-    await page.locator(`#cad input[data-min$="|${w}"]`).fill(String({ 1: 2, 2: 2, 3: 2, 4: 2, 5: 3, 6: 4, 0: 2 }[w]));
-  }
+  // pratico: preenche segunda e "⇉ repetir" para os outros dias; depois so muda domingo, sexta e sabado
+  await page.locator('#cad input[data-hor$="|1|0"]').fill('10:00'); await page.locator('#cad input[data-hor$="|1|1"]').fill('22:00');
+  await page.locator('#cad table.x5-hor [data-rep="1"]').click();
+  assert.equal(await page.locator('#cad input[data-hor$="|4|1"]').inputValue(), '22:00', 'repetiu o horario de segunda');
+  await page.locator('#cad input[data-hor$="|0|0"]').fill('11:00'); await page.locator('#cad input[data-hor$="|0|1"]').fill('21:00');
+  await page.locator('#cad input[data-min$="|1"]').fill('2'); await page.locator('#cad table.x5-min:not(.x5-hor) [data-rep="1"]').click();
+  assert.equal(await page.locator('#cad input[data-min$="|0"]').inputValue(), '2', 'repetiu o minimo de segunda');
+  await page.locator('#cad input[data-min$="|5"]').fill('3'); await page.locator('#cad input[data-min$="|6"]').fill('4');
   await page.click('.modal-foot button:has-text("Salvar")'); await page.waitForSelector('table.hs');
   const hsT = await page.locator('.hs-card').innerText();
   assert.match(hsT, /Horário sugerido · Fini Petrópolis/);
   assert.match(hsT, /Abertura[\s\S]*10 às 19:39\n[\s\S]*8h24 de trabalho/, 'abertura comeca quando a loja abre');
+  assert.match(hsT, /Intermediário[\s\S]*11:11 às 20:50\n[\s\S]*8h24 de trabalho/, 'intermediario no meio do dia');
   assert.match(hsT, /Fechamento[\s\S]*12:21 às 22\n[\s\S]*8h24 de trabalho/, 'fechamento termina quando a loja fecha');
   assert.match(hsT, /11 às 21\n[\s\S]*8h45 de trabalho[\s\S]*todos no mesmo horário/, 'domingo 11h-21h cabe num turno');
-  assert.match(hsT, /Pessoas no dia[\s\S]*4\n?2 abre · 2 fecha/, 'sabado 4 = 2 abrem + 2 fecham');
+  assert.match(hsT, /Pessoas no dia[\s\S]*2\n?1 abre · 1 fecha[\s\S]*3\n?1 abre · 1 meio · 1 fecha[\s\S]*4\n?1 abre · 2 meio · 1 fecha/, 'sex 3 = 1+1+1; sab 4 = 1+2+1');
+  assert.match(hsT, /Na escala do mês/);
+  assert.match(hsT, /Atendimento: \d pessoas cobrem o mínimo com 2 folgas por semana e domingo a cada 3 semanas · na equipe: 6/);
+  assert.equal(await page.locator('table.hs td.hs-opc').count(), 4, 'seg-qui (2 pessoas) sem intermediario');
   assert.equal(await page.locator('table.hs td.hs-alerta').count(), 0);
   // grade: todo dia de seg a sab tem alguem abrindo e alguem fechando; 42h por semana
   const sh = page.locator('section.store:has(h2:has-text("Fini"))');
-  assert.ok(await sh.locator('td.tn.ta').count() > 20 && await sh.locator('td.tn.tf').count() > 20, 'turnos na grade');
+  assert.ok(await sh.locator('td.tn.ta').count() > 20 && await sh.locator('td.tn.tf').count() > 20 && await sh.locator('td.tn.tm').count() > 10, 'turnos na grade');
   const diasTn = await sh.locator('tbody tr').first().evaluate(() => [...document.querySelectorAll('section.store td.c[data-d]')].map((t) => t.dataset.d));
   for (const d of [...new Set(diasTn)].filter((x) => x.startsWith('2026-12') && new Date(x + 'T12:00').getDay() !== 0)) {
     const ab = await sh.locator(`td.tn.ta[data-d="${d}"]`).count(), fe = await sh.locator(`td.tn.tf[data-d="${d}"]`).count();
@@ -597,7 +604,12 @@ test('E2E: escala 5x2 — equipe da propria aba (com extra), cobertura com nome,
   // ✏️ Meu horário: escrevo os meus turnos e a escala passa a usar
   await page.click('[data-act=tmodo][data-v=manual]'); await page.waitForSelector('.x5-mh');
   assert.equal(await page.locator('[data-mh="1|0|0"]').inputValue(), '10:00', 'vem preenchido com a sugestao');
-  for (const w of [1, 2, 3, 4, 5, 6]) { await page.fill(`[data-mh="${w}|0|1"]`, '19:40'); await page.fill(`[data-mh="${w}|1|0"]`, '12:20'); }
+  await page.fill('[data-mh="1|0|1"]', '19:40'); await page.fill('[data-mh="1|2|0"]', '12:20');
+  await page.click('.x5-mh [data-rep="1"]'); // repete segunda nos outros dias
+  assert.equal(await page.locator('[data-mh="6|2|0"]').inputValue(), '12:20'); assert.equal(await page.locator('[data-mh="0|0|1"]').inputValue(), '19:40', 'repetir copia para todos');
+  // domingo diferente: 11h-21h todo mundo junto
+  await page.fill('[data-mh="0|0|0"]', '11:00'); await page.fill('[data-mh="0|0|1"]', '21:00');
+  for (const t of [1, 2]) for (const k of [0, 1]) await page.fill(`[data-mh="0|${t}|${k}"]`, '');
   assert.match(await page.locator('[data-mhh="1|0"]').innerText(), /8h25 de trabalho/);
   if (process.env.SHOT_DIR) await page.screenshot({ path: path.join(process.env.SHOT_DIR, 'escala5x2-meuhorario.png') });
   await page.click('.modal-foot button:has-text("Salvar e usar")'); await page.waitForSelector('.hs-card h3:has-text("Meu horário")');

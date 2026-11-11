@@ -92,6 +92,14 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   pessoa, quem vem cobrir; clicar num dia alterna trabalha → folga → cobre
   outra loja. Dados em rh_sundays
   (5x2-cfg, 5x2-AAAA-MM, 5x2-outro), sem mudar regras.
+- **Escala 5x2 (v1.22)**: loja longa tem também o turno **Intermediário** (no shopping
+  11:11–20:50): dia com 3 pessoas = 1 abre + 1 meio + 1 fecha; 4 = 1 + 2 + 1; 6 = 2 + 2 + 2;
+  com 2 pessoas fica só abertura e fechamento. Quem vai para o intermediário é em rodízio.
+  O quadro mostra "Na escala do mês" (média de pessoas por dia da semana, com o reforço) e
+  quantas pessoas cobrem o mínimo com 2 folgas por semana e domingo a cada 3 semanas
+  (sobra = reforço nos dias mais cheios; a folga vai para o dia com mais sobra em relação
+  ao mínimo). Botão **⇉ repetir** embaixo de cada dia (horário de funcionamento, mínimo
+  e Meu horário) copia aquele dia para os outros.
 - **Escala 5x2 (v1.21) — turnos**: quando a loja fica aberta mais do que uma pessoa
   aguenta (ex.: shopping 10h–22h), o sistema monta **Abertura** (abre a loja, 8h24 de
   trabalho) e **Fechamento** (fecha a loja, 8h24); se ainda sobrar buraco, um
