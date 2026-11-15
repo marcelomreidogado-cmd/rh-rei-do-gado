@@ -136,6 +136,9 @@ function monthBar() {
   if (!uses) return;
   bar.innerHTML = `<button class="btn sm" data-y="-1" aria-label="Ano anterior">‹</button><b class="yr">${year}</b><button class="btn sm" data-y="1" aria-label="Próximo ano">›</button>
     ${C.MESES.map((n, i) => { const k = C.monthKey(year, i + 1), d = D.monthDoc(k); if (S.perfil !== 'total') return `<button class="mchip ${k === month ? 'on' : ''}" data-m="${k}">${n.slice(0, 3)}</button>`; return `<button class="mchip ${k === month ? 'on' : ''} ${d ? d.status : 'none'}" data-m="${k}" title="${d ? (d.status === 'closed' ? 'Fechado (pode ser reaberto na aba Folha)' : 'Em preenchimento') : 'Ainda não criado'}">${n.slice(0, 3)}${d ? (d.status === 'closed' ? ' ✔' : ' ●') : ''}</button>`; }).join('')}`;
+  // no celular a faixa de meses rola: mantém o mês aberto visível (sem mexer na rolagem da página)
+  const on = bar.querySelector('.mchip.on');
+  if (on && bar.scrollWidth > bar.clientWidth) bar.scrollLeft = Math.max(0, on.offsetLeft - (bar.clientWidth - on.offsetWidth) / 2);
   bar.onclick = (ev) => {
     const y = ev.target.closest('[data-y]'), m = ev.target.closest('[data-m]');
     if (y) { year += +y.dataset.y; monthBar(); }
@@ -146,6 +149,8 @@ function monthBar() {
 async function route() {
   Ferias.updateBadge();
   $$('#nav a').forEach((a) => a.classList.toggle('on', a.dataset.v === view));
+  const navOn = $('#nav a.on'), nav = $('#nav');
+  if (navOn && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = Math.max(0, navOn.offsetLeft - (nav.clientWidth - navOn.offsetWidth) / 2);
   year = C.parseMonth(month).y;
   monthBar();
   const holder = $('#main');

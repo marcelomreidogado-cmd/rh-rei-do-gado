@@ -92,6 +92,11 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   pessoa, quem vem cobrir; clicar num dia alterna trabalha → folga → cobre
   outra loja. Dados em rh_sundays
   (5x2-cfg, 5x2-AAAA-MM, 5x2-outro), sem mudar regras.
+- **Visual (v1.23)**: cabeçalho em duas faixas (abas numa linha só, com a aba aberta
+  sublinhada; no celular as abas e os meses deslizam e já mostram o atual), nome das lojas
+  com marcador, coluna de nome com largura fixa para as três lojas ficarem alinhadas,
+  Férias no celular com linhas compactas e campos de Configurações alinhados. Sem mudança
+  de dados nem de regras.
 - **Escala 5x2 (v1.22)**: loja longa tem também o turno **Intermediário** (no shopping
   11:11–20:50): dia com 3 pessoas = 1 abre + 1 meio + 1 fecha; 4 = 1 + 2 + 1; 6 = 2 + 2 + 2;
   com 2 pessoas fica só abertura e fechamento. Quem vai para o intermediário é em rodízio.
