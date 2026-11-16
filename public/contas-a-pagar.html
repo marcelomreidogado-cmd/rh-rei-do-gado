@@ -229,6 +229,11 @@ tfoot td{font-weight:800;border-top:2px solid var(--line)}
 .lojas button small{display:block;font-weight:500;color:var(--ink2);font-size:11px}
 .ins{margin-top:14px;padding:12px 16px}
 .ins ul{margin:6px 0 0;padding-left:18px}.ins li{margin:4px 0;font-size:13.5px}
+.mesnav{display:flex;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.mesnav button{border:0;background:transparent;padding:7px 12px;cursor:pointer;font-size:18px;line-height:1;color:var(--ink2)}
+.mesnav button:hover{background:var(--line2)}
+.mesnav button:disabled{opacity:.3;cursor:default}
+.mesnav select{border:0;background:transparent;font-weight:700;padding:7px 4px}
 @media print{header.top,.noprint{display:none!important}main{padding:0}}
 </style>
 </head>
@@ -293,7 +298,10 @@ tfoot td{font-weight:800;border-top:2px solid var(--line)}
     <div class="impmsg"></div>
     <div class="vbar">
       <div class="lojas" id="lojaChips"></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <div class="mesnav"><button id="vPrev" title="Mês anterior">‹</button><select id="vMes"></select><button id="vNext" title="Próximo mês">›</button></div>
       <div class="seg" id="vView"><button data-v="dia" class="on">Dia a dia</button><button data-v="semana">Semana × fim de semana</button><button data-v="mes">Mês a mês</button></div>
+      </div>
     </div>
     <div class="grid kpis" id="kpiVendas"></div>
     <div class="card ins" id="vIns"></div>
@@ -803,7 +811,7 @@ function dl(blob,name){ const a=document.createElement('a'); a.href=URL.createOb
 
 /* ================= CONFIG ================= */
 /* ================= VENDAS ================= */
-let VVIEW='dia', VLOJA='TODAS';
+let VVIEW='dia', VLOJA='TODAS', VMES=null;
 const LOJA_COR={CORONEL:'#2a78d6',CORREAS:'#1baf7a',BINGEN:'#eb6834',MATRIZ:'#6250d6'};
 const lojaCor = l => LOJA_COR[l] || '#9a978f';
 const SL = () => S.data.salesLoja || {};
@@ -834,8 +842,13 @@ function stackBars(el,labels,series,opts){
 }
 const varTxt = v => v==null?'—':(v>=0?'+':'')+pct(v);
 const varCls = v => v==null?'':v<0?'neg':'pos';
+function vMonths(){ const ms=Object.keys(S.data.sales).filter(m=>Object.keys(S.data.sales[m]).length).sort(); if(!ms.includes(M.month)) ms.push(M.month); return ms.sort(); }
 function renderVendas(){
-  const month=M.month, pm=prevMonth(month), lojas=lojasAll(), today=M.today;
+  const ms=vMonths();
+  if(!VMES || !ms.includes(VMES)) VMES = S.data.sales[M.month]&&Object.keys(S.data.sales[M.month]).length ? M.month : ms.filter(m=>S.data.sales[m]).pop()||M.month;
+  $('#vMes').innerHTML=ms.slice().reverse().map(m=>`<option value="${m}" ${m===VMES?'selected':''}>${monthLabel(m)}${S.data.sales[m]?` · ${Object.keys(S.data.sales[m]).length} dias`:' · sem vendas'}</option>`).join('');
+  $('#vPrev').disabled = ms.indexOf(VMES)<=0; $('#vNext').disabled = ms.indexOf(VMES)>=ms.length-1;
+  const month=VMES, pm=prevMonth(month), lojas=lojasAll(), today=M.today;
   if(VLOJA!=='TODAS' && !lojas.includes(VLOJA)) VLOJA='TODAS';
   const L=S.data.salesLast;
   $('#vLast').innerHTML = L ? `<div>Última importação: <b>${esc(L.file)}</b> · ${new Date(L.at).toLocaleString('pt-BR')}</div><div style="margin-top:4px">Período <b>${dmyy(L.from)} a ${dmyy(L.to)}</b> · ${L.n} dias · <b>${brl(L.total)}</b></div>`
@@ -865,9 +878,9 @@ function renderVendas(){
   $('#kpiVendas').innerHTML =
     kpi('Vendido · '+ljNome, brl0(tot), rv.length?`${monthLabel(month)} · até ${DOW[dowOf(rv[rv.length-1])]} ${dmy(rv[rv.length-1])}`:'nenhum dia importado')+
     kpi('vs '+monthLabel(pm).split('/')[0], varTxt(vr), ptot?`mesmos dias (1 a ${lastN}): ${brl0(ptot)}`:'sem vendas do mês anterior', varCls(vr))+
-    kpi('Média dia de semana', brl0(aU), `seg a sex · ${monthLabel(pm).slice(0,3)}: ${brl0(paU)} <span class="${varCls(paU?aU/paU-1:null)}">${varTxt(paU?aU/paU-1:null)}</span>`)+
-    kpi('Média fim de semana', brl0(aF), `sáb e dom · ${monthLabel(pm).slice(0,3)}: ${brl0(paF)} <span class="${varCls(paF?aF/paF-1:null)}">${varTxt(paF?aF/paF-1:null)}</span>`)+
-    kpi('Projeção do mês', brl0(proj), `real + média de cada dia da semana de ${monthLabel(pm).split('/')[0]}`);
+    kpi('Média dia de semana', brl0(aU), paU?`seg a sex · ${monthLabel(pm).slice(0,3)}: ${brl0(paU)} <span class="${varCls(aU/paU-1)}">${varTxt(aU/paU-1)}</span>`:'seg a sex')+
+    kpi('Média fim de semana', brl0(aF), paF?`sáb e dom · ${monthLabel(pm).slice(0,3)}: ${brl0(paF)} <span class="${varCls(aF/paF-1)}">${varTxt(aF/paF-1)}</span>`:'sáb e dom')+
+    kpi('Projeção do mês', brl0(proj), pdc.some(x=>x)?`real + média de cada dia da semana de ${monthLabel(pm).split('/')[0]}`:(rv.length===days.length?'mês completo':'sem mês anterior para projetar'));
   // ---------- leituras automáticas ----------
   const ins=[];
   if(vr!=null) ins.push(`<b>${ljNome.charAt(0).toUpperCase()+ljNome.slice(1)}</b>: venda <b class="${varCls(vr)}">${varTxt(vr)}</b> em relação a ${monthLabel(pm).split('/')[0]} nos mesmos ${lastN} dias (${brl0(tot)} × ${brl0(ptot)}).`);
@@ -933,6 +946,9 @@ function renderVendas(){
       return `<tr data-l="${l}" style="cursor:pointer" class="${VLOJA===l?'today':''}"><td><span class="sw" style="background:${lojaCor(l)}"></span><b>${l}</b><div style="height:6px;border-radius:3px;background:${lojaCor(l)};width:${tAll?a/tAll*100:0}%;margin-top:4px"></div></td><td class="r num"><b>${brl0(a)}</b></td><td class="r num">${tAll?pct(a/tAll):'—'}</td><td class="r num">${fd.length?brl0(sumL(fd,l)/fd.length):'—'}</td><td class="r num ${varCls(v)}">${varTxt(v)}</td></tr>`; }).join('')+`</tbody>`
     : '<tbody><tr><td class="sub">Os dias importados antes da separação por loja não têm esse detalhe. Importe o relatório de novo para ver por loja.</td></tr></tbody>';
 }
+$('#vMes').onchange=e=>{ VMES=e.target.value; renderVendas(); };
+$('#vPrev').onclick=()=>{ const ms=vMonths(), i=ms.indexOf(VMES); if(i>0){ VMES=ms[i-1]; renderVendas(); } };
+$('#vNext').onclick=()=>{ const ms=vMonths(), i=ms.indexOf(VMES); if(i<ms.length-1){ VMES=ms[i+1]; renderVendas(); } };
 $('#vView').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; VVIEW=b.dataset.v; renderVendas(); };
 $('#lojaChips').onclick=e=>{ const b=e.target.closest('button[data-l]'); if(!b) return; VLOJA=b.dataset.l; renderVendas(); };
 $('#vLoja').onclick=e=>{ const r=e.target.closest('tr[data-l]'); if(!r) return; VLOJA=VLOJA===r.dataset.l?'TODAS':r.dataset.l; renderVendas(); };
@@ -1044,6 +1060,7 @@ async function importVD(file){
     keys.forEach(k=>{ (byM[k.slice(0,7)]=byM[k.slice(0,7)]||{})[k]=found[k].total; if(Object.keys(found[k].lojas).length) S.data.salesLoja[k]=found[k].lojas; });
     Object.entries(byM).forEach(([m,o])=>S.data.sales[m]=Object.assign({},S.data.sales[m]||{},o));
     const ks=keys.sort();
+    VMES=ks[ks.length-1].slice(0,7);
     S.data.salesFile=file.name; S.data.salesAt=Date.now(); S.data.salesLast={file:file.name,at:Date.now(),from:ks[0],to:ks[ks.length-1],n:ks.length,total:ks.reduce((a,k)=>a+found[k].total,0)};
     commit(true);
     msg(`✅ Vendas: ${Object.entries(byM).map(([m,o])=>{ const ks=Object.keys(o).sort(); return `<b>${monthLabel(m)}</b> ${dmy(ks[0])} a ${dmy(ks[ks.length-1])} (${ks.length} dias) · ${brl(Object.values(o).reduce((a,b)=>a+b,0))}`; }).join(' · ')}`);
