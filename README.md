@@ -374,3 +374,18 @@ bibliotecas ficam salvas em `public/vendor/`:
 
 Nenhum arquivo do funcionário ou contracheque sai do navegador: a leitura
 (OCR) acontece localmente na máquina de quem está usando o sistema.
+
+## Painel de contas a pagar (`/contas-a-pagar`)
+
+Página separada do RH (`public/contas-a-pagar.html`), com o mesmo login (ID e senha do RH, perfil total).
+Os dados ficam em `rh_config/contas_pagar_rei` e não há nenhum dado real no arquivo.
+
+- **Agenda:** uma semana por vez, com as vendas que pagam a semana (sex→qui), as despesas (sáb→sex),
+  o resultado, o teto de compras (meta − fixos − outras) e o caixa dia a dia. Embaixo, a visão do mês.
+- **Agenda de compras:** lançar a compra do dia com prazo de 7, 14, 21 ou 28 dias (um ou mais, para
+  parcelar). Mostra o vencimento em dia útil e a sobra no teto da semana; a compra prevista entra no
+  caixa e no teto até ser removida.
+- **Vendas:** importação do Quadro de Venda Diária (PDF ou XLS), com filtro por loja e visões dia a dia,
+  semana × fim de semana e mês a mês, além de leituras automáticas, dia da semana e ranking das lojas.
+- **Fluxo de caixa, Análises, Títulos e Ajustes:** importação do .xls de contas a pagar, grupos
+  (fixo, compra, outra), valores estimados e metas.
