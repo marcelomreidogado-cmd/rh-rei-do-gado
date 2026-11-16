@@ -172,6 +172,18 @@ tfoot td{font-weight:800;border-top:2px solid var(--line)}
 #login input{width:100%;border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-top:10px}
 #login .btn{width:100%;margin-top:14px;padding:11px}
 #loginMsg{font-size:12.5px;margin-top:10px;color:var(--crit);min-height:16px}
+.vtop{display:grid;grid-template-columns:minmax(280px,1fr) 1.4fr;gap:14px;align-items:stretch}
+@media(max-width:900px){.vtop{grid-template-columns:1fr}}
+.vdrop{padding:16px}
+.vlast{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;font-size:13px;color:var(--ink2)}
+.vlast b{color:var(--ink)}
+.seg{display:inline-flex;background:var(--line2);border-radius:9px;padding:3px}
+.seg button{border:0;background:transparent;padding:6px 12px;border-radius:7px;cursor:pointer;font-weight:600;color:var(--ink2)}
+.seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.vtbl td,.vtbl th{padding:7px 9px}
+.vtbl tr.we td{background:#fbfaf7}
+.vtbl tr.proj td{color:var(--ink3)}
+.vtbl tr.today td{background:#fff7f7}
 @media print{header.top,.noprint{display:none!important}main{padding:0}}
 </style>
 </head>
@@ -179,11 +191,12 @@ tfoot td{font-weight:800;border-top:2px solid var(--line)}
 <header class="top">
   <div class="logo"><div class="crown">👑</div><div>REI DO GADO<small>Agenda de pagamentos · Teto de compras semanal</small></div></div>
   <nav class="tabs" id="tabs">
-    <button data-t="agenda" class="on">📅 Agenda semanal</button>
+    <button data-t="agenda" class="on">📅 Agenda</button>
+    <button data-t="vendas">🛒 Vendas</button>
     <button data-t="fluxo">💰 Fluxo de caixa</button>
     <button data-t="analises">📊 Análises</button>
     <button data-t="titulos">📄 Títulos</button>
-    <button data-t="config">⚙️ Importar & Ajustes</button>
+    <button data-t="config">⚙️ Ajustes</button>
   </nav>
   <div class="right">
     <span class="chip" id="cloudChip">local</span>
@@ -209,6 +222,27 @@ tfoot td{font-weight:800;border-top:2px solid var(--line)}
       <span style="margin-left:auto">Clique no dia ou no cabeçalho da semana para ver os títulos</span>
     </div>
     <div id="agenda"></div>
+  </section>
+
+  <!-- VENDAS -->
+  <section class="tab" id="t-vendas">
+    <div class="vtop">
+      <div class="drop vdrop" id="dropVD2"><b>📥 Importar relatório de vendas (PDF ou XLS)</b><span class="sub">arraste aqui ou clique · cada dia importado soma ao histórico</span></div>
+      <input type="file" id="fileVD2" accept=".pdf,.xls,.xlsx,.csv" hidden>
+      <div class="vlast" id="vLast"></div>
+    </div>
+    <div class="impmsg"></div>
+    <div class="grid kpis" id="kpiVendas" style="margin-top:14px"></div>
+    <div style="display:flex;align-items:center;gap:12px;margin:22px 0 10px;flex-wrap:wrap">
+      <h2 style="margin:0" id="vTitle">Vendas</h2>
+      <div class="seg" id="vView"><button data-v="dia" class="on">Por dia</button><button data-v="semana">Por semana (sex→qui)</button><button data-v="mes">Por mês</button></div>
+    </div>
+    <div class="card"><div class="legend-row" id="vLegend"></div><div id="vChart"></div></div>
+    <div class="card" style="margin-top:14px;padding:6px 10px"><table id="vTbl" class="vtbl"></table></div>
+    <div class="grid two" style="margin-top:14px">
+      <div class="card"><h3>Média por dia da semana <span class="sub" id="vDowSub"></span></h3><div id="vDow"></div></div>
+      <div class="card"><h3>Participação por loja <span class="sub" id="vLojaSub"></span></h3><div id="vLoja"></div></div>
+    </div>
   </section>
 
   <!-- FLUXO -->
@@ -675,6 +709,97 @@ $('#btnCsv').onclick=()=>{ const l=filteredTit(); const rows=[['Pagar em','Venci
 function dl(blob,name){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000); }
 
 /* ================= CONFIG ================= */
+/* ================= VENDAS ================= */
+let VVIEW='dia';
+const LOJA_COL=['#2a78d6','#1baf7a','#eb6834','#6250d6','#9a978f'];
+function lojasDe(dates){ const set=new Set(); dates.forEach(d=>{ const l=(S.data.salesLoja||{})[d]; if(l) Object.entries(l).forEach(([k,v])=>{ if(v) set.add(k); }); }); return [...set].sort(); }
+function sumLojas(dates,lojas){ const o={}; lojas.forEach(l=>o[l]=0); dates.forEach(d=>{ const x=(S.data.salesLoja||{})[d]; if(x) lojas.forEach(l=>o[l]+=(+x[l]||0)); }); return o; }
+function vbars(el,labels,vals,opts){
+  const W=900,H=250,pl=56,pr=10,pt=12,pb=30, max=niceMax(Math.max(1,...vals,...(opts.marks||[]).filter(x=>x!=null)));
+  const iw=W-pl-pr, ih=H-pt-pb, bw=iw/labels.length, y=v=>pt+ih-(v/max)*ih;
+  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%">`;
+  for(let i=0;i<=4;i++){ const v=max*i/4, yy=y(v); s+=`<line x1="${pl}" x2="${W-pr}" y1="${yy}" y2="${yy}" stroke="${i?'#efede8':'#c9c6be'}"/><text x="${pl-6}" y="${yy+4}" text-anchor="end" font-size="11" fill="#86847e">${kfmt(v)}</text>`; }
+  labels.forEach((l,i)=>{ const v=vals[i], w=Math.max(2,Math.min(56,bw-4)), x=pl+i*bw+(bw-w)/2, yy=y(v), h=pt+ih-yy;
+    s+=`<path d="${roundTop(x,yy,w,pt+ih,Math.min(4,h/2,w/2))}" fill="${opts.colors[i]}"/>`;
+    const mk=(opts.marks||[])[i]; if(mk!=null){ const my=y(mk); s+=`<line x1="${x-3}" x2="${x+w+3}" y1="${my}" y2="${my}" stroke="var(--ink)" stroke-width="2"/>`; }
+    s+=`<rect x="${pl+i*bw}" y="${pt}" width="${bw}" height="${ih}" fill="transparent" data-tip="${opts.tips[i]}"/>`;
+    if(!opts.every || i%opts.every===0) s+=`<text x="${pl+i*bw+bw/2}" y="${H-10}" text-anchor="middle" font-size="11" fill="#52514e">${l}</text>`; });
+  el.innerHTML=s+'</svg>';
+}
+function renderVendas(){
+  const month=M.month, [y,mm]=month.split('-').map(Number), nd=new Date(y,mm,0).getDate();
+  const real=S.data.sales[month]||{}, sm=M.sm, today=M.today;
+  const L=S.data.salesLast;
+  $('#vLast').innerHTML = L ? `<div>Última importação: <b>${esc(L.file)}</b></div><div style="margin-top:4px">Período <b>${dmyy(L.from)} a ${dmyy(L.to)}</b> · ${L.n} dias · <b>${brl(L.total)}</b></div><div class="sub" style="margin-top:4px">em ${new Date(L.at).toLocaleString('pt-BR')}</div>`
+    : `<div>Meses com vendas: ${Object.keys(S.data.sales).sort().map(m=>`<b>${monthLabel(m)}</b> (${Object.keys(S.data.sales[m]).length} dias)`).join(' · ')||'nenhum'}</div><div class="sub" style="margin-top:4px">Importe o Quadro de Venda Diária para acompanhar por dia, semana e mês.</div>`;
+  // dias do mês
+  const days=[]; for(let d=1;d<=nd;d++){ const ds=month+'-'+pad(d), r=real[ds]!=null; days.push({ds,dow:dowOf(ds),v:r?real[ds]:sm.get(ds).v,real:r,hol:feriado(ds)}); }
+  const rd=days.filter(d=>d.real), vReal=rd.reduce((a,d)=>a+d.v,0), open=rd.filter(d=>d.v>0);
+  const proj=days.reduce((a,d)=>a+d.v,0), best=rd.reduce((a,d)=>!a||d.v>a.v?d:a,null);
+  // mesmo período do mês anterior
+  const pm = mm===1? (y-1)+'-12' : y+'-'+pad(mm-1), prev=S.data.sales[pm]||{};
+  const lastReal = rd.length? +rd[rd.length-1].ds.slice(8) : 0;
+  const prevSame = Object.entries(prev).filter(([d])=>+d.slice(8)<=lastReal).reduce((a,[,v])=>a+v,0);
+  const varPrev = prevSame? vReal/prevSame-1 : null;
+  const metaMes = M.weeks.reduce((a,w)=>a+w.meta,0)*(nd/(M.weeks.length*7));
+  $('#kpiVendas').innerHTML =
+    kpi('Vendido em '+monthLabel(month).split('/')[0], brl0(vReal), rd.length?`${rd.length} ${rd.length===1?'dia importado':'dias importados'} · até ${dmy(rd[rd.length-1].ds)}`:'nenhum dia importado ainda')+
+    kpi('Média por dia aberto', brl0(open.length?vReal/open.length:0), `${open.length} ${open.length===1?'dia':'dias'} com venda`)+
+    kpi('Projeção do mês', brl0(proj), `real + média do dia da semana (${sm.base?monthLabel(sm.base):'—'})`)+
+    kpi('vs mês anterior', varPrev==null?'—':(varPrev>=0?'+':'')+pct(varPrev), varPrev==null?'sem vendas do mês anterior':`mesmos dias 1 a ${lastReal}: ${brl0(prevSame)}`, varPrev==null?'':varPrev<0?'neg':'pos')+
+    kpi('Melhor dia', best?brl0(best.v):'—', best?`${DOW_L[best.dow]} ${dmy(best.ds)}`:'');
+  [...$('#vView').children].forEach(b=>b.classList.toggle('on',b.dataset.v===VVIEW));
+  let th='', tb='', tf='';
+  if(VVIEW==='dia'){
+    $('#vTitle').textContent='Vendas por dia · '+monthLabel(month);
+    $('#vLegend').innerHTML='<span><span class="sw" style="background:var(--s1)"></span>Venda real (importada)</span><span><span class="sw" style="background:#cfe9dd"></span>Projeção (média do dia da semana)</span>';
+    vbars($('#vChart'),days.map(d=>d.ds.slice(8)),days.map(d=>d.v),{colors:days.map(d=>d.real?'var(--s1)':'#cfe9dd'),tips:days.map(d=>`<b>${DOW_L[d.dow]} ${dmy(d.ds)}</b>${d.hol?' · '+d.hol:''}<br>${d.real?'Real':'Projeção'}: ${brl(d.v)}`)});
+    const lojas=lojasDe(rd.map(d=>d.ds));
+    th=`<tr><th>Dia</th>${lojas.map(l=>`<th class="r">${esc(l)}</th>`).join('')}<th class="r">Total</th><th class="r">Acumulado</th><th class="r">vs média do dia</th></tr>`;
+    let acc=0;
+    days.forEach(d=>{ if(d.real) acc+=d.v; const lv=(S.data.salesLoja||{})[d.ds]||{}, avg=sm.avg[d.dow], dv=avg&&d.real?d.v/avg-1:null;
+      tb+=`<tr class="${d.dow===0||d.dow===6?'we':''} ${d.real?'':'proj'} ${d.ds===today?'today':''}"><td><b>${DOW[d.dow]} ${dmy(d.ds)}</b>${d.hol?' <span class="sub">'+esc(d.hol)+'</span>':''}${d.real?'':' <span class="tagr proj">proj.</span>'}</td>${lojas.map(l=>`<td class="r num">${d.real&&lv[l]!=null?brl0(lv[l]):''}</td>`).join('')}<td class="r num"><b>${d.v||d.real?brl0(d.v):'—'}</b></td><td class="r num">${d.real?brl0(acc):''}</td><td class="r num ${dv==null?'':dv<0?'neg':'pos'}">${dv==null?'':(dv>=0?'+':'')+pct(dv)}</td></tr>`; });
+    const lt=sumLojas(rd.map(d=>d.ds),lojas);
+    tf=`<tr><td>Total real (${rd.length} dias)</td>${lojas.map(l=>`<td class="r num">${brl0(lt[l])}</td>`).join('')}<td class="r num">${brl0(vReal)}</td><td></td><td></td></tr>`;
+  } else if(VVIEW==='semana'){
+    $('#vTitle').textContent='Vendas por semana (sexta a quinta) · '+monthLabel(month);
+    $('#vLegend').innerHTML='<span><span class="sw" style="background:var(--s1)"></span>Semana toda real</span><span><span class="sw" style="background:#8fd4b9"></span>Parte real + projeção</span><span><span class="sw" style="background:#cfe9dd"></span>Projeção</span><span>▬ Meta da semana</span>';
+    const W=M.weeks;
+    vbars($('#vChart'),W.map(w=>'Sem '+w.n),W.map(w=>w.sales),{colors:W.map(w=>w.realDays===7?'var(--s1)':w.realDays?'#8fd4b9':'#cfe9dd'),marks:W.map(w=>w.meta),tips:W.map(w=>`<b>${w.label} · ${w.srange}</b><br>Vendas: ${brl0(w.sales)} (${w.realDays} dias reais)<br>Meta: ${brl0(w.meta)} · ${pct(w.meta?w.sales/w.meta:0)}`)});
+    const lojas=lojasDe(W.flatMap(w=>w.sDays.filter(d=>d.real).map(d=>d.ds)));
+    th=`<tr><th>Semana</th><th>Sexta a quinta</th>${lojas.map(l=>`<th class="r">${esc(l)}</th>`).join('')}<th class="r">Total</th><th class="r">Meta</th><th class="r">% meta</th><th class="r">vs semana anterior</th></tr>`;
+    let prevW=null;
+    W.forEach(w=>{ const ld=sumLojas(w.sDays.filter(d=>d.real).map(d=>d.ds),lojas), vp=prevW&&w.realDays?w.sales/prevW-1:null;
+      tb+=`<tr class="${w.realDays?'':'proj'} ${w===M.curW?'today':''}"><td><b>${w.label}</b></td><td>${w.srange} ${w.realDays===7?'<span class="tagr real">real</span>':w.realDays?`<span class="tagr real">${w.realDays}d real</span>`:'<span class="tagr proj">proj.</span>'}</td>${lojas.map(l=>`<td class="r num">${ld[l]?brl0(ld[l]):''}</td>`).join('')}<td class="r num"><b>${brl0(w.sales)}</b></td><td class="r num">${brl0(w.meta)}</td><td class="r num ${w.sales<w.meta?'neg':'pos'}">${pct(w.meta?w.sales/w.meta:0)}</td><td class="r num ${vp==null?'':vp<0?'neg':'pos'}">${vp==null?'':(vp>=0?'+':'')+pct(vp)}</td></tr>`; prevW=w.sales; });
+    tf=`<tr><td colspan="2">Total</td>${lojas.map(()=>'<td></td>').join('')}<td class="r num">${brl0(M.T.sales)}</td><td class="r num">${brl0(M.T.meta)}</td><td class="r num">${pct(M.T.meta?M.T.sales/M.T.meta:0)}</td><td></td></tr>`;
+  } else {
+    $('#vTitle').textContent='Vendas por mês (dias importados)';
+    $('#vLegend').innerHTML='<span><span class="sw" style="background:var(--s1)"></span>Total vendido no mês (só dias importados)</span>';
+    const ms=Object.keys(S.data.sales).sort();
+    const rows=ms.map(m=>{ const e=Object.entries(S.data.sales[m]), t=e.reduce((a,[,v])=>a+v,0), op=e.filter(([,v])=>v>0).length; return {m,n:e.length,t,op,dates:e.map(([d])=>d)}; });
+    vbars($('#vChart'),rows.map(r=>monthLabel(r.m).slice(0,3)+'/'+r.m.slice(2,4)),rows.map(r=>r.t),{colors:rows.map(r=>r.m===month?'var(--s1)':'#8fd4b9'),tips:rows.map(r=>`<b>${monthLabel(r.m)}</b><br>${brl0(r.t)} em ${r.n} dias importados`)});
+    const lojas=lojasDe(rows.flatMap(r=>r.dates));
+    th=`<tr><th>Mês</th><th class="r">Dias</th>${lojas.map(l=>`<th class="r">${esc(l)}</th>`).join('')}<th class="r">Total</th><th class="r">Média/dia aberto</th><th class="r">vs mês anterior</th></tr>`;
+    let pv=null;
+    rows.forEach(r=>{ const ld=sumLojas(r.dates,lojas), full=r.n>=new Date(+r.m.slice(0,4),+r.m.slice(5,7),0).getDate(), vp=pv&&full?r.t/pv-1:null;
+      tb+=`<tr class="${r.m===month?'today':''}"><td><b>${monthLabel(r.m)}</b>${full?'':' <span class="sub">parcial</span>'}</td><td class="r num">${r.n}</td>${lojas.map(l=>`<td class="r num">${ld[l]?brl0(ld[l]):''}</td>`).join('')}<td class="r num"><b>${brl0(r.t)}</b></td><td class="r num">${brl0(r.op?r.t/r.op:0)}</td><td class="r num ${vp==null?'':vp<0?'neg':'pos'}">${vp==null?'':(vp>=0?'+':'')+pct(vp)}</td></tr>`; if(full) pv=r.t; });
+  }
+  $('#vTbl').innerHTML=`<thead>${th}</thead><tbody>${tb}</tbody>${tf?`<tfoot>${tf}</tfoot>`:''}`;
+  // média por dia da semana (dias reais do mês) × base
+  const dsum=[0,0,0,0,0,0,0], dcnt=[0,0,0,0,0,0,0]; rd.forEach(d=>{ dsum[d.dow]+=d.v; dcnt[d.dow]++; });
+  $('#vDowSub').textContent = `· ${monthLabel(month)} (real) × ${sm.base?monthLabel(sm.base):'—'}`;
+  const order=[5,6,0,1,2,3,4], mx=Math.max(1,...sm.avg,...dsum.map((v,i)=>dcnt[i]?v/dcnt[i]:0));
+  $('#vDow').innerHTML = order.map(i=>{ const cur=dcnt[i]?dsum[i]/dcnt[i]:null, b=sm.avg[i];
+    return `<div class="hbar" style="grid-template-columns:70px 1fr 150px" data-tip="<b>${DOW_L[i]}</b><br>${monthLabel(month)}: ${cur==null?'sem dias reais':brl0(cur)+' ('+dcnt[i]+' dias)'}<br>${sm.base?monthLabel(sm.base):'base'}: ${brl0(b)}"><span class="lb">${DOW_L[i]}</span><span class="tr" style="height:18px;display:flex;flex-direction:column;gap:2px;background:none"><i style="height:8px;width:${(cur||0)/mx*100}%;background:var(--s1);border-radius:0 3px 3px 0"></i><i style="height:8px;width:${b/mx*100}%;background:#c9c6be;border-radius:0 3px 3px 0"></i></span><span class="v num">${cur==null?'—':brl0(cur)} <span class="sub">/ ${kfmt(b)}</span></span></div>`; }).join('')+
+    `<div class="legend-row" style="margin-top:8px"><span><span class="sw" style="background:var(--s1)"></span>${monthLabel(month)}</span><span><span class="sw" style="background:#c9c6be"></span>${sm.base?monthLabel(sm.base):'base'}</span><span class="sub">ordem sexta → quinta</span></div>`;
+  // por loja
+  const lojasM=lojasDe(rd.map(d=>d.ds)), lt=sumLojas(rd.map(d=>d.ds),lojasM), tl=Object.values(lt).reduce((a,b)=>a+b,0), lmx=Math.max(1,...Object.values(lt));
+  $('#vLojaSub').textContent='· '+monthLabel(month)+' (real)';
+  $('#vLoja').innerHTML = lojasM.length ? lojasM.sort((a,b)=>lt[b]-lt[a]).map((l,i)=>hbar(l,lt[l],lmx,LOJA_COL[i%LOJA_COL.length],pct(tl?lt[l]/tl:0)+' do total')).join('')+`<div class="sub" style="margin-top:8px">${lojasM.map(l=>`${esc(l)} ${pct(tl?lt[l]/tl:0)}`).join(' · ')}</div>`
+    : '<p class="sub">Os dias importados antes desta versão não têm a separação por loja. Importe o relatório do mês de novo para ver por loja.</p>';
+}
+$('#vView').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; VVIEW=b.dataset.v; renderVendas(); };
+
 function renderConfig(){
   const c=S.cfg;
   $('#cMeta').value=c.meta; $('#cReserva').value=c.reserva; $('#cFixExtra').value=c.fixExtra; $('#cSaldo').value=c.saldoInicial; $('#cGrowth').value=c.growth; $('#cTaxa').value=c.taxa;
@@ -697,7 +822,7 @@ $('#gTbl').addEventListener('change',e=>{
 function loadScript(src){ return new Promise((ok,ko)=>{ const s=document.createElement('script'); s.src=src; s.onload=ok; s.onerror=()=>ko(new Error('Não foi possível carregar a biblioteca de leitura (sem internet?)')); document.head.appendChild(s); }); }
 async function needXLSX(){ if(!window.XLSX){ try{ await loadScript('https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js'); }catch(e){ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'); } } }
 async function needPDF(){ if(!window.pdfjsLib){ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'); pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; } }
-function msg(html,cls='info'){ $('#impMsg').innerHTML=`<div class="alert ${cls}">${html}</div>`; }
+function msg(html,cls='info'){ const h=`<div class="alert ${cls}">${html}</div>`; $('#impMsg').innerHTML=h; document.querySelectorAll('.impmsg').forEach(e=>e.innerHTML=h); }
 function toISO(v){
   if(v==null||v==='') return '';
   if(typeof v==='number'){ const d=new Date(Date.UTC(1899,11,30)+Math.round(v*864e5)); return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate()); }
@@ -730,21 +855,26 @@ async function importCP(file){
     msg(`✅ <b>${out.length} títulos</b> importados (${brl(out.reduce((a,r)=>a+r[3],0))})`);
   }catch(e){ console.error(e); msg('❌ '+esc(e.message),'crit'); }
 }
-function lineToSale(cells,found,totIdx){
+/* lê cada linha "dd/mm/aaaa - dia" com as colunas de loja e o TOTAL */
+function lojaNome(h){ return String(h).trim().toUpperCase().replace(/^FILIAL\s+/,''); }
+function lineToSale(cells,found,hdr){
   const first=String(cells[0]??'').trim();
   const m=first.match(/^(\d{2})\/(\d{2})\/(\d{4})/); if(!m) return;
-  let v = totIdx>=0 ? cells[totIdx] : cells.filter(c=>c!==''&&c!=null).pop();
-  found[`${m[3]}-${m[2]}-${m[1]}`] = toNum(v);
+  const ds=`${m[3]}-${m[2]}-${m[1]}`, lojas={};
+  let tot=null;
+  if(hdr){ hdr.forEach((h,i)=>{ if(i===0||!h) return; const v=toNum(cells[i]); if(h==='TOTAL') tot=v; else lojas[h]=v; }); }
+  if(tot==null) tot=toNum(cells.filter(c=>c!==''&&c!=null).pop());
+  found[ds]={total:tot,lojas};
 }
 async function readSalesXLS(file){
   await needXLSX();
   const wb=XLSX.read(await file.arrayBuffer(),{type:'array'}), found={};
   wb.SheetNames.forEach(n=>{
     const rows=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:''});
-    let totIdx=-1;
+    let hdr=null;
     rows.forEach(r=>{
-      const ti=r.findIndex(c=>String(c).trim().toUpperCase()==='TOTAL'); if(ti>=0 && /dia/i.test(String(r[0]))) totIdx=ti;
-      lineToSale(r,found,totIdx);
+      if(/dia da semana/i.test(String(r[0])) && r.some(c=>String(c).trim().toUpperCase()==='TOTAL')) hdr=r.map((c,i)=>i===0?'':(String(c).trim()?lojaNome(c):''));
+      lineToSale(r,found,hdr);
     });
   });
   return found;
@@ -752,13 +882,18 @@ async function readSalesXLS(file){
 async function readSalesPDF(file){
   await needPDF();
   const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise, found={};
+  let hdr=null;
   for(let p=1;p<=pdf.numPages;p++){
     const tc=await (await pdf.getPage(p)).getTextContent(), lines={};
     tc.items.forEach(it=>{ if(!it.str.trim()) return; const y=Math.round(it.transform[5]/2)*2; (lines[y]=lines[y]||[]).push(it); });
-    Object.values(lines).forEach(l=>{
-      const txt=l.sort((a,b)=>a.transform[4]-b.transform[4]).map(i=>i.str).join(' ').replace(/\s+/g,' ').trim();
-      const m=txt.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*-\s*\S+\s+(.*)$/);
-      if(m){ const nums=m[4].match(/-?[\d.]+,\d{2}/g); if(nums) found[`${m[3]}-${m[2]}-${m[1]}`]=toNum(nums[nums.length-1]); }
+    Object.keys(lines).sort((a,b)=>b-a).forEach(y=>{
+      const txt=lines[y].sort((a,b)=>a.transform[4]-b.transform[4]).map(i=>i.str).join(' ').replace(/\s+/g,' ').trim();
+      if(/Dia da Semana/i.test(txt) && /TOTAL/i.test(txt)){ const cols=txt.toUpperCase().match(/FILIAL\s+[A-ZÀ-Ú]+|MATRIZ|TOTAL/g); if(cols&&cols.includes('TOTAL')) hdr=cols.map(lojaNome); return; }
+      const m=txt.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*-\s*\S+\s+(.*)$/); if(!m) return;
+      const nums=(m[4].match(/-?[\d.]+,\d{2}/g)||[]).map(toNum); if(!nums.length) return;
+      const ds=`${m[3]}-${m[2]}-${m[1]}`, lojas={};
+      if(hdr && nums.length===hdr.length) hdr.forEach((h,i)=>{ if(h!=='TOTAL') lojas[h]=nums[i]; });
+      found[ds]={total:nums[nums.length-1],lojas};
     });
   }
   return found;
@@ -768,9 +903,12 @@ async function importVD(file){
     msg('Lendo '+esc(file.name)+'…');
     const found = /\.pdf$/i.test(file.name) ? await readSalesPDF(file) : await readSalesXLS(file);
     const keys=Object.keys(found); if(!keys.length) throw new Error('Não encontrei linhas “dd/mm/aaaa - dia” no arquivo. É o Quadro de Venda Diária?');
-    const byM={}; keys.forEach(k=>{ (byM[k.slice(0,7)]=byM[k.slice(0,7)]||{})[k]=found[k]; });
+    const byM={}; S.data.salesLoja=S.data.salesLoja||{};
+    keys.forEach(k=>{ (byM[k.slice(0,7)]=byM[k.slice(0,7)]||{})[k]=found[k].total; if(Object.keys(found[k].lojas).length) S.data.salesLoja[k]=found[k].lojas; });
     Object.entries(byM).forEach(([m,o])=>S.data.sales[m]=Object.assign({},S.data.sales[m]||{},o));
-    S.data.salesFile=file.name; S.data.salesAt=Date.now(); commit(true);
+    const ks=keys.sort();
+    S.data.salesFile=file.name; S.data.salesAt=Date.now(); S.data.salesLast={file:file.name,at:Date.now(),from:ks[0],to:ks[ks.length-1],n:ks.length,total:ks.reduce((a,k)=>a+found[k].total,0)};
+    commit(true);
     msg(`✅ Vendas: ${Object.entries(byM).map(([m,o])=>{ const ks=Object.keys(o).sort(); return `<b>${monthLabel(m)}</b> ${dmy(ks[0])} a ${dmy(ks[ks.length-1])} (${ks.length} dias) · ${brl(Object.values(o).reduce((a,b)=>a+b,0))}`; }).join(' · ')}`);
   }catch(e){ console.error(e); msg('❌ '+esc(e.message),'crit'); }
 }
@@ -780,7 +918,7 @@ function wireDrop(dropId,inputId,fn){
   d.ondragover=e=>{ e.preventDefault(); d.classList.add('over'); }; d.ondragleave=()=>d.classList.remove('over');
   d.ondrop=e=>{ e.preventDefault(); d.classList.remove('over'); if(e.dataTransfer.files[0]) fn(e.dataTransfer.files[0]); };
 }
-wireDrop('#dropCP','#fileCP',importCP); wireDrop('#dropVD','#fileVD',importVD);
+wireDrop('#dropCP','#fileCP',importCP); wireDrop('#dropVD','#fileVD',importVD); wireDrop('#dropVD2','#fileVD2',importVD);
 
 /* ================= FIREBASE: Auth REST + Realtime Database REST (sem SDK) ================= */
 const FB = {apiKey:'AIzaSyDoYFoKnVjtcib0V4yN1Qzvk2B7QrNgiuM', doc:'https://firestore.googleapis.com/v1/projects/motoboy-ddefa/databases/(default)/documents/rh_config/contas_pagar_rei', path:'rh_config/contas_pagar_rei'};
@@ -868,7 +1006,7 @@ function refresh(){
   const ms=Object.keys(cnt).sort();
   if(!S.cfg.month||!ms.includes(S.cfg.month)) S.cfg.month=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0]?.[0]||ymd(new Date()).slice(0,7);
   $('#monthSel').innerHTML=(ms.length?ms:[S.cfg.month]).map(m=>`<option value="${m}">${monthLabel(m)}</option>`).join(''); $('#monthSel').value=S.cfg.month;
-  buildRecs(); compute(); renderAgenda(); renderFluxo(); renderAnalises(); fillFilters(); renderTitulos(); renderConfig();
+  buildRecs(); compute(); renderAgenda(); renderVendas(); renderFluxo(); renderAnalises(); fillFilters(); renderTitulos(); renderConfig();
 }
 function commit(dataChanged){ S.savedAt=Date.now(); saveLocal(); refresh(); cloudQueue(dataChanged?'data':'cfg'); }
 $('#monthSel').onchange=e=>{ S.cfg.month=e.target.value; commit(); };
