@@ -278,6 +278,7 @@ tfoot td{font-weight:800;border-top:2px solid var(--line)}
   .hbar{grid-template-columns:minmax(90px,120px) 1fr 84px}
   h2{font-size:16px}
 }
+.sec{margin:18px 0 10px}
 @media print{header.top,.noprint{display:none!important}main{padding:0}}
 </style>
 </head>
@@ -301,7 +302,9 @@ tfoot td{font-weight:800;border-top:2px solid var(--line)}
 <main>
   <!-- AGENDA -->
   <section class="tab on" id="t-agenda">
+    <h2 class="sec" id="mesTitle"></h2>
     <div class="grid kpis" id="kpiAgenda"></div>
+    <h2 class="sec" id="wkTitle"></h2>
     <div class="wkchips" id="wkChips"></div>
     <div class="wtiles" id="wkTiles"></div>
     <div class="agrid">
@@ -613,12 +616,18 @@ function renderAgenda(){
   const {weeks,T,curW,allDays}=M;
   if(!SELW || !weeks.find(w=>w.ws===SELW)) SELW=(curW||weeks[0]).ws;
   const w=weeks.find(x=>x.ws===SELW);
-  const minD = allDays.reduce((a,b)=>a.acc<b.acc?a:b,allDays[0]);
+  /* ---- MÊS CALENDÁRIO (01 ao último dia): vendas por dia vendido, despesas por dia de pagamento ---- */
+  const mdays=monthDays(M.month), mlast=mdays[mdays.length-1], mn=monthLabel(M.month).split('/')[0];
+  let vR=0,vP=0,nR=0,lastR=null; mdays.forEach(d=>{ const x=M.sm.get(d); if(x.real){ vR+=x.v; nR++; lastR=d; } else vP+=x.v; });
+  const mi=RECS.filter(r=>r.pay>=mdays[0]&&r.pay<=mlast), gs=g=>mi.filter(r=>r.g===g).reduce((a,r)=>a+r.val,0);
+  const mF=gs('F')+(+S.cfg.fixExtra||0)*mdays.filter(d=>dowOf(d)===5).length, mC=gs('C'), mO=gs('O'), mV=vR+vP, mD=mF+mC+mO, mPrev=mi.filter(r=>r.prev).reduce((a,r)=>a+r.val,0);
+  $('#mesTitle').innerHTML=`Mês de ${mn} <span class="sub">· 01 a ${dmy(mlast)} · vendas pelo dia em que foram feitas · despesas pelo dia em que são pagas</span>`;
   $('#kpiAgenda').innerHTML =
-    kpi('Vendas do período', brl0(T.sales), `${weeks.length} semanas · ${pct(T.meta?T.sales/T.meta:0)} da meta`)+
-    kpi('Despesas do período', brl0(T.saidas), `fixos ${kfmt(T.Fx)} · compras ${kfmt(T.C)} · outras ${kfmt(T.O)}`)+
-    kpi('Resultado', brl0(T.net-T.saidas), `${pct(T.sales?(T.net-T.saidas)/T.sales:0)} da venda`, (T.net-T.saidas)<0?'neg':'pos')+
-    kpi('Menor caixa do período', brl0(minD.acc), minD.acc<0?`${DOW_L[minD.dow]} ${dmy(minD.ds)} · caixa inicial ${brl0(+S.cfg.saldoInicial||0)}`:`o caixa não fica negativo no período (caixa inicial ${brl0(+S.cfg.saldoInicial||0)})`, minD.acc<0?'neg':'pos');
+    kpi('Vendas de '+mn, brl0(mV), nR?`real ${brl0(vR)} (01 a ${dmy(lastR)})${vP?` + projeção ${brl0(vP)}`:''}`:`projeção pela média de ${M.sm.base?monthLabel(M.sm.base):'—'}`)+
+    kpi('Compras de '+mn, brl0(mC), `${pct(mV?mC/mV:0)} da venda${mPrev?` · inclui ${brl0(mPrev)} previstas`:''}`)+
+    kpi('Fixos + outras de '+mn, brl0(mF+mO), `fixos ${brl0(mF)} · outras ${brl0(mO)}`)+
+    kpi('Resultado de '+mn, brl0(mV-mD), `vendas ${kfmt(mV)} − despesas ${kfmt(mD)} · ${pct(mV?(mV-mD)/mV:0)}`, mV-mD<0?'neg':'pos');
+  $('#wkTitle').innerHTML=`Semanas de pagamento <span class="sub">· ${dmy(weeks[0].ws)} a ${dmy(weeks[weeks.length-1].we)} · cada semana paga de sáb a sex com as vendas de sex a qui · as semanas da ponta cruzam o mês</span>`;
   // chips de semana
   $('#wkChips').innerHTML = weeks.map(x=>`<button data-ws="${x.ws}" class="${x.ws===SELW?'on':''}"><span class="st ${x.status}"></span><span><b>${x.label}</b>${x===curW?' · atual':''}<br>${dmy(x.ws)} a ${dmy(x.we)}</span></button>`).join('');
   // tiles da semana
