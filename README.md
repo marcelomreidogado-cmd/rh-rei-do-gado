@@ -387,5 +387,9 @@ Os dados ficam em `rh_config/contas_pagar_rei` e não há nenhum dado real no ar
   caixa e no teto até ser removida.
 - **Vendas:** importação do Quadro de Venda Diária (PDF ou XLS), com filtro por loja e visões dia a dia,
   semana × fim de semana e mês a mês, além de leituras automáticas, dia da semana e ranking das lojas.
-- **Fluxo de caixa, Análises, Títulos e Ajustes:** importação do .xls de contas a pagar, grupos
-  (fixo, compra, outra), valores estimados e metas.
+- **Mês:** mês fechado (01 ao último dia) em faixas 01–07, 08–14, 15–21, 22–28 e 29–fim, com
+  vendas realizadas + projeção, pagamentos, resultado e a curva acumulada de vendas × pagamentos.
+- **Pagamentos:** pelo dia em que são pagos, dia a dia, por semana (sáb→sex) e próximos 30 dias,
+  com filtro fixos/compras/outras, naturezas e fornecedores.
+- **Títulos e Ajustes:** importação do .xls de contas a pagar, grupos (fixo, compra, outra),
+  valores estimados e metas.

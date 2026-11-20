@@ -279,6 +279,11 @@ tfoot td{font-weight:800;border-top:2px solid var(--line)}
   h2{font-size:16px}
 }
 .sec{margin:18px 0 10px}
+.mt{margin-top:14px}
+.card.tight{padding:6px 10px}
+.sw-v{background:var(--s1)}.sw-vp{background:#8fd4b9}.sw-p{background:var(--s2)}
+.vtbl td.lb2{white-space:nowrap}
+.vtbl .top1{color:var(--ink2);font-size:12px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media print{header.top,.noprint{display:none!important}main{padding:0}}
 </style>
 </head>
@@ -287,9 +292,9 @@ tfoot td{font-weight:800;border-top:2px solid var(--line)}
   <div class="logo"><div class="crown">👑</div><div>REI DO GADO<small>Agenda de pagamentos · Teto de compras semanal</small></div></div>
   <nav class="tabs" id="tabs">
     <button data-t="agenda" class="on">📅 Agenda</button>
+    <button data-t="mes">🗓️ Mês</button>
     <button data-t="vendas">🛒 Vendas</button>
-    <button data-t="fluxo">💰 Fluxo de caixa</button>
-    <button data-t="analises">📊 Análises</button>
+    <button data-t="pag">📤 Pagamentos</button>
     <button data-t="titulos">📄 Títulos</button>
     <button data-t="config">⚙️ Ajustes</button>
   </nav>
@@ -302,8 +307,6 @@ tfoot td{font-weight:800;border-top:2px solid var(--line)}
 <main>
   <!-- AGENDA -->
   <section class="tab on" id="t-agenda">
-    <h2 class="sec" id="mesTitle"></h2>
-    <div class="grid kpis" id="kpiAgenda"></div>
     <h2 class="sec" id="wkTitle"></h2>
     <div class="wkchips" id="wkChips"></div>
     <div class="wtiles" id="wkTiles"></div>
@@ -359,25 +362,33 @@ tfoot td{font-weight:800;border-top:2px solid var(--line)}
     </div>
   </section>
 
-  <!-- FLUXO -->
-  <section class="tab" id="t-fluxo">
-    <div class="grid kpis" id="kpiFluxo"></div>
-    <h2>Fluxo de caixa semanal (sábado a sexta)</h2>
-    <div class="card"><table id="flowTbl"></table><div class="note" id="flowNote"></div></div>
-    <div class="grid two" style="margin-top:14px">
-      <div class="card"><h3>Venda × pagamentos por semana</h3><div class="legend-row"><span><span class="sw" style="background:var(--s1)"></span>Venda líquida</span><span><span class="sw" style="background:var(--s2)"></span>Pagamentos</span></div><div id="chWeek"></div></div>
-      <div class="card"><h3>Saldo acumulado dia a dia</h3><div class="sub" style="margin-bottom:6px">Saldo inicial + vendas líquidas − pagamentos. Abaixo de zero = falta caixa.</div><div id="chDaily"></div></div>
+  <!-- MÊS -->
+  <section class="tab" id="t-mes">
+    <h2 class="sec" id="mTitle"></h2>
+    <div class="grid kpis" id="kpiMes"></div>
+    <div class="card mt">
+      <h3>Vendas × pagamentos acumulados no mês</h3>
+      <div class="legend-row"><span><span class="sw sw-v"></span>Vendas realizadas</span><span><span class="sw sw-vp"></span>Vendas projetadas</span><span><span class="sw sw-p"></span>Pagamentos (pelo dia de pagamento)</span><span>│ hoje</span></div>
+      <div id="mCurve"></div>
+      <div class="sub" id="mCurveNote"></div>
     </div>
+    <div class="card mt tight"><table class="vtbl" id="mFaixas"></table></div>
+    <div class="note" id="mNote"></div>
   </section>
 
-  <!-- ANALISES -->
-  <section class="tab" id="t-analises">
-    <div class="grid kpis" id="kpiAnal"></div>
-    <div class="grid two" style="margin-top:14px">
-      <div class="card"><h3>Gastos fixos por natureza</h3><div id="anFix"></div><h3 style="margin-top:18px">Compras por natureza</h3><div id="anComp"></div><h3 style="margin-top:18px">Outras despesas por natureza</h3><div id="anOut"></div></div>
-      <div class="card"><h3>Top 15 fornecedores de compras</h3><div class="sub" style="margin-bottom:8px">Nomes unificados (ex.: “BRF” e “BRF S.A.” somam juntos)</div><div id="anForn"></div><h3 style="margin-top:18px">Por forma de pagamento</h3><div id="anForma"></div></div>
-      <div class="card"><h3>Vendas diárias da base <span class="sub" id="anVendSub"></span></h3><div id="anVend"></div></div>
-      <div class="card"><h3>15 maiores títulos</h3><div class="tblwrap" style="max-height:440px"><table id="anTop"></table></div></div>
+  <!-- PAGAMENTOS -->
+  <section class="tab" id="t-pag">
+    <h2 class="sec" id="pgTitle"></h2>
+    <div class="grid kpis" id="kpiPag"></div>
+    <div class="vbar">
+      <div class="seg" id="pgView"><button data-v="dia" class="on">Dia a dia</button><button data-v="semana">Semana (sáb→sex)</button><button data-v="prox">Próximos 30 dias</button></div>
+      <div class="seg" id="pgGrp"><button data-g="" class="on">Tudo</button><button data-g="F">Fixos</button><button data-g="C">Compras</button><button data-g="O">Outras</button></div>
+    </div>
+    <div class="card"><h3 id="pgChTitle"></h3><div class="legend-row" id="pgLegend"></div><div id="pgChart"></div></div>
+    <div class="card mt tight"><table class="vtbl" id="pgTbl"></table></div>
+    <div class="grid two mt">
+      <div class="card"><h3>Por natureza <span class="sub" id="pgNatSub"></span></h3><div id="pgNat"></div></div>
+      <div class="card"><h3>Maiores fornecedores <span class="sub" id="pgForSub"></span></h3><div id="pgFor"></div></div>
     </div>
   </section>
 
@@ -616,18 +627,7 @@ function renderAgenda(){
   const {weeks,T,curW,allDays}=M;
   if(!SELW || !weeks.find(w=>w.ws===SELW)) SELW=(curW||weeks[0]).ws;
   const w=weeks.find(x=>x.ws===SELW);
-  /* ---- MÊS CALENDÁRIO (01 ao último dia): vendas por dia vendido, despesas por dia de pagamento ---- */
-  const mdays=monthDays(M.month), mlast=mdays[mdays.length-1], mn=monthLabel(M.month).split('/')[0];
-  let vR=0,vP=0,nR=0,lastR=null; mdays.forEach(d=>{ const x=M.sm.get(d); if(x.real){ vR+=x.v; nR++; lastR=d; } else vP+=x.v; });
-  const mi=RECS.filter(r=>r.pay>=mdays[0]&&r.pay<=mlast), gs=g=>mi.filter(r=>r.g===g).reduce((a,r)=>a+r.val,0);
-  const mF=gs('F')+(+S.cfg.fixExtra||0)*mdays.filter(d=>dowOf(d)===5).length, mC=gs('C'), mO=gs('O'), mV=vR+vP, mD=mF+mC+mO, mPrev=mi.filter(r=>r.prev).reduce((a,r)=>a+r.val,0);
-  $('#mesTitle').innerHTML=`Mês de ${mn} <span class="sub">· 01 a ${dmy(mlast)} · vendas pelo dia em que foram feitas · despesas pelo dia em que são pagas</span>`;
-  $('#kpiAgenda').innerHTML =
-    kpi('Vendas de '+mn, brl0(mV), nR?`real ${brl0(vR)} (01 a ${dmy(lastR)})${vP?` + projeção ${brl0(vP)}`:''}`:`projeção pela média de ${M.sm.base?monthLabel(M.sm.base):'—'}`)+
-    kpi('Compras de '+mn, brl0(mC), `${pct(mV?mC/mV:0)} da venda${mPrev?` · inclui ${brl0(mPrev)} previstas`:''}`)+
-    kpi('Fixos + outras de '+mn, brl0(mF+mO), `fixos ${brl0(mF)} · outras ${brl0(mO)}`)+
-    kpi('Resultado de '+mn, brl0(mV-mD), `vendas ${kfmt(mV)} − despesas ${kfmt(mD)} · ${pct(mV?(mV-mD)/mV:0)}`, mV-mD<0?'neg':'pos');
-  $('#wkTitle').innerHTML=`Semanas de pagamento <span class="sub">· ${dmy(weeks[0].ws)} a ${dmy(weeks[weeks.length-1].we)} · cada semana paga de sáb a sex com as vendas de sex a qui · as semanas da ponta cruzam o mês</span>`;
+  $('#wkTitle').innerHTML=`Semanas de pagamento <span class="sub">· ${dmy(weeks[0].ws)} a ${dmy(weeks[weeks.length-1].we)} · as vendas de sex a qui pagam as contas de sáb a sex · as semanas da ponta cruzam o mês (o mês fechado está na aba Mês)</span>`;
   // chips de semana
   $('#wkChips').innerHTML = weeks.map(x=>`<button data-ws="${x.ws}" class="${x.ws===SELW?'on':''}"><span class="st ${x.status}"></span><span><b>${x.label}</b>${x===curW?' · atual':''}<br>${dmy(x.ws)} a ${dmy(x.we)}</span></button>`).join('');
   // tiles da semana
@@ -778,57 +778,116 @@ function lineChart(el,days){
   el.innerHTML=s+'</svg>';
 }
 
-/* ================= FLUXO ================= */
-function renderFluxo(){
-  const {weeks,T,allDays}=M, min=allDays.reduce((a,b)=>a.acc<b.acc?a:b,allDays[0]), last=weeks[weeks.length-1];
-  $('#kpiFluxo').innerHTML=kpi('Venda líquida (real + proj.)',brl0(T.net),`bruta ${brl0(T.sales)} · meta ${brl0(T.meta)}`)+
-    kpi('Pagamentos',brl0(T.saidas),`fixos ${brl0(T.Fx)} · compras ${brl0(T.C)} · outras ${brl0(T.O)}`)+
-    kpi('Resultado do período',brl0(T.net-T.saidas),`${weeks.length} semanas`,(T.net-T.saidas)<0?'neg':'pos')+
-    kpi('Pior saldo',brl0(min.acc),`${DOW[min.dow]} ${dmy(min.ds)}`,min.acc<0?'neg':'pos')+
-    kpi('Saldo ao fim',brl0(last.saldoFim),'sexta '+dmy(last.we),last.saldoFim<0?'neg':'pos');
-  let h=`<thead><tr><th>Semana</th><th class="r">Saldo inicial</th><th class="r">Venda bruta</th><th class="r">vs meta</th><th class="r">Venda líquida</th><th class="r">Fixos</th><th class="r">Compras</th><th class="r">Outras</th><th class="r">Total pago</th><th class="r">Resultado</th><th class="r">Saldo final</th></tr></thead><tbody>`;
-  weeks.forEach(w=>{ const dm=w.sales-w.meta; h+=`<tr><td><b>${w.label}</b><div class="sub">vendas ${w.srange} (${w.realDays===7?'real':w.realDays?'real+proj.':'proj.'}) · pagam. ${w.range}</div></td><td class="r num">${brl0(w.saldoIni)}</td><td class="r num">${brl0(w.sales)}</td><td class="r num ${dm<0?'neg':'pos'}">${dm<0?'':'+'}${brl0(dm)}</td><td class="r num">${brl0(w.net)}</td><td class="r num">${brl0(w.Fx)}</td><td class="r num">${brl0(w.C)}</td><td class="r num">${brl0(w.O)}</td><td class="r num">${brl0(w.saidas)}</td><td class="r num ${w.result<0?'neg':'pos'}">${brl0(w.result)}</td><td class="r num ${w.saldoFim<0?'neg':''}"><b>${brl0(w.saldoFim)}</b></td></tr>`; });
-  h+=`</tbody><tfoot><tr><td>Total</td><td class="r num">${brl0(+S.cfg.saldoInicial||0)}</td><td class="r num">${brl0(T.sales)}</td><td class="r num">${brl0(T.sales-T.meta)}</td><td class="r num">${brl0(T.net)}</td><td class="r num">${brl0(T.Fx)}</td><td class="r num">${brl0(T.C)}</td><td class="r num">${brl0(T.O)}</td><td class="r num">${brl0(T.saidas)}</td><td class="r num ${(T.net-T.saidas)<0?'neg':'pos'}">${brl0(T.net-T.saidas)}</td><td class="r num">${brl0(last.saldoFim)}</td></tr></tfoot>`;
-  $('#flowTbl').innerHTML=h;
-  $('#flowNote').innerHTML=`Vendas = todas as lojas, de sexta a quinta (o que é vendido sex/sáb/dom cai na conta na segunda). Despesas = vencimentos de sábado a sexta. Dias sem venda importada usam a média do mesmo dia da semana de ${M.sm.base?monthLabel(M.sm.base):'—'}${+S.cfg.growth?` (${S.cfg.growth>0?'+':''}${S.cfg.growth}%)`:''}. Vendas no crédito caem na conta depois; se não antecipa, o caixa real fica abaixo deste fluxo.`;
-  groupedBars($('#chWeek'),weeks.map(w=>'Sem '+w.n),weeks.map(w=>w.net),weeks.map(w=>w.saidas),weeks.map(w=>`<b>${w.label} · ${w.range}</b><br>Venda líquida: ${brl0(w.net)}<br>Pagamentos: ${brl0(w.saidas)}<br>Resultado: ${brl0(w.result)}`));
-  lineChart($('#chDaily'),allDays);
+/* ================= MÊS (01 ao último dia) ================= */
+/* vendas: pelo dia em que foram feitas (real importado ou projeção pela média do dia da semana)
+   pagamentos: pelo dia em que são pagos (vencimento levado ao dia útil) */
+function monthModel(m){
+  const days=monthDays(m), today=M.today, fx=+S.cfg.fixExtra||0;
+  return days.map(d=>{ const s=M.sm.get(d), its=RECS.filter(r=>r.pay===d), sum=g=>its.filter(r=>r.g===g).reduce((a,r)=>a+r.val,0);
+    const F=sum('F')+(dowOf(d)===5?fx:0), C=sum('C'), O=sum('O');
+    return {d,dow:dowOf(d),v:s.v,real:s.real,F,C,O,pag:F+C+O,its,past:d<=today}; });
+}
+function curveChart(el,rows){
+  const W=960,H=290,pl=62,pr=14,pt=14,pb=30, n=rows.length;
+  let av=0,ap=0; const A=rows.map(r=>{ av+=r.v; ap+=r.pag; return {v:av,p:ap}; });
+  const max=niceMax(Math.max(1,...A.map(a=>Math.max(a.v,a.p)))), iw=W-pl-pr, ih=H-pt-pb;
+  const x=i=>pl+(n>1?i/(n-1)*iw:iw/2), y=v=>pt+ih-(v/max)*ih;
+  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%">`;
+  for(let i=0;i<=4;i++){ const v=max*i/4, yy=y(v); s+=`<line x1="${pl}" x2="${W-pr}" y1="${yy}" y2="${yy}" stroke="${i?'#e9e7e1':'#c9c6be'}"/><text x="${pl-6}" y="${yy+4}" text-anchor="end" font-size="11" fill="#86847e">${kfmt(v)}</text>`; }
+  rows.forEach((r,i)=>{ if(i%2===0||i===n-1) s+=`<text x="${x(i)}" y="${H-10}" text-anchor="middle" font-size="11" fill="#52514e">${r.d.slice(8)}</text>`; });
+  const ti=rows.findIndex(r=>r.d===M.today); if(ti>=0) s+=`<line x1="${x(ti)}" x2="${x(ti)}" y1="${pt}" y2="${pt+ih}" stroke="#9a978f" stroke-dasharray="3 3"/><text x="${x(ti)+4}" y="${pt+10}" font-size="11" fill="#52514e">hoje</text>`;
+  const lr=rows.reduce((a,r,i)=>r.real?i:a,-1);
+  const path=(arr,k,from,to)=>arr.slice(from,to+1).map((a,j)=>`${x(from+j).toFixed(1)},${y(a[k]).toFixed(1)}`).join(' ');
+  // área de diferença (vendas − pagamentos)
+  s+=`<polygon points="${A.map((a,i)=>x(i)+','+y(a.v)).join(' ')} ${A.map((a,i)=>x(i)+','+y(a.p)).reverse().join(' ')}" fill="#1baf7a" opacity=".07"/>`;
+  s+=`<polyline points="${path(A,'p',0,n-1)}" fill="none" stroke="var(--s2)" stroke-width="2.5" stroke-linejoin="round"/>`;
+  if(lr>=0) s+=`<polyline points="${path(A,'v',0,lr)}" fill="none" stroke="var(--s1)" stroke-width="2.5" stroke-linejoin="round"/>`;
+  if(lr<n-1) s+=`<polyline points="${path(A,'v',Math.max(0,lr),n-1)}" fill="none" stroke="#8fd4b9" stroke-width="2.5" stroke-dasharray="6 4" stroke-linejoin="round"/>`;
+  const L=A[n-1]; s+=`<text x="${x(n-1)-4}" y="${y(L.v)-8}" text-anchor="end" font-size="12" font-weight="700" fill="#0f6b4a">${kfmt(L.v)}</text><text x="${x(n-1)-4}" y="${y(L.p)+16}" text-anchor="end" font-size="12" font-weight="700" fill="#8a3b0c">${kfmt(L.p)}</text>`;
+  const cw=iw/Math.max(1,n-1);
+  rows.forEach((r,i)=>{ s+=`<rect x="${x(i)-cw/2}" y="${pt}" width="${cw}" height="${ih}" fill="transparent" data-tip="<b>${DOW_L[r.dow]} ${dmy(r.d)}</b><br>Venda do dia: ${brl0(r.v)} ${r.real?'(real)':'(projeção)'}<br>Pago no dia: ${brl0(r.pag)}<br>Acumulado: vendas ${brl0(A[i].v)} · pagamentos ${brl0(A[i].p)}<br>Diferença: <b>${brl0(A[i].v-A[i].p)}</b>"/>`; });
+  el.innerHTML=s+'</svg>';
+}
+function renderMes(){
+  const m=M.month, mn=monthLabel(m).split('/')[0], pm=prevMonth(m), rows=monthModel(m), last=rows[rows.length-1].d, today=M.today;
+  const real=rows.filter(r=>r.real), vR=real.reduce((a,r)=>a+r.v,0), vP=rows.filter(r=>!r.real).reduce((a,r)=>a+r.v,0), vT=vR+vP;
+  const lastR=real.length?real[real.length-1].d:null, nR=lastR?+lastR.slice(8):0;
+  const prev=S.data.sales[pm]||{}, pSame=Object.entries(prev).filter(([d])=>+d.slice(8)<=nR).reduce((a,[,v])=>a+v,0), pTot=Object.values(prev).reduce((a,v)=>a+v,0);
+  const P=k=>rows.reduce((a,r)=>a+r[k],0), pT=P('pag'), pPast=rows.filter(r=>r.past).reduce((a,r)=>a+r.pag,0);
+  $('#mTitle').innerHTML=`Mês de ${mn} <span class="sub">· 01 a ${dmy(last)} · vendas pelo dia em que foram feitas · pagamentos pelo dia em que são pagos</span>`;
+  $('#kpiMes').innerHTML=
+    kpi('Vendas realizadas', brl0(vR), lastR?`01 a ${dmy(lastR)} · vs ${pm.slice(5)==='12'?'dez':MES[+pm.slice(5)-1].slice(0,3)} mesmos dias <span class="${varCls(pSame?vR/pSame-1:null)}">${varTxt(pSame?vR/pSame-1:null)}</span>`:'nenhum dia importado')+
+    kpi('Vendas projetadas do mês', brl0(vT), `${brl0(vR)} real + ${brl0(vP)} projeção${pTot?` · ${monthLabel(pm).slice(0,3)} fechou ${kfmt(pTot)} <span class="${varCls(vT/pTot-1)}">${varTxt(vT/pTot-1)}</span>`:''}`)+
+    kpi('Pagamentos do mês', brl0(pT), `até hoje ${brl0(pPast)} · daqui ao dia ${dmy(last)} ${brl0(pT-pPast)}`)+
+    kpi('Resultado projetado', brl0(vT-pT), `vendas projetadas − pagamentos · ${pct(vT?(vT-pT)/vT:0)}`, vT-pT<0?'neg':'pos')+
+    kpi('Compras ÷ vendas', pct(vT?P('C')/vT:0), `compras ${brl0(P('C'))} · fixos ${kfmt(P('F'))} · outras ${kfmt(P('O'))}`);
+  curveChart($('#mCurve'),rows);
+  let av=0,ap=0,minGap=null; rows.forEach(r=>{ av+=r.v; ap+=r.pag; const g=av-ap; if(minGap==null||g<minGap.g) minGap={g,d:r.d}; });
+  $('#mCurveNote').innerHTML = minGap&&minGap.g<0 ? `Os pagamentos acumulados passam das vendas acumuladas: o pior ponto é <b>${DOW_L[dowOf(minGap.d)]} ${dmy(minGap.d)}</b>, com <b class="neg">${brl0(minGap.g)}</b>. É o caixa que precisa estar no banco antes do mês começar.` : `As vendas acumuladas ficam acima dos pagamentos acumulados o mês inteiro; a menor folga é de ${brl0(minGap?minGap.g:0)} em ${minGap?dmy(minGap.d):'—'}.`;
+  // faixas 01–07, 08–14, 15–21, 22–28, 29–fim
+  const nd=rows.length, fx=[[1,7],[8,14],[15,21],[22,28],[29,nd]].filter(f=>f[0]<=nd);
+  let acc=0;
+  $('#mFaixas').innerHTML=`<thead><tr><th>Faixa do mês</th><th class="r">Vendas</th><th class="r">Fixos</th><th class="r">Compras</th><th class="r">Outras</th><th class="r">Pagamentos</th><th class="r">Resultado</th><th class="r">Acumulado</th></tr></thead><tbody>`+
+    fx.map(([a,b])=>{ const rr=rows.slice(a-1,b), v=rr.reduce((x,r)=>x+r.v,0), nr=rr.filter(r=>r.real).length, S_=k=>rr.reduce((x,r)=>x+r[k],0), p=S_('pag'); acc+=v-p;
+      const cur=rr.some(r=>r.d===today);
+      return `<tr class="${cur?'today':''}"><td class="lb2"><b>${pad(a)} a ${pad(b)}</b> ${nr===rr.length?'<span class="tagr real">real</span>':nr?`<span class="tagr real">${nr}d real</span>`:'<span class="tagr proj">proj.</span>'}</td><td class="r num"><b>${brl0(v)}</b></td><td class="r num">${brl0(S_('F'))}</td><td class="r num">${brl0(S_('C'))}</td><td class="r num">${brl0(S_('O'))}</td><td class="r num"><b>${brl0(p)}</b></td><td class="r num ${v-p<0?'neg':'pos'}"><b>${brl0(v-p)}</b></td><td class="r num ${acc<0?'neg':''}">${brl0(acc)}</td></tr>`; }).join('')+
+    `</tbody><tfoot><tr><td>Mês</td><td class="r num">${brl0(vT)}</td><td class="r num">${brl0(P('F'))}</td><td class="r num">${brl0(P('C'))}</td><td class="r num">${brl0(P('O'))}</td><td class="r num">${brl0(pT)}</td><td class="r num ${vT-pT<0?'neg':'pos'}">${brl0(vT-pT)}</td><td></td></tr></tfoot>`;
+  $('#mNote').innerHTML=`<b>Como ler:</b> venda real = dias importados do Quadro de Venda Diária; projeção = média do mesmo dia da semana de ${M.sm.base?monthLabel(M.sm.base):'—'}${+S.cfg.growth?` ${S.cfg.growth>0?'+':''}${S.cfg.growth}%`:''}. Pagamentos = títulos do Alterdata${(S.data.planned||[]).length?' + compras previstas':''}, no dia útil em que são pagos; os vencidos até hoje são considerados pagos. Aqui não entra o prazo de recebimento do cartão: isso está na Agenda.`;
 }
 
-/* ================= ANÁLISES ================= */
-function renderAnalises(){
-  const {items,T,weeks}=M;
-  const byNat=g=>{ const m={}; items.filter(r=>r.g===g).forEach(r=>m[r.nat]=(m[r.nat]||0)+r.val); return Object.entries(m).sort((a,b)=>b[1]-a[1]); };
-  [['F','#anFix'],['C','#anComp'],['O','#anOut']].forEach(([g,id])=>{ const a=byNat(g), mx=Math.max(1,...a.map(x=>x[1])), tot=a.reduce((s,x)=>s+x[1],0);
-    $(id).innerHTML = (a.map(([k,v])=>hbar(k,v,mx,GCOL[g],pct(tot?v/tot:0)+' do grupo')).join('')||'<p class="sub">Nada no período.</p>') + (g==='F'&&+S.cfg.fixExtra?hbar('FIXOS FORA DO ALTERDATA',+S.cfg.fixExtra*weeks.length,Math.max(mx,+S.cfg.fixExtra*weeks.length),GCOL.F,''):''); });
-  const fm={}; items.filter(r=>r.g==='C').forEach(r=>{ (fm[r.fornN]=fm[r.fornN]||{v:0,n:0}); fm[r.fornN].v+=r.val; fm[r.fornN].n++; });
-  const fa=Object.entries(fm).sort((a,b)=>b[1].v-a[1].v), fmax=Math.max(1,...fa.map(x=>x[1].v));
-  $('#anForn').innerHTML=fa.slice(0,15).map(([k,o])=>hbar(k,o.v,fmax,GCOL.C,`${o.n} títulos · ${pct(T.C?o.v/T.C:0)} das compras`)).join('');
-  const pm={}; items.forEach(r=>pm[r.forma||'—']=(pm[r.forma||'—']||0)+r.val); const pa=Object.entries(pm).sort((a,b)=>b[1]-a[1]), pmax=Math.max(1,...pa.map(x=>x[1]));
-  $('#anForma').innerHTML=pa.map(([k,v])=>hbar(k,v,pmax,'var(--s2)',pct(v/T.total))).join('');
-  let pw=0,pv=0; items.filter(r=>r.g==='C').forEach(r=>{ if(r.emis){ const dd=(parseD(r.venc)-parseD(r.emis))/864e5; if(dd>=0&&dd<200){ pw+=dd*r.val; pv+=r.val; } } });
-  const top3=fa.slice(0,3).reduce((a,x)=>a+x[1].v,0);
-  $('#kpiAnal').innerHTML=
-    kpi('Fixos ÷ meta de venda',pct(T.meta?T.Fx/T.meta:0),`${brl0(T.Fx)} de ${brl0(T.meta)}`)+
-    kpi('Compras ÷ venda',pct(T.sales?T.C/T.sales:0),`${brl0(T.C)} ÷ ${brl0(T.sales)} (proj.)`)+
-    kpi('Top 3 fornecedores',pct(T.C?top3/T.C:0),fa.slice(0,3).map(x=>x[0]).join(' · '))+
-    kpi('Prazo médio das compras',pv?Math.round(pw/pv)+' dias':'—','emissão → vencimento, por valor')+
-    kpi('Ponto de equilíbrio semanal',brl0((T.Fx+T.O)/weeks.length),'fixos + outras / semana (sem compras)');
-  const base=M.sm.base;
-  if(base&&S.data.sales[base]){
-    const ent=Object.entries(S.data.sales[base]).sort(), tot=ent.reduce((a,x)=>a+x[1],0);
-    $('#anVendSub').textContent=`· ${monthLabel(base)} · total ${brl0(tot)} · ${brl0(tot/ent.length*7)}/semana em média`;
-    const W=640,H=220,pl=50,pr=8,pt=10,pb=28, mx=niceMax(Math.max(...ent.map(x=>x[1]),1)), iw=W-pl-pr, ih=H-pt-pb, bw=iw/ent.length;
-    let s=`<svg viewBox="0 0 ${W} ${H}" width="100%">`;
-    for(let i=0;i<=4;i++){ const v=mx*i/4, yy=pt+ih-v/mx*ih; s+=`<line x1="${pl}" x2="${W-pr}" y1="${yy}" y2="${yy}" stroke="${i?'#efede8':'#c9c6be'}"/><text x="${pl-6}" y="${yy+4}" text-anchor="end" font-size="11" fill="#86847e">${kfmt(v)}</text>`; }
-    ent.forEach(([d,v],i)=>{ const dw=dowOf(d), h=v/mx*ih, x=pl+i*bw+1, w=Math.max(1,bw-2), yy=pt+ih-h;
-      s+=`<path d="${roundTop(x,yy,w,pt+ih,Math.min(3,h/2,w/2))}" fill="${dw===0||dw===6?'var(--s1)':'#8fd4b9'}"/><rect x="${pl+i*bw}" y="${pt}" width="${bw}" height="${ih}" fill="transparent" data-tip="<b>${DOW_L[dw]} ${dmy(d)}</b><br>${brl(v)}${v===0?' (fechado)':''}"/>`;
-      if(i%2===0) s+=`<text x="${pl+i*bw+bw/2}" y="${H-10}" text-anchor="middle" font-size="10.5" fill="#52514e">${d.slice(8)}</text>`; });
-    $('#anVend').innerHTML=s+`</svg><div class="legend-row"><span><span class="sw" style="background:var(--s1)"></span>Sábado e domingo</span><span><span class="sw" style="background:#8fd4b9"></span>Dias de semana</span></div><table><thead><tr><th>Média</th>${DOW.map(d=>`<th class="r">${d}</th>`).join('')}</tr></thead><tbody><tr><td>${monthLabel(base)}</td>${M.sm.avg.map(v=>`<td class="r num">${kfmt(v)}</td>`).join('')}</tr></tbody></table>`;
-  } else { $('#anVend').innerHTML='<p class="sub">Importe um PDF de vendas.</p>'; $('#anVendSub').textContent=''; }
-  const tt=[...items].sort((a,b)=>b.val-a.val).slice(0,15);
-  $('#anTop').innerHTML=`<thead><tr><th>Pagar em</th><th>Fornecedor</th><th>Natureza</th><th class="r">Valor</th></tr></thead><tbody>`+tt.map(r=>`<tr><td class="num">${DOW[dowOf(r.pay)]} ${dmy(r.pay)}</td><td>${esc(r.forn)}</td><td><span class="pill ${r.g}">${esc(r.nat)}</span></td><td class="r num">${brl(r.val)}</td></tr>`).join('')+`</tbody>`;
+/* ================= PAGAMENTOS ================= */
+let PGV='dia', PGG='';
+function renderPag(){
+  const m=M.month, mn=monthLabel(m).split('/')[0], today=M.today, rows=monthModel(m), g=PGG;
+  const its=RECS.filter(r=>!g||r.g===g);
+  const inM=its.filter(r=>r.pay.slice(0,7)===m), tot=inM.reduce((a,r)=>a+r.val,0)+(!g||g==='F'?rows.reduce((a,r)=>a+(r.dow===5?+S.cfg.fixExtra||0:0),0):0);
+  const sumR=(a,b)=>its.filter(r=>r.pay>=a&&r.pay<=b).reduce((x,r)=>x+r.val,0);
+  const past=inM.filter(r=>r.pay<=today).reduce((a,r)=>a+r.val,0), n7=sumR(today,addD(today,7)), n30=sumR(today,addD(today,30));
+  const byDay={}; inM.forEach(r=>byDay[r.pay]=(byDay[r.pay]||0)+r.val); const heavy=Object.entries(byDay).sort((a,b)=>b[1]-a[1])[0];
+  const gname=g?GNAME[g].toLowerCase():'tudo';
+  $('#pgTitle').innerHTML=`Pagamentos <span class="sub">· pelo dia em que são pagos (vencimento no fim de semana ou feriado vai para o próximo dia útil) · ${gname}</span>`;
+  $('#kpiPag').innerHTML=
+    kpi('A pagar em '+mn, brl0(tot), `${inM.length} títulos`)+
+    kpi('Vencidos até hoje', brl0(past), `considerados pagos · ${pct(tot?past/tot:0)} do mês`)+
+    kpi('Próximos 7 dias', brl0(n7), `${dmy(today)} a ${dmy(addD(today,7))}`)+
+    kpi('Próximos 30 dias', brl0(n30), `até ${dmy(addD(today,30))}`)+
+    kpi('Dia mais pesado', heavy?brl0(heavy[1]):'—', heavy?`${DOW_L[dowOf(heavy[0])]} ${dmy(heavy[0])} · ${pct(tot?heavy[1]/tot:0)} do mês`:'');
+  [...$('#pgView').children].forEach(b=>b.classList.toggle('on',b.dataset.v===PGV));
+  [...$('#pgGrp').children].forEach(b=>b.classList.toggle('on',b.dataset.g===PGG));
+  const grs=g?[g]:['F','C','O'];
+  $('#pgLegend').innerHTML=grs.map(k=>`<span><span class="sw" style="background:${GCOL[k]}"></span>${GNAME[k]}</span>`).join('');
+  const dayRow=(d,list)=>{ const S_=k=>list.filter(r=>r.g===k).reduce((a,r)=>a+r.val,0), t=list.reduce((a,r)=>a+r.val,0), top=list.slice().sort((a,b)=>b.val-a.val)[0];
+    return `<tr data-d="${d}" class="${d===today?'today':''} ${d<today?'proj':''}"><td class="lb2"><b>${DOW[dowOf(d)]} ${dmy(d)}</b></td><td class="r num">${list.length}</td>${grs.map(k=>`<td class="r num">${brl0(S_(k))}</td>`).join('')}<td class="r num"><b>${brl0(t)}</b></td><td><div class="top1" title="${esc(top?top.forn:'')}">${top?esc(top.fornN)+' · '+brl0(top.val):''}</div></td></tr>`; };
+  const head=`<tr><th>Dia</th><th class="r">Títulos</th>${grs.map(k=>`<th class="r">${GNAME[k]}</th>`).join('')}<th class="r">Total</th><th>Maior título</th></tr>`;
+  let body='', foot='', scopeIts=[];
+  if(PGV==='dia' || PGV==='prox'){
+    const days = PGV==='dia' ? monthDays(m) : Array.from({length:31},(_,i)=>addD(today,i));
+    $('#pgChTitle').innerHTML = PGV==='dia' ? `Dia a dia · ${monthLabel(m)}` : `Próximos 30 dias · ${dmy(today)} a ${dmy(addD(today,30))}`;
+    stackBars($('#pgChart'),days.map(d=>PGV==='dia'?d.slice(8):dmy(d).slice(0,2)),grs.map(k=>({color:GCOL[k],vals:days.map(d=>its.filter(r=>r.pay===d&&r.g===k).reduce((a,r)=>a+r.val,0))})),
+      {shade:days.map(d=>!isUtil(d)),tips:days.map(d=>{ const l=its.filter(r=>r.pay===d).sort((a,b)=>b.val-a.val); return `<b>${DOW_L[dowOf(d)]} ${dmy(d)}</b>${feriado(d)?' · '+feriado(d):''}<br>Total: ${brl0(l.reduce((a,r)=>a+r.val,0))} · ${l.length} títulos${l.slice(0,3).map(r=>`<br>${esc(r.fornN)}: ${brl0(r.val)}`).join('')}`; })});
+    days.forEach(d=>{ const l=its.filter(r=>r.pay===d); if(l.length){ body+=dayRow(d,l); scopeIts.push(...l); } });
+  } else {
+    $('#pgChTitle').innerHTML=`Semanas de pagamento (sáb→sex) · ${monthLabel(m)}`;
+    const W=M.weeks; stackBars($('#pgChart'),W.map(w=>'Sem '+w.n),grs.map(k=>({color:GCOL[k],vals:W.map(w=>w.items.filter(r=>r.g===k).reduce((a,r)=>a+r.val,0)+(k==='F'?+S.cfg.fixExtra||0:0))})),
+      {maxW:80,marks:(!g||g==='C')?W.map(w=>g==='C'?w.teto:null):null,tips:W.map(w=>`<b>${w.label} · ${w.range}</b><br>Fixos ${brl0(w.Fx)} · compras ${brl0(w.C)} · outras ${brl0(w.O)}<br>Teto de compras ${brl0(w.teto)} · ${w.sobra<0?'passa':'sobra'} ${brl0(Math.abs(w.sobra))}`)});
+    body=W.map(w=>{ const l=w.items.filter(r=>!g||r.g===g); scopeIts.push(...l); const S_=k=>w[k==='F'?'Fx':k];
+      return `<tr class="${w===M.curW?'today':''}"><td class="lb2"><b>${w.label}</b> <span class="sub">${w.range}</span></td><td class="r num">${l.length}</td>${grs.map(k=>`<td class="r num">${brl0(S_(k))}</td>`).join('')}<td class="r num"><b>${brl0(grs.reduce((a,k)=>a+S_(k),0))}</b></td><td class="num">compras ${kfmt(w.C)} de ${kfmt(w.teto)} · <b class="${w.sobra<0?'neg':'pos'}">${w.sobra<0?'passa':'sobra'} ${kfmt(Math.abs(w.sobra))}</b></td></tr>`; }).join('');
+  }
+  const st=scopeIts.reduce((a,r)=>a+r.val,0);
+  foot=`<tr><td>Total</td><td class="r num">${scopeIts.length}</td>${grs.map(k=>`<td class="r num">${brl0(scopeIts.filter(r=>r.g===k).reduce((a,r)=>a+r.val,0))}</td>`).join('')}<td class="r num">${brl0(st)}</td><td></td></tr>`;
+  $('#pgTbl').innerHTML=`<thead>${PGV==='semana'?head.replace('<th>Maior título</th>','<th>Compras × teto</th>').replace('<th>Dia</th>','<th>Semana</th>'):head}</thead><tbody>${body||'<tr><td class="sub" colspan="8">Nenhum pagamento no período.</td></tr>'}</tbody><tfoot>${foot}</tfoot>`;
+  // natureza e fornecedores do recorte
+  const nm={}; scopeIts.forEach(r=>{ (nm[r.nat]=nm[r.nat]||{v:0,g:r.g}).v+=r.val; }); const na=Object.entries(nm).sort((a,b)=>b[1].v-a[1].v), nmx=Math.max(1,...na.map(x=>x[1].v));
+  const lbl=PGV==='prox'?'próximos 30 dias':monthLabel(m);
+  $('#pgNatSub').textContent='· '+lbl; $('#pgForSub').textContent='· '+lbl;
+  $('#pgNat').innerHTML=na.slice(0,12).map(([k,o])=>hbar(k,o.v,nmx,GCOL[o.g],pct(st?o.v/st:0))).join('')||'<div class="sub">—</div>';
+  const fm={}; scopeIts.forEach(r=>{ (fm[r.fornN]=fm[r.fornN]||{v:0,n:0,g:r.g}); fm[r.fornN].v+=r.val; fm[r.fornN].n++; }); const fa=Object.entries(fm).sort((a,b)=>b[1].v-a[1].v), fmx=Math.max(1,...fa.map(x=>x[1].v));
+  $('#pgFor').innerHTML=fa.slice(0,12).map(([k,o])=>hbar(k,o.v,fmx,GCOL[o.g],`${o.n} títulos · ${pct(st?o.v/st:0)}`)).join('')||'<div class="sub">—</div>';
 }
+$('#pgView').onclick=e=>{ const b=e.target.closest('button[data-v]'); if(b){ PGV=b.dataset.v; renderPag(); } };
+$('#pgGrp').onclick=e=>{ const b=e.target.closest('button[data-g]'); if(b){ PGG=b.dataset.g; renderPag(); } };
+$('#pgTbl').addEventListener('click',e=>{ const r=e.target.closest('tr[data-d]'); if(!r) return; const d=r.dataset.d, l=RECS.filter(x=>x.pay===d);
+  openDrawer(`${DOW_L[dowOf(d)]}, ${dmyy(d)}`,`Pagamentos do dia: <b>${brl(l.reduce((a,x)=>a+x.val,0))}</b> · ${l.length} títulos`,itemsTable(l,false)); });
 
 /* ================= TÍTULOS ================= */
 let sortK='pay', sortDir=1;
@@ -876,7 +935,7 @@ const isFds = ds => { const w=dowOf(ds); return w===0||w===6; };
 function stackBars(el,labels,series,opts){
   /* series: [{name,color,vals[]}] empilhadas; opts.marks (ref), opts.tips, opts.shade (bool[]) */
   const W=960,H=270,pl=58,pr=10,pt=14,pb=30, tot=labels.map((_,i)=>series.reduce((a,s)=>a+(s.vals[i]||0),0));
-  const max=niceMax(Math.max(1,...tot,...(opts.marks||[]).filter(x=>x!=null)));
+  const max=niceMax(Math.max(1,...tot,...(opts.marks||[]).filter(x=>x!=null&&x>0)));
   const iw=W-pl-pr, ih=H-pt-pb, bw=iw/labels.length, y=v=>pt+ih-(v/max)*ih;
   let s=`<svg viewBox="0 0 ${W} ${H}" width="100%">`;
   (opts.shade||[]).forEach((sh,i)=>{ if(sh) s+=`<rect x="${pl+i*bw}" y="${pt}" width="${bw}" height="${ih}" fill="#f4f2ec"/>`; });
@@ -1207,7 +1266,7 @@ function refresh(){
   const ms=[...new Set([...Object.keys(cnt),...Object.keys(S.data.sales).filter(m=>Object.keys(S.data.sales[m]).length)])].sort();
   if(!S.cfg.month||!ms.includes(S.cfg.month)) S.cfg.month=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0]?.[0]||ymd(new Date()).slice(0,7);
   renderMesBar(cnt);
-  buildRecs(); compute(); renderAgenda(); renderVendas(); renderFluxo(); renderAnalises(); fillFilters(); renderTitulos(); renderConfig();
+  buildRecs(); compute(); renderAgenda(); renderMes(); renderVendas(); renderPag(); fillFilters(); renderTitulos(); renderConfig();
 }
 function commit(dataChanged){ S.savedAt=Date.now(); saveLocal(); refresh(); cloudQueue(dataChanged?'data':'cfg'); }
 function renderMesBar(cnt){
