@@ -234,6 +234,50 @@ tfoot td{font-weight:800;border-top:2px solid var(--line)}
 .mesnav button:hover{background:var(--line2)}
 .mesnav button:disabled{opacity:.3;cursor:default}
 .mesnav select{border:0;background:transparent;font-weight:700;padding:7px 4px}
+.mesbar{display:flex;gap:6px;align-items:center;padding:10px 22px;background:#1f1f1f;overflow-x:auto;scrollbar-width:none;position:sticky;top:58px;z-index:29}
+.mesbar::-webkit-scrollbar{display:none}
+.mesbar button{flex:0 0 auto;border:1px solid #333;background:#262626;color:#d8d5cd;border-radius:10px;padding:6px 14px 5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;line-height:1.15;min-width:66px}
+.mesbar button b{font-size:14px;color:#fff}
+.mesbar button span{font-size:10.5px;color:#a9a59c}
+.mesbar button i{display:flex;gap:3px;height:6px;margin-top:3px}
+.mesbar button:hover{background:#2f2f2f}
+.mesbar button.on{background:var(--brand);border-color:var(--brand)}
+.mesbar button.on span{color:#ffd9dc}
+.mesbar em{display:inline-block;width:6px;height:6px;border-radius:50%}
+.mesbar em.dv{background:#3fd59a}.mesbar em.dp{background:#f0a35b}
+.mesbar .mesleg{margin-left:auto;flex:0 0 auto;font-size:11px;color:#a9a59c;display:flex;align-items:center;gap:5px;padding-left:12px}
+.grid>*,.agrid>*,.wtiles>*,.two>*{min-width:0}
+.card{overflow-x:auto}
+.card table{min-width:max-content}
+.card table.cx,.card table.pprev{min-width:0}
+@media(max-width:700px){
+  header.top{padding:10px 12px;gap:8px;flex-wrap:nowrap}
+  .logo small{display:none}
+  nav.tabs{flex-wrap:nowrap;overflow-x:auto;margin-left:0;scrollbar-width:none;flex:1}
+  nav.tabs::-webkit-scrollbar{display:none}
+  nav.tabs button{flex:0 0 auto;padding:7px 10px}
+  .top .right{margin-left:0}
+  .chip{display:none}
+  .mesbar{padding:8px 12px;top:54px}
+  .mesbar .mesleg{display:none}
+  main{padding:14px 12px 50px}
+  .kpis{grid-template-columns:1fr 1fr;gap:10px}
+  .kpi .val{font-size:19px}
+  .kpi .lbl{font-size:10.5px}
+  .wtiles{grid-template-columns:1fr 1fr;gap:10px}
+  .tile .v{font-size:20px}
+  .tile{padding:12px}
+  .wkchips,.lojas{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+  .wkchips button,.lojas button{flex:0 0 auto}
+  .vtop{grid-template-columns:1fr}
+  .vbar{flex-direction:column;align-items:stretch}
+  .vbar>*{min-width:0;max-width:100%}
+  .seg{overflow-x:auto}
+  .seg button{white-space:nowrap}
+  .planner .pf{grid-template-columns:1fr}
+  .hbar{grid-template-columns:minmax(90px,120px) 1fr 84px}
+  h2{font-size:16px}
+}
 @media print{header.top,.noprint{display:none!important}main{padding:0}}
 </style>
 </head>
@@ -250,9 +294,9 @@ tfoot td{font-weight:800;border-top:2px solid var(--line)}
   </nav>
   <div class="right">
     <span class="chip" id="cloudChip">local</span>
-    <select id="monthSel" title="Mês"></select>
   </div>
 </header>
+<nav class="mesbar" id="mesBar" aria-label="Mês"></nav>
 
 <main>
   <!-- AGENDA -->
@@ -299,7 +343,6 @@ tfoot td{font-weight:800;border-top:2px solid var(--line)}
     <div class="vbar">
       <div class="lojas" id="lojaChips"></div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <div class="mesnav"><button id="vPrev" title="Mês anterior">‹</button><select id="vMes"></select><button id="vNext" title="Próximo mês">›</button></div>
       <div class="seg" id="vView"><button data-v="dia" class="on">Dia a dia</button><button data-v="semana">Semana × fim de semana</button><button data-v="mes">Mês a mês</button></div>
       </div>
     </div>
@@ -811,7 +854,7 @@ function dl(blob,name){ const a=document.createElement('a'); a.href=URL.createOb
 
 /* ================= CONFIG ================= */
 /* ================= VENDAS ================= */
-let VVIEW='dia', VLOJA='TODAS', VMES=null;
+let VVIEW='dia', VLOJA='TODAS';
 const LOJA_COR={CORONEL:'#2a78d6',CORREAS:'#1baf7a',BINGEN:'#eb6834',MATRIZ:'#6250d6'};
 const lojaCor = l => LOJA_COR[l] || '#9a978f';
 const SL = () => S.data.salesLoja || {};
@@ -842,13 +885,8 @@ function stackBars(el,labels,series,opts){
 }
 const varTxt = v => v==null?'—':(v>=0?'+':'')+pct(v);
 const varCls = v => v==null?'':v<0?'neg':'pos';
-function vMonths(){ const ms=Object.keys(S.data.sales).filter(m=>Object.keys(S.data.sales[m]).length).sort(); if(!ms.includes(M.month)) ms.push(M.month); return ms.sort(); }
 function renderVendas(){
-  const ms=vMonths();
-  if(!VMES || !ms.includes(VMES)) VMES = S.data.sales[M.month]&&Object.keys(S.data.sales[M.month]).length ? M.month : ms.filter(m=>S.data.sales[m]).pop()||M.month;
-  $('#vMes').innerHTML=ms.slice().reverse().map(m=>`<option value="${m}" ${m===VMES?'selected':''}>${monthLabel(m)}${S.data.sales[m]?` · ${Object.keys(S.data.sales[m]).length} dias`:' · sem vendas'}</option>`).join('');
-  $('#vPrev').disabled = ms.indexOf(VMES)<=0; $('#vNext').disabled = ms.indexOf(VMES)>=ms.length-1;
-  const month=VMES, pm=prevMonth(month), lojas=lojasAll(), today=M.today;
+  const month=M.month, pm=prevMonth(month), lojas=lojasAll(), today=M.today;
   if(VLOJA!=='TODAS' && !lojas.includes(VLOJA)) VLOJA='TODAS';
   const L=S.data.salesLast;
   $('#vLast').innerHTML = L ? `<div>Última importação: <b>${esc(L.file)}</b> · ${new Date(L.at).toLocaleString('pt-BR')}</div><div style="margin-top:4px">Período <b>${dmyy(L.from)} a ${dmyy(L.to)}</b> · ${L.n} dias · <b>${brl(L.total)}</b></div>`
@@ -946,9 +984,6 @@ function renderVendas(){
       return `<tr data-l="${l}" style="cursor:pointer" class="${VLOJA===l?'today':''}"><td><span class="sw" style="background:${lojaCor(l)}"></span><b>${l}</b><div style="height:6px;border-radius:3px;background:${lojaCor(l)};width:${tAll?a/tAll*100:0}%;margin-top:4px"></div></td><td class="r num"><b>${brl0(a)}</b></td><td class="r num">${tAll?pct(a/tAll):'—'}</td><td class="r num">${fd.length?brl0(sumL(fd,l)/fd.length):'—'}</td><td class="r num ${varCls(v)}">${varTxt(v)}</td></tr>`; }).join('')+`</tbody>`
     : '<tbody><tr><td class="sub">Os dias importados antes da separação por loja não têm esse detalhe. Importe o relatório de novo para ver por loja.</td></tr></tbody>';
 }
-$('#vMes').onchange=e=>{ VMES=e.target.value; renderVendas(); };
-$('#vPrev').onclick=()=>{ const ms=vMonths(), i=ms.indexOf(VMES); if(i>0){ VMES=ms[i-1]; renderVendas(); } };
-$('#vNext').onclick=()=>{ const ms=vMonths(), i=ms.indexOf(VMES); if(i<ms.length-1){ VMES=ms[i+1]; renderVendas(); } };
 $('#vView').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; VVIEW=b.dataset.v; renderVendas(); };
 $('#lojaChips').onclick=e=>{ const b=e.target.closest('button[data-l]'); if(!b) return; VLOJA=b.dataset.l; renderVendas(); };
 $('#vLoja').onclick=e=>{ const r=e.target.closest('tr[data-l]'); if(!r) return; VLOJA=VLOJA===r.dataset.l?'TODAS':r.dataset.l; renderVendas(); };
@@ -975,7 +1010,8 @@ $('#gTbl').addEventListener('change',e=>{
 function loadScript(src){ return new Promise((ok,ko)=>{ const s=document.createElement('script'); s.src=src; s.onload=ok; s.onerror=()=>ko(new Error('Não foi possível carregar a biblioteca de leitura (sem internet?)')); document.head.appendChild(s); }); }
 async function needXLSX(){ if(!window.XLSX){ try{ await loadScript('https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js'); }catch(e){ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'); } } }
 async function needPDF(){ if(!window.pdfjsLib){ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'); pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; } }
-function msg(html,cls='info'){ const h=`<div class="alert ${cls}">${html}</div>`; $('#impMsg').innerHTML=h; document.querySelectorAll('.impmsg').forEach(e=>e.innerHTML=h); }
+let MSG_SALES=false;
+function msg(html,cls='info'){ const h=`<div class="alert ${cls}"><div>${html}</div></div>`; $('#impMsg').innerHTML=h; document.querySelectorAll('.impmsg').forEach(e=>e.innerHTML=MSG_SALES?h:''); }
 function toISO(v){
   if(v==null||v==='') return '';
   if(typeof v==='number'){ const d=new Date(Date.UTC(1899,11,30)+Math.round(v*864e5)); return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate()); }
@@ -984,6 +1020,7 @@ function toISO(v){
 }
 function toNum(v){ if(typeof v==='number') return v; const s=String(v||'').replace(/[R$\s*]/g,''); return +(s.includes(',')?s.replace(/\./g,'').replace(',','.'):s)||0; }
 async function importCP(file){
+  MSG_SALES=false;
   try{
     msg('Lendo '+esc(file.name)+'…'); await needXLSX();
     const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:false});
@@ -1052,6 +1089,7 @@ async function readSalesPDF(file){
   return found;
 }
 async function importVD(file){
+  MSG_SALES=true;
   try{
     msg('Lendo '+esc(file.name)+'…');
     const found = /\.pdf$/i.test(file.name) ? await readSalesPDF(file) : await readSalesXLS(file);
@@ -1060,7 +1098,7 @@ async function importVD(file){
     keys.forEach(k=>{ (byM[k.slice(0,7)]=byM[k.slice(0,7)]||{})[k]=found[k].total; if(Object.keys(found[k].lojas).length) S.data.salesLoja[k]=found[k].lojas; });
     Object.entries(byM).forEach(([m,o])=>S.data.sales[m]=Object.assign({},S.data.sales[m]||{},o));
     const ks=keys.sort();
-    VMES=ks[ks.length-1].slice(0,7);
+    S.cfg.month=ks[ks.length-1].slice(0,7);
     S.data.salesFile=file.name; S.data.salesAt=Date.now(); S.data.salesLast={file:file.name,at:Date.now(),from:ks[0],to:ks[ks.length-1],n:ks.length,total:ks.reduce((a,k)=>a+found[k].total,0)};
     commit(true);
     msg(`✅ Vendas: ${Object.entries(byM).map(([m,o])=>{ const ks=Object.keys(o).sort(); return `<b>${monthLabel(m)}</b> ${dmy(ks[0])} a ${dmy(ks[ks.length-1])} (${ks.length} dias) · ${brl(Object.values(o).reduce((a,b)=>a+b,0))}`; }).join(' · ')}`);
@@ -1157,13 +1195,23 @@ $('#btnReset').onclick=()=>{ if(!confirm('Voltar aos dados originais embutidos n
 /* ================= CICLO ================= */
 function refresh(){
   const cnt={}; S.data.cp.forEach(r=>{ const m=payDate(r[0]).slice(0,7); cnt[m]=(cnt[m]||0)+1; });
-  const ms=Object.keys(cnt).sort();
+  const ms=[...new Set([...Object.keys(cnt),...Object.keys(S.data.sales).filter(m=>Object.keys(S.data.sales[m]).length)])].sort();
   if(!S.cfg.month||!ms.includes(S.cfg.month)) S.cfg.month=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0]?.[0]||ymd(new Date()).slice(0,7);
-  $('#monthSel').innerHTML=(ms.length?ms:[S.cfg.month]).map(m=>`<option value="${m}">${monthLabel(m)}</option>`).join(''); $('#monthSel').value=S.cfg.month;
+  renderMesBar(cnt);
   buildRecs(); compute(); renderAgenda(); renderVendas(); renderFluxo(); renderAnalises(); fillFilters(); renderTitulos(); renderConfig();
 }
 function commit(dataChanged){ S.savedAt=Date.now(); saveLocal(); refresh(); cloudQueue(dataChanged?'data':'cfg'); }
-$('#monthSel').onchange=e=>{ S.cfg.month=e.target.value; commit(); };
+function renderMesBar(cnt){
+  const sm={}; Object.keys(S.data.sales).forEach(m=>{ const n=Object.keys(S.data.sales[m]).length; if(n) sm[m]=n; });
+  const ms=[...new Set([...Object.keys(cnt),...Object.keys(sm),S.cfg.month])].sort();
+  const cur=ymd(new Date()).slice(0,7);
+  $('#mesBar').innerHTML=ms.map(m=>{ const [y,mm]=m.split('-'); const nm=MES[+mm-1];
+    const tip=`${monthLabel(m)} · ${sm[m]?sm[m]+' dias de vendas':'sem vendas'} · ${cnt[m]?cnt[m]+' títulos a pagar':'sem títulos'}`;
+    return `<button data-m="${m}" class="${m===S.cfg.month?'on':''}" title="${tip}"><b>${nm.charAt(0).toUpperCase()+nm.slice(1,3)}</b><span>${y}${m===cur?' · atual':''}</span><i>${sm[m]?'<em class="dv"></em>':''}${cnt[m]?'<em class="dp"></em>':''}</i></button>`; }).join('')+
+    `<span class="mesleg"><em class="dv"></em>vendas <em class="dp"></em>contas</span>`;
+  const on=$('#mesBar button.on'); if(on) on.scrollIntoView({block:'nearest',inline:'center'});
+}
+$('#mesBar').addEventListener('click',e=>{ const b=e.target.closest('button[data-m]'); if(!b||b.dataset.m===S.cfg.month) return; S.cfg.month=b.dataset.m; SELW=null; commit(); });
 $('#tabs').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('on',x===b)); document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.id==='t-'+b.dataset.t)); scrollTo(0,0); };
 refresh();
 if(AUTH){ $('#fbUser').textContent='Conectado como '+AUTH.email.split('@')[0]; cloudLoad(); } else showLogin();
