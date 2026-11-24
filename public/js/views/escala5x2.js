@@ -1,4 +1,4 @@
-// Escala 5x2 — simulacao do fim da escala 6x1. Dois modos: Rei do Gado (equipe real) e Outro negocio (cadastro livre).
+// Escala 5x2 (em uso desde nov/2026; nao e mais simulacao). Dois modos: Rei do Gado (equipe real) e Outro negocio (cadastro livre).
 // Calculo em calc.js (gerar5x2): dia fechado conta como folga, 1 folga fixa na semana, domingo a cada 3 semanas,
 // sem folga nos dias marcados (sabado); as folgas sao planejadas olhando todas as lojas juntas, com troca de loja no
 // dia (cobrir5x2). Carga horaria (carga5x2) pelo horario de funcionamento de cada loja/dia.

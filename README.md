@@ -68,11 +68,11 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   (atendimento e manipulação) e quem **folga**. Ajuste
   manual por loja/domingo (Editar ou clique no nome); imagem pronta para o
   WhatsApp e impressão em uma folha.
-- **Escala 5x2 (simulação)** — aba separada da escala de domingo. Dois modos:
+- **Escala 5x2** (em uso desde nov/2026) — aba separada da escala de domingo. Dois modos:
   *Rei do Gado* (equipe real: primeiro confirma quem entra no mês, mostrando
   quem está afastado) e *Outro negócio* (cadastro livre de unidades, funções e
   pessoas). Regras: dia em que a loja não abre (segunda) conta como folga; a
-  outra folga é um dia fixo da semana e, a cada 3 semanas, vira domingo; nunca
+  outra folga **muda de dia a cada semana (v1.24)** e, a cada 3 semanas, é o domingo; nunca
   folga nos dias marcados (sábado); onde a folga deixa uma loja abaixo do
   mínimo, alguém da mesma função (ou híbrido) de outra loja cobre naquele dia,
   e quem cobriu menos vezes vai primeiro. As folgas são planejadas olhando as
@@ -92,6 +92,11 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   pessoa, quem vem cobrir; clicar num dia alterna trabalha → folga → cobre
   outra loja. Dados em rh_sundays
   (5x2-cfg, 5x2-AAAA-MM, 5x2-outro), sem mudar regras.
+- **Escala 5x2 (v1.24)**: a folga da semana gira (terça, quarta, quinta, sexta…) em vez de cair
+  sempre no mesmo dia: semana a semana, cada pessoa folga no dia em que a rede continua coberta, com mais
+  sobra na loja, sem repetir o dia da semana anterior. Domingo a cada 3 semanas, contínuo entre meses, como antes.
+  A aba deixou de se chamar "simulação". Domingo curto (9h–14h): na semana em que trabalha o domingo, terça a
+  sexta entram mais cedo (≈8h20) para fechar as 42h.
 - **Visual (v1.23)**: cabeçalho em duas faixas (abas numa linha só, com a aba aberta
   sublinhada; no celular as abas e os meses deslizam e já mostram o atual), nome das lojas
   com marcador, coluna de nome com largura fixa para as três lojas ficarem alinhadas,

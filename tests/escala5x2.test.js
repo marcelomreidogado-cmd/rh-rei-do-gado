@@ -31,8 +31,11 @@ test('loja fechada na segunda: segunda + 1 folga por semana, nunca no sabado, do
     for (const w of weeks) { seguidos = r.folgas[p.id].includes(w[6]) ? 0 : seguidos + 1; assert.ok(seguidos < 3, `${p.id}: 3 domingos seguidos`); }
   }
   assert.deepEqual(r.faltas, []); assert.deepEqual(r.avisos, []);
-  // dia fixo: a folga de semana (sem ser domingo) cai sempre no mesmo dia da semana para cada pessoa
-  for (const p of pessoas) assert.ok(new Set(r.folgas[p.id].map(C.weekday).filter((d) => d !== 0)).size <= 1, p.id);
+  // v1.24: a folga da semana gira (nao fica sempre no mesmo dia) e nunca repete o dia da semana anterior quando ha opcao
+  for (const p of pessoas) {
+    const dows = weeks.map((w) => w.filter((d) => r.folgas[p.id].includes(d) && C.weekday(d) !== 0).map(C.weekday)[0]).filter((d) => d !== undefined);
+    assert.ok(new Set(dows).size >= 2, `${p.id}: folga sempre no mesmo dia (${dows})`);
+  }
 });
 
 test('equipe que nao fecha: aponta a falta na propria loja (nunca puxa de outra)', () => {

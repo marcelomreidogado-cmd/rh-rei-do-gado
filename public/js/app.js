@@ -13,7 +13,7 @@ import * as Ferias from './views/ferias.js';
 import * as Ajustes from './views/ajustes.js';
 
 const DEMO = new URLSearchParams(location.search).has('demo') && ['localhost', '127.0.0.1'].includes(location.hostname);
-const ALL_VIEWS = [['folha', 'Folha de pagamento', true], ['contracheques', 'Contracheques', true], ['escala', 'Escala de domingo', true], ['escala5x2', 'Escala 5x2 (simulação)', true], ['ferias', 'Férias', false], ['funcionarios', 'Funcionários', false], ['config', 'Configurações', false], ['historico', 'Histórico', false]];
+const ALL_VIEWS = [['folha', 'Folha de pagamento', true], ['contracheques', 'Contracheques', true], ['escala', 'Escala de domingo', true], ['escala5x2', 'Escala 5x2', true], ['ferias', 'Férias', false], ['funcionarios', 'Funcionários', false], ['config', 'Configurações', false], ['historico', 'Histórico', false]];
 let VIEWS = ALL_VIEWS;
 const IDLE_MS = 30 * 60 * 1000;
 

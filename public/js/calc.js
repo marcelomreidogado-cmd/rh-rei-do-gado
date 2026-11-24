@@ -583,8 +583,8 @@ const ausentes = (pessoas, weeks, unavailable) => {
  * pessoas: [{id, nome, unidade, funcao, funcoes?}] (funcoes com 2+ itens = hibrido, cobre a funcao que faltar)
  * unidades: {id: {abre: [dias da semana 0..6], minimos: {funcao: [7 numeros, indice = dia da semana]}}}
  * semFolga: dias da semana que nunca recebem folga (ex.: [6] = sabado)
- * Cada pessoa: dia(s) fechado(s) da unidade + folga num DIA FIXO; a cada 3 semanas o dia fixo vira domingo.
- * O dia fixo e o grupo do domingo sao escolhidos para que, depois da cobertura entre lojas, falte o minimo de gente.
+ * Cada pessoa: dia(s) fechado(s) da unidade + folga num dia que MUDA a cada semana; a cada 3 semanas a folga e o domingo.
+ * O dia de cada semana e o grupo do domingo sao escolhidos para que, depois da cobertura entre lojas, falte o minimo de gente.
  * Retorna { folgas: {id: [datas]}, plano: {id: {fixo:[dias], grupoDomingo}}, faltas, avisos }.
  */
 export function gerar5x2({ weeks, pessoas, unidades, semFolga = [6], domingo3 = true, unavailable = () => '' }) {
@@ -605,41 +605,54 @@ export function gerar5x2({ weeks, pessoas, unidades, semFolga = [6], domingo3 = 
     || (funcoesP(a).length > 1) - (funcoesP(b).length > 1) || a.funcao.localeCompare(b.funcao) || a.nome.localeCompare(b.nome));
   const idx = {}, vistos = {};
   for (const p of ordem) { const k = p.unidade + '|' + (funcoesP(p).length > 1 ? '*' : p.funcao); idx[p.id] = vistos[k] = (vistos[k] ?? -1) + 1; }
+  // v1.24: a folga da semana MUDA de dia a cada semana (antes era um dia fixo). Primeiro o grupo do domingo de cada
+  // pessoa (a cada 3 semanas, como antes); depois, semana a semana, cada folga vai para o dia em que a rede continua
+  // coberta, com mais sobra na loja, sem repetir o dia da semana anterior da pessoa.
+  const info = {};
   for (const p of ordem) {
     const u = unidades[p.unidade];
     const abre = new Set(u.abre || [0, 1, 2, 3, 4, 5, 6]);
     const precisa = Math.max(0, 2 - (7 - abre.size)); // folgas alem dos dias fechados
     const cands = [2, 3, 4, 5, 6, 1].filter((d) => abre.has(d) && !semFolga.includes(d)); // ter..sab, seg por ultimo
     const usaRodizio = abre.has(0) && precisa > 0 && domingo3 && !semFolga.includes(0);
-    const i = idx[p.id];
-    const fixo = [];
-    if (!fora0.has(p.id)) {
-      for (let k = 0; k < precisa && cands.length; k++) {
-        const nota = (d) => {
-          const fora = new Set([...foraDia[d], p.id]);
-          return -rede(d, fora) * 1000 + sobra(p.unidade, d, fora) * 10
-            + (fixo.some((x) => Math.abs(x - d) === 1) ? 3 : 0) - ((cands.indexOf(d) - i + 70) % cands.length) * 0.01;
-        };
-        const d = cands.filter((x) => !fixo.includes(x)).sort((a, b) => nota(b) - nota(a))[0];
-        if (d === undefined) break;
-        fixo.push(d); foraDia[d].add(p.id);
-      }
-    }
     let grupoDomingo = null;
-    if (usaRodizio && fixo.length) {
+    if (usaRodizio && cands.length && !fora0.has(p.id)) {
+      const i = idx[p.id];
       const notaG = (g) => -rede(0, new Set([...gruposDom[g], p.id])) * 1000 - gruposDom[g].size * 10 - ((g - i + 30) % 3) * 0.01;
       grupoDomingo = [0, 1, 2].sort((a, b) => notaG(b) - notaG(a))[0];
       gruposDom[grupoDomingo].add(p.id);
     }
-    plano[p.id] = { fixo, grupoDomingo };
+    info[p.id] = { precisa, cands, grupoDomingo, anterior: [] };
     folgas[p.id] = [];
-    for (const week of weeks) {
-      const dias = [...fixo];
-      if (grupoDomingo !== null && (semanaCorrida(week[0]) + grupoDomingo) % 3 === 0) dias[dias.length - 1] = 0; // domingo no lugar do ultimo dia fixo
+    plano[p.id] = { fixo: [], grupoDomingo };
+  }
+  weeks.forEach((week, w) => {
+    const foraSem = {}; for (let d = 0; d < 7; d++) foraSem[d] = new Set(fora0);
+    const domOff = (p) => info[p.id].grupoDomingo !== null && (semanaCorrida(week[0]) + info[p.id].grupoDomingo) % 3 === 0;
+    for (const p of ordem) if (domOff(p)) foraSem[0].add(p.id);
+    // quem tem menos opcao escolhe primeiro; o rodizio da ordem muda a cada semana para ninguem ficar sempre com a sobra
+    const vez = ordem.filter((p) => !fora0.has(p.id)).map((p, k) => ({ p, k })).sort((x, y) => info[x.p.id].cands.length - info[y.p.id].cands.length || ((x.k + w * 3) % ordem.length) - ((y.k + w * 3) % ordem.length)).map((x) => x.p);
+    for (const p of vez) {
+      const I = info[p.id], i = idx[p.id], dias = [];
+      const quantas = domOff(p) ? I.precisa - 1 : I.precisa; // semana do domingo de folga: o domingo e a folga da semana
+      if (domOff(p)) dias.push(0);
+      for (let k = 0; k < quantas; k++) {
+        const nota = (d) => {
+          const fora = new Set([...foraSem[d], p.id]);
+          return -rede(d, fora) * 1000 + sobra(p.unidade, d, fora) * 10
+            + (dias.some((x) => Math.abs(x - d) === 1) ? 3 : 0) - (I.anterior.includes(d) ? 8 : 0)
+            - ((I.cands.indexOf(d) - i - w + 70) % I.cands.length) * 0.01;
+        };
+        const d = I.cands.filter((x) => !dias.includes(x)).sort((a, b) => nota(b) - nota(a))[0];
+        if (d === undefined) break;
+        dias.push(d); foraSem[d].add(p.id);
+      }
+      if (!plano[p.id].fixo.length) plano[p.id].fixo = dias.filter((d) => d !== 0);
+      I.anterior = dias.filter((d) => d !== 0).length ? dias.filter((d) => d !== 0) : I.anterior;
       for (const dow of dias) folgas[p.id].push(week[(dow + 6) % 7]);
     }
-    folgas[p.id].sort();
-  }
+  });
+  for (const id of Object.keys(folgas)) folgas[id].sort();
   // aviso: mesmo com troca de loja, algum domingo de rodizio fica sem gente
   for (const [uid, u] of Object.entries(unidades)) {
     if (!abreNo(u, 0) || !domingo3 || semFolga.includes(0)) continue;
