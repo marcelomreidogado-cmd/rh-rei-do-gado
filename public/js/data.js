@@ -288,6 +288,20 @@ export async function saveEmployee(e) {
   await log('funcionario', `${doc.nome} (${i >= 0 ? 'alterado' : 'novo'})`);
   return full;
 }
+/**
+ * v1.25: desligado com data -> as linhas dele em meses ABERTOS depois do desligamento saem da folha (ficam em
+ * "Linhas excluídas", da pra restaurar). Meses fechados e o mes do desligamento (rescisao) nao mudam.
+ */
+export async function tiraDesligadoDaFolha(emp) {
+  if (!emp?.demissao) return 0;
+  const mDem = emp.demissao.slice(0, 7); let n = 0;
+  for (const mk of S.months.keys()) {
+    if (mk <= mDem || monthClosed(mk)) continue;
+    const e = entryFor(mk, emp.id);
+    if (e && !e.excluded) { await setRowExcluded(mk, emp.id, true); n++; }
+  }
+  return n;
+}
 // ---------- ferias (rh_ferias/{empId}; antes das regras novas ficavam dentro de rh_employees) ----------
 async function saveFerias(empId, patch) {
   const e = emp(empId); if (!e) throw new Error('Funcionário não encontrado.');

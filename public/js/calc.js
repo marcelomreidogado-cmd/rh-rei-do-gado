@@ -754,6 +754,15 @@ export function horasTurno(ini, fim, intervaloMin = 60, lancheMin = 0) {
   if (dur > 6) dur -= ((intervaloMin || 0) + (lancheMin || 0)) / 60; else if (dur > 4) dur -= Math.max(15, lancheMin || 0) / 60;
   return Math.round(dur * 100) / 100;
 }
+/**
+ * Minutos trabalhados num turno (a e b em horas decimais). Turno > 6h desconta o almoco (o lanche de 15 min e
+ * DENTRO da jornada: conta como trabalhado, Sumula 118 TST); de 4h a 6h desconta a pausa legal de 15 min.
+ */
+export function minutosTurno(a, b, almoco = 60, lanche = 0) {
+  let dur = Math.round((b - a) * 60); if (dur <= 0) dur += 24 * 60;
+  if (dur > 360) dur -= (almoco || 0) + (lanche || 0); else if (dur > 240) dur -= Math.max(15, lanche || 0);
+  return dur;
+}
 /** Jornada semanal usada na escala: a informada nos ajustes, ou 42h na transicao e 40h a partir de 16/12/2027. */
 export const metaSemanal = (iso, informada) => (Number(informada) > 0 ? Number(informada) : iso < '2027-12-16' ? 42 : 40);
 const hhmm = (h) => { const t = Math.round(h * 60); return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; };
@@ -764,7 +773,7 @@ const hhmm = (h) => { const t = Math.round(h * 60); return `${String(Math.floor(
  * e de FECHAMENTO (fecha a loja), cada um com a jornada media do dia (meta/5, ex.: 8h24) + almoco + lanche; se sobrar
  * um buraco no meio, entra um INTERMEDIARIO. Retorna [[ini, fim], ...] em HH:MM.
  */
-export function turnosDoHorario(ini, fim, { meta = 42, almoco = 60, lanche = 15, maxDia = 9.5 } = {}) {
+export function turnosDoHorario(ini, fim, { meta = 42, almoco = 60, lanche = 0, maxDia = 9.5 } = {}) {
   const a = hm(ini), b = hm(fim); if (a === null || b === null || b <= a) return [];
   if (horasTurno(ini, fim, almoco, lanche) <= maxDia + 1e-9) return [[hhmm(a), hhmm(b)]];
   const dia = meta / 5;
@@ -867,12 +876,13 @@ export function atribuiTurnos({ weeks, pessoas, unidades, folgas, cobre = {}, un
 /**
  * Turnos sugeridos (5x2): cada dia trabalhado comeca com o horario da loja onde a pessoa esta (a dela ou a que foi
  * cobrir); se a semana nao fecha a jornada (ex.: 42h), a pessoa ENTRA MAIS CEDO nos dias longos (de 15 em 15 min,
- * espalhado pela semana, nunca antes de inicioMin e no maximo maxDia horas no dia); se passa, entra mais tarde.
- * Desconta almoco + lanche (turno > 6h) ou so o lanche (4h a 6h). Horario proprio da pessoa e respeitado sem ajuste.
+ * espalhado pela semana, nunca antes de inicioMin, nunca passando da jornada e no maximo maxDia horas no dia); se passa, entra mais tarde.
+ * Desconta o almoco (turno > 6h; o lanche de 15 min fica dentro da jornada) ou a pausa legal de 15 min (4h a 6h).
+ * A jornada semanal e TETO: nunca passa (conta em minutos inteiros). Horario proprio da pessoa e respeitado sem ajuste.
  * Semana com afastamento nao e ajustada; semana com menos de 5 dias de trabalho tem a meta proporcional.
  * Retorna {id: {dias: {data: {ini, fim, horas, cedo}}, semanas: [{inicio, horas, meta}]}}.
  */
-export function turnos5x2({ weeks, pessoas, unidades, folgas, cobre = {}, unavailable = () => '', almoco = 60, lanche = 15, jornada = 0, horariosPessoa = {}, inicioMin = '07:00', maxDia = 9.5, turnoDe = null }) {
+export function turnos5x2({ weeks, pessoas, unidades, folgas, cobre = {}, unavailable = () => '', almoco = 60, lanche = 0, jornada = 0, horariosPessoa = {}, inicioMin = '07:00', maxDia = 9.5, turnoDe = null }) {
   const out = {};
   const ini0 = hm(inicioMin) ?? 7;
   for (const p of pessoas) {
@@ -903,15 +913,18 @@ export function turnos5x2({ weeks, pessoas, unidades, folgas, cobre = {}, unavai
         if (a === null || b === null) continue;
         trab.push({ d, a, b, abre: a, proprio: !!proprio, especial: extra, fixo: !!proprio || extra, curto: b - a <= 6, lado: 'ini', min: ini0 });
       }
-      const horasDe = (t) => horasTurno(hhmm(t.a), hhmm(t.b), almoco, lanche);
+      // v1.25: conta em MINUTOS inteiros (antes somava horas arredondadas e passava 5 min da meta)
+      const minDe = (t) => minutosTurno(t.a, t.b, almoco, lanche);
       // feriado / abertura extra: horario do dia fixo e FORA da conta da jornada (feriado trabalhado e pago a parte)
       const normais = trab.filter((t) => !t.especial);
-      const soma = () => normais.reduce((s, t) => s + horasDe(t), 0);
+      const soma = () => normais.reduce((s, t) => s + minDe(t), 0);
       const temProprio = trab.some((t) => t.proprio);
       const alvo = meta * Math.min(normais.length, 5) / 5;
+      const alvoMin = Math.round(alvo * 60);
       if (!afastado && !temProprio && normais.length) {
         // dias que mudam: os de semana (ter-sex); sabado e domingo ficam no horario da loja ("final de semana e
         // diferente"). Ajuste de 5 em 5 minutos, sempre no dia com menos horas -> horarios iguais na semana.
+        // A meta e TETO: a semana nunca passa dela (fica no maximo igual).
         const P = 5 / 60;
         const fds = (t) => [0, 6].includes(weekday(t.d));
         let ajust = trab.filter((t) => !t.fixo && !fds(t));
@@ -919,22 +932,24 @@ export function turnos5x2({ weeks, pessoas, unidades, folgas, cobre = {}, unavai
         const r60 = (x) => Math.round(x * 60) / 60;
         const mais = (t) => (t.lado === 'fim' ? { ...t, b: r60(t.b + P) } : { ...t, a: r60(t.a - P) });
         const menos = (t) => (t.lado === 'fim' ? { ...t, b: r60(t.b - P) } : { ...t, a: r60(t.a + P) });
-        const cabe = (t) => { const n = mais(t); if (horasDe(n) > maxDia + 1e-9) return false;
+        const cabe = (t) => { const n = mais(t); if (minDe(n) > maxDia * 60) return false;
+          if (soma() - minDe(t) + minDe(n) > alvoMin) return false; // nunca passa da meta
           return t.lado === 'fim' ? n.b <= t.max + 1e-9 : n.a >= t.min - 1e-9 && (!t.curto || n.b - n.a <= 6 + 1e-9); };
         const cabeMenos = (t) => { const n = menos(t); return n.b - n.a >= 4 - 1e-9 && (t.curto || n.b - n.a > 6); };
         let guarda = 0;
-        while (ajust.length && guarda++ < 2000 && soma() < alvo - 1e-6) { // mais horas: entra mais cedo (abertura: sai mais tarde)
-          const c = ajust.filter(cabe).sort((x, y) => horasDe(x) - horasDe(y) || x.d.localeCompare(y.d))[0];
+        while (ajust.length && guarda++ < 2000 && soma() < alvoMin) { // mais horas: entra mais cedo (abertura: sai mais tarde)
+          const c = ajust.filter(cabe).sort((x, y) => minDe(x) - minDe(y) || x.d.localeCompare(y.d))[0];
           if (!c) break; Object.assign(c, mais(c));
         }
-        while (ajust.length && guarda++ < 4000 && soma() > alvo + P - 1e-6) { // passa: entra mais tarde (abertura: sai mais cedo)
-          const c = ajust.filter(cabeMenos).sort((x, y) => horasDe(y) - horasDe(x) || x.d.localeCompare(y.d))[0];
+        while (ajust.length && guarda++ < 4000 && soma() > alvoMin) { // passa: entra mais tarde (abertura: sai mais cedo)
+          const c = ajust.filter(cabeMenos).sort((x, y) => minDe(y) - minDe(x) || x.d.localeCompare(y.d))[0];
           if (!c) break; Object.assign(c, menos(c));
         }
       }
-      for (const t of trab) dias[t.d] = { ini: hhmm(t.a), fim: hhmm(t.b), horas: horasDe(t), cedo: t.a < t.abre, tarde: t.a > t.abre, turno: t.turno, nTurnos: t.nTurnos };
-      const especiais = trab.filter((t) => t.especial).reduce((s, t) => s + horasDe(t), 0);
-      semanas.push({ inicio: week[0], horas: Math.round((soma() + especiais) * 100) / 100, normais: Math.round(soma() * 100) / 100, especiais: Math.round(especiais * 100) / 100, meta: Math.round(alvo * 100) / 100, metaCheia: meta, afastado, dias: normais.length, proprio: temProprio });
+      const h4 = (min) => Math.round((min / 60) * 10000) / 10000;
+      for (const t of trab) dias[t.d] = { ini: hhmm(t.a), fim: hhmm(t.b), horas: h4(minDe(t)), cedo: t.a < t.abre, tarde: t.a > t.abre, turno: t.turno, nTurnos: t.nTurnos };
+      const especiais = trab.filter((t) => t.especial).reduce((s, t) => s + minDe(t), 0);
+      semanas.push({ inicio: week[0], horas: h4(soma() + especiais), normais: h4(soma()), especiais: h4(especiais), meta: h4(alvoMin), metaCheia: meta, afastado, dias: normais.length, proprio: temProprio });
     }
     out[p.id] = { dias, semanas };
   }

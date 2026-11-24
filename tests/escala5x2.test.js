@@ -264,3 +264,30 @@ test('equipe minima: shopping com minimo 2,2,2,2,3,4,2 na 5x2 com domingo a cada
   const gera = (k) => C.gerar5x2({ weeks, pessoas: Array.from({ length: k }, (_, i) => P('x' + i, 'fini', 'atendimento')), unidades: fini, semFolga: [6] });
   assert.equal(gera(n).faltas.length, 0); assert.ok(gera(n - 1).faltas.length > 0 || gera(n - 1).avisos.length > 0);
 });
+
+test('v1.25: jornada e TETO — a semana nunca passa de 42h (conta em minutos), com lanche dentro da jornada', () => {
+  // lanche de 15 min dentro da jornada: turno > 6h desconta so o almoco; 4h a 6h desconta a pausa legal de 15 min
+  assert.equal(C.minutosTurno(10, 19, 60), 480);
+  assert.equal(C.minutosTurno(9, 14, 60), 285);
+  let semanas = 0;
+  for (const mk of ['2026-12', '2027-01', '2027-03']) {
+    const weeks = C.semanasDoMes(mk);
+    for (const [iniU, fimU] of [['10:00', '19:00'], ['09:00', '18:00'], ['10:30', '18:30'], ['09:00', '19:00']]) {
+      for (const [sab, dom] of [[['09:00', '19:00'], ['09:00', '14:00']], [['08:30', '18:00'], ['08:30', '13:30']], [['09:00', '18:00'], ['09:00', '13:00']]]) {
+        const hor = { 0: dom, 2: [iniU, fimU], 3: [iniU, fimU], 4: [iniU, fimU], 5: [iniU, fimU], 6: sab };
+        const un = { a: { abre: FECHA_SEG, minimos: { atendimento: [1, 0, 1, 1, 1, 1, 1] }, horario: hor } };
+        const ps = [P('x', 'a', 'atendimento'), P('y', 'a', 'atendimento'), P('z', 'a', 'atendimento')];
+        const folgas = { x: weeks.map((w) => w[1]), y: weeks.map((w) => w[6]), z: weeks.map((w, i) => w[2 + (i % 4)]) };
+        const t = C.turnos5x2({ weeks, pessoas: ps, unidades: un, folgas, almoco: 60 });
+        for (const p of ps) for (const s of t[p.id].semanas) {
+          if (s.dias !== 5) continue; semanas++;
+          assert.ok(s.normais <= 42 + 1e-9, `${p.id} ${s.inicio} (${iniU}-${fimU}): ${C.fmtH(s.normais)} passou de 42h`);
+          assert.ok(s.normais > 42 - 5 / 60 - 1e-9 || Object.values(t[p.id].dias).some((v) => v.ini === '07:00' || v.horas >= 9.5), `${p.id} ${s.inicio}: ${C.fmtH(s.normais)} longe de 42h`);
+          const soma = Object.entries(t[p.id].dias).filter(([d]) => s.inicio <= d && d <= C.isoAddDays(s.inicio, 6)).reduce((a, [, v]) => a + Math.round(v.horas * 60), 0);
+          assert.equal(soma, Math.round(s.normais * 60), 'total da semana = soma dos dias (sem arredondamento)');
+        }
+      }
+    }
+  }
+  assert.ok(semanas > 100);
+});

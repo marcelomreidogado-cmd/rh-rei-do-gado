@@ -92,6 +92,14 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   pessoa, quem vem cobrir; clicar num dia alterna trabalha → folga → cobre
   outra loja. Dados em rh_sundays
   (5x2-cfg, 5x2-AAAA-MM, 5x2-outro), sem mudar regras.
+- **Escala 5x2 (v1.25)**: a jornada semanal é **teto** — a semana nunca passa de 42h (40h a partir
+  de 16/12/2027). A conta é feita em minutos inteiros (antes o arredondamento dava 42h05 e o quadro
+  sugerido chegava a 42h15, mostrado como “ok”). Qualquer minuto acima aparece em vermelho e no
+  aviso da loja. O **lanche de 15 min é dentro da jornada** (conta como trabalhado; só o almoço é
+  descontado). Novo quadro **Entradas por loja**: em cada dia, quantas pessoas entram em cada horário.
+  Desligamento respeita a data: a pessoa trabalha até o dia do desligamento e sai depois; admitido
+  entra sozinho na lista da equipe; ao salvar um desligado com data, as linhas dele nos meses abertos
+  seguintes saem da folha (ficam em “Linhas excluídas”).
 - **Escala 5x2 (v1.24)**: a folga da semana gira (terça, quarta, quinta, sexta…) em vez de cair
   sempre no mesmo dia: semana a semana, cada pessoa folga no dia em que a rede continua coberta, com mais
   sobra na loja, sem repetir o dia da semana anterior. Domingo a cada 3 semanas, contínuo entre meses, como antes.

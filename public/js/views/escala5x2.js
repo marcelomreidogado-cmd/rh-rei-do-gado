@@ -9,6 +9,7 @@ import { esc, $, toast, openModal, confirmBox } from '../ui.js';
 import { awayReason } from './escala.js';
 
 let root, mk, modo = 'rei', st; // st: { cfg, mes } (rei) ou { outro } (outro)
+let lojaHs = null; // loja escolhida no quadro "Entradas por loja"
 const FUN_REI = { atendimento: 'Atendimento', manipulacao: 'Manipulação' };
 const ROT_HIBRIDO = 'Atend./Manip.';
 const rotuloCat = (cat) => (cat === C.HIBRIDO ? ROT_HIBRIDO : FUN_REI[cat] || '');
@@ -53,28 +54,34 @@ function modelo() {
   const equipe = new Set(st.mes?.equipe || []);
   const hor = horarioRei(cfg);
   const unidades = Object.fromEntries(C.STORES.map((s) => [s.id, { nome: s.nome, ...cfg.lojas[s.id], horario: hor, extras: extrasDe(s.id) }]));
-  const lista = equipeLista().filter((p) => equipe.has(p.id) && unidades[p.unidade]);
+  const lista = equipeLista().filter((p) => equipe.has(p.id) && unidades[p.unidade] && !foraDoMes(p));
   const pessoas = lista.map((p) => ({ id: p.id, nome: p.nome, unidade: p.unidade, funcao: p.funcao === C.HIBRIDO ? 'atendimento' : p.funcao, funcoes: p.funcao === C.HIBRIDO ? ['atendimento', 'manipulacao'] : [p.funcao], podeCobrir: p.podeCobrir !== false, empId: p.empId || null, extra: !!p.extra }));
   const porId = Object.fromEntries(pessoas.map((p) => [p.id, p]));
   // afastamento (atestado, ferias...) so para quem veio do cadastro de funcionarios
   const unavailable = (id, d) => (porId[id]?.empId ? awayReason(porId[id].empId, d) : '');
   return { unidades, funcoes: FUN_REI, pessoas, semFolga: cfg.semFolga || [6], domingo3: cfg.domingo3 !== false, folgas: st.mes?.folgas || null, cobre: st.mes?.cobre || {}, turnoMan: st.mes?.turnos || {}, unavailable, ...cargaCfg(cfg) };
 }
-/** Almoco, lanche e jornada semanal (vazio = 42h na transicao, 40h a partir de 16/12/2027). */
+/** Almoco e jornada semanal (vazio = 42h na transicao, 40h a partir de 16/12/2027). */
 // almoco: 1h (o valor antigo "intervalo" de 75 min juntava almoco + lanche; so vale o que foi salvo depois da v1.19)
-const cargaCfg = (c) => ({ almoco: c.almocoOk ? (c.almoco ?? 60) : 60, lanche: c.lanche ?? 15, jornada: Number(c.jornada) || 0, inicioMin: c.inicioMin || '07:00', horariosPessoa: c.horariosPessoa || {} });
+// v1.25: o lanche de 15 min e DENTRO da jornada (conta como trabalhado) -> nao desconta nada
+const cargaCfg = (c) => ({ almoco: c.almocoOk ? (c.almoco ?? 60) : 60, lanche: 0, jornada: Number(c.jornada) || 0, inicioMin: c.inicioMin || '07:00', horariosPessoa: c.horariosPessoa || {} });
 
 /**
  * Equipe da escala 5x2 (Rei do Gado): lista PROPRIA da aba (nome, loja, funcao, cobre outras lojas). Na primeira vez
  * vem com os nomes do cadastro de funcionarios; depois e editada aqui, com extras que nao sao funcionarios.
  */
 function equipeLista() {
-  if (!st.cfg.equipe) {
-    st.cfg.equipe = S.employees.filter((e) => C.inEscala(e)).sort((a, b) => a.nome.localeCompare(b.nome))
-      .map((e) => ({ id: e.id, nome: nomeCurto(e.nome), unidade: C.workStore(e), funcao: e.categoria, podeCobrir: true, empId: e.id }));
-  }
+  const novo = (e) => ({ id: e.id, nome: nomeCurto(e.nome), unidade: C.workStore(e), funcao: e.categoria, podeCobrir: true, empId: e.id });
+  // entra quem esta no quadro no mes (inclusive quem foi desligado DURANTE o mes: trabalha ate a data)
+  const noQuadro = (e) => C.inEscala({ ...e, ativo: true }) && C.activeInMonth(e, mk) && (e.ativo !== false || !!e.demissao);
+  if (!st.cfg.equipe) st.cfg.equipe = S.employees.filter(noQuadro).sort((a, b) => a.nome.localeCompare(b.nome)).map(novo);
+  // v1.25: admitido depois que a lista foi criada entra sozinho na lista (fica marcado nas escalas novas)
+  const tem = new Set(st.cfg.equipe.map((p) => p.empId).filter(Boolean));
+  for (const e of S.employees) if (noQuadro(e) && !tem.has(e.id)) st.cfg.equipe.push(novo(e));
   return st.cfg.equipe;
 }
+/** Pessoa da lista que veio do cadastro e esta desligada (ou ainda nao entrou) no mes inteiro: sai da escala. */
+const foraDoMes = (p) => { if (!p.empId) return false; const e = S.employees.find((x) => x.id === p.empId); return !!e && !C.activeInMonth(e, mk); };
 
 /** Horario de funcionamento do Rei do Gado: o mesmo para todas as lojas (antes era por loja: usa o primeiro preenchido). */
 const horarioRei = (cfg) => (cfg.horario && Object.keys(cfg.horario).length ? cfg.horario : (Object.values(cfg.lojas || {}).find((l) => l.horario && Object.keys(l.horario).length) || {}).horario || {});
@@ -193,14 +200,14 @@ function telaEscala() {
     if (s.afastado && !s.normais) return '<td class="ws af" title="Afastado na semana">A</td>';
     if (!s.dias && !s.especiais) return '<td class="ws">—</td>';
     const dif = Math.round((s.normais - s.meta) * 100) / 100;
-    const cls = s.afastado ? 'info' : Math.abs(dif) <= 0.26 ? 'ok' : dif < 0 ? 'falta' : 'passa';
-    const tip = `Semana de ${C.fmtDM(s.inicio)}: ${C.fmtH(s.normais)} de ${C.fmtH(s.meta)}${Math.abs(dif) > 0.26 ? ` — ${dif < 0 ? 'faltam' : 'passam'} ${C.fmtH(Math.abs(dif))}` : ' ✓'}${s.especiais ? ` · + ${C.fmtH(s.especiais)} em feriado/dia extra (pago à parte)` : ''}${s.dias < 5 ? ` · ${s.dias} dia(s) de trabalho, meta proporcional` : ''}${s.afastado ? ' · afastado em parte da semana' : ''}${s.proprio ? ' · horário próprio' : ''}`;
+    const cls = s.afastado ? 'info' : PASSA(dif) ? 'passa' : FALTA(dif) ? 'falta' : 'ok';
+    const tip = `Semana de ${C.fmtDM(s.inicio)}: ${C.fmtH(s.normais)} de ${C.fmtH(s.meta)}${PASSA(dif) || FALTA(dif) ? ` — ${dif < 0 ? 'faltam' : 'passam'} ${C.fmtH(Math.abs(dif))}` : ' ✓'}${s.especiais ? ` · + ${C.fmtH(s.especiais)} em feriado/dia extra (pago à parte)` : ''}${s.dias < 5 ? ` · ${s.dias} dia(s) de trabalho, meta proporcional` : ''}${s.afastado ? ' · afastado em parte da semana' : ''}${s.proprio ? ' · horário próprio' : ''}`;
     const sub = cls === 'falta' || cls === 'passa' ? `<small>${dif < 0 ? '−' : '+'}${esc(C.fmtH(Math.abs(dif)))}</small>` : s.especiais ? `<small class="wfer">+${esc(C.fmtH(s.especiais))} fer.</small>` : s.dias < 5 && s.dias > 0 ? `<small class="wfer">${s.dias} dias</small>` : '';
     return `<td class="ws ${cls}" title="${esc(tip)}">${esc(C.fmtH(s.normais))}${sub}</td>`;
   };
   const ext = extrasMes().filter((x) => x.date.slice(0, 7) === mk).sort((a, b) => a.date.localeCompare(b.date));
   const linhaExtras = ext.length ? `<div class="x5-extras">${ext.map((x) => `<span class="x5-ext ${x.tipo === 'feriado' ? 'fer' : ''}"><b>${x.tipo === 'feriado' ? 'Feriado' : 'Abre'} ${C.DIAS_SEM[C.weekday(x.date)]} ${C.fmtDM(x.date)}</b> · ${esc((x.lojas || []).map((l) => m.unidades[l]?.nome || l).join(', '))}${x.ini && x.fim ? ` · ${esc(curtoH(x.ini))}–${esc(curtoH(x.fim))}` : ''}${x.minimos && (x.minimos.atendimento || x.minimos.manipulacao) ? ` · mín. ${x.minimos.atendimento ?? '–'} atend. + ${x.minimos.manipulacao ?? '–'} manip.` : ''}${x.obs ? ` · <i>${esc(x.obs)}</i>` : ''} <button class="icon-btn" data-act="rmextra" data-id="${esc(x.id)}" title="Tirar">✕</button></span>`).join('')}</div>` : '';
-  return `${resumo}${linhaExtras}${temHorario ? painelHorario(m, weeks, ext) : ''}
+  return `${resumo}${linhaExtras}${temHorario ? painelHorario(m, weeks, ext) : ''}${carga ? painelLojas(m, weeks, carga) : ''}
     ${Object.entries(m.unidades).map(([u, un]) => {
       const gente = m.pessoas.filter((p) => p.unidade === u).sort((a, b) => ehHib(a) - ehHib(b) || Object.keys(m.funcoes).indexOf(a.funcao) - Object.keys(m.funcoes).indexOf(b.funcao) || a.nome.localeCompare(b.nome));
       if (!gente.length) return '';
@@ -227,7 +234,7 @@ function telaEscala() {
         const hd = tn?.horas || 0; const hx = hd > C.MAX_DIARIO;
         const kT = !f ? tz.k(u, d) : 0; const iT = kT > 1 ? (tz.atrib[p.id] || {})[d] ?? 0 : -1;
         if (iT >= 0) return `<td class="c tn t${iT === 0 ? 'a' : iT === kT - 1 ? 'f' : 'm'} ${hx ? 'hx' : ''} ${sem} ${dom}" data-p="${esc(p.id)}" data-d="${d}" title="${esc(C.NOMES_TURNO(kT)[iT])}${tn ? ` ${tn.ini}–${tn.fim} · ${C.fmtH(hd)} de trabalho` : ''}${pTxt ? ` · faz ${esc(pTxt.toLowerCase())}` : ''} — clique para mudar">${esc(C.SIGLA_TURNO(kT)[iT])}</td>`;
-        const tTxt = tn && !f ? `${tn.ini}–${tn.fim} · ${C.fmtH(hd)} (almoço ${m.almoco} min + lanche ${m.lanche} min)${tn.cedo ? ' · entra mais cedo para fechar a jornada' : ''} · ` : '';
+        const tTxt = tn && !f ? `${tn.ini}–${tn.fim} · ${C.fmtH(hd)} (almoço ${m.almoco} min; lanche de 15 min dentro da jornada)${tn.cedo ? ' · entra mais cedo para fechar a jornada' : ''} · ` : '';
         return `<td class="c ${f ? 'f' : ''} ${hx ? 'hx' : ''} ${sem} ${dom}" data-p="${esc(p.id)}" data-d="${d}" title="${f ? 'Folga — clique para cobrir outra loja ou trabalhar' : esc(tTxt) + (pTxt ? `Faz ${esc(pTxt.toLowerCase())} — ` : '') + 'Clique para dar folga'}">${f ? 'F' : pTxt ? `<span class="x5-pap">${esc(pTxt[0].toLowerCase())}</span>` : ''}</td>`; }).join('')}<td class="tt">${fs.length + dias.filter((d) => !aD(d) && !m.unavailable(p.id, d)).length}</td><td class="tt">${fs.filter((d) => C.weekday(d) === 0).length}</td></tr>`; }).join('')}
       ${Object.keys(m.funcoes).filter((f) => gente.some((p) => C.funcoesP(p).includes(f))).map((f) => `<tr class="cont"><td class="nm">${esc(m.funcoes[f])} na loja</td>${diasCols.map((d) => { if (d[0] === 'S') return semCol('v'); const w = C.weekday(d); if (!aD(d)) return `<td class="fech ${w === 1 ? 'sem' : ''}"></td>`;
         const tem = C.naUnidade5x2({ pessoas: m.pessoas, unidade: u, unidades: m.unidades, funcao: f, d, folgas: m.folgas, cobre: m.cobre, unavailable: m.unavailable }); const min = ((nd(d).minimos || {})[f] || [])[w] || 0;
@@ -311,7 +318,7 @@ function painelHorario(m, weeks, ext) {
     const abre = new Set(un.abre || []);
     const turnosDow = (w) => (!abre.has(w) ? null : tc.modo === 'manual' && (tc.dias[w] || []).length ? tc.dias[w] : sugeridos((un.horario || {})[w], m, iso));
     const multi = ORD7.some((w) => (turnosDow(w) || []).length > 1);
-    const cab = `<div class="hs-top"><h3>${tc.modo === 'manual' ? 'Meu horário' : 'Horário sugerido'}${varios || modo === 'outro' ? ` · ${esc(ids.map((i) => m.unidades[i].nome).join(', '))}` : ''}</h3><span>${meta}h por semana · média ${esc(C.fmtH(meta / 5))} por dia · almoço ${m.almoco >= 60 ? C.fmtH(m.almoco / 60) : m.almoco + ' min'} + lanche ${m.lanche} min</span>
+    const cab = `<div class="hs-top"><h3>${tc.modo === 'manual' ? 'Meu horário' : 'Horário sugerido'}${varios || modo === 'outro' ? ` · ${esc(ids.map((i) => m.unidades[i].nome).join(', '))}` : ''}</h3><span>${meta}h por semana · média ${esc(C.fmtH(meta / 5))} por dia · almoço ${m.almoco >= 60 ? C.fmtH(m.almoco / 60) : m.almoco + ' min'} · lanche de 15 min dentro da jornada</span>
       <span class="spacer"></span><div class="seg sm"><button class="${tc.modo === 'auto' ? 'on' : ''}" data-act="tmodo" data-v="auto">Sugestão do sistema</button><button class="${tc.modo === 'manual' ? 'on' : ''}" data-act="tmodo" data-v="manual">✏️ Meu horário</button></div>${tc.modo === 'manual' ? '<button class="btn sm" data-act="meuhorario">Editar</button>' : ''}</div>`;
     if (!multi && tc.modo !== 'manual' && ORD7.some((w) => !abre.has(w))) return painelSemana(m, weeks, ext, un, cab);
     return painelTurnos(m, ext, un, cab, turnosDow, ids);
@@ -356,6 +363,33 @@ function painelTurnos(m, ext, un, cab, turnosDow, idsU = []) {
     ${equipe ? `<p class="hs-equipe">${equipe}</p>` : ''}
     <p class="hs-nota">Cada pessoa trabalha 5 dias e folga 2 por semana (dias na escala abaixo).${K > 1 ? ' Abertura e fechamento ficam a semana toda e revezam na seguinte (quem abriu passa a fechar); em dia com 3 ou mais pessoas, quem sobra vai para o intermediário, em rodízio.' : ''}</p>
     ${fer.length ? `<p class="hs-fer">Feriado${fer.length > 1 ? 's' : ''}: ${fer.map((x) => `${C.fmtDM(x.date)} ${esc(curtoH(x.ini))} às ${esc(curtoH(x.fim))}`).join(' · ')} — fora da conta da semana (pago à parte).</p>` : ''}</section>`;
+}
+
+/**
+ * v1.25: "Entradas por loja" — a escala vista pela LOJA (nao pela pessoa): em cada dia, quantas pessoas entram em
+ * cada horario (contando quem veio cobrir de outra loja). Vem da mesma conta das horas da semana (teto da jornada).
+ */
+function painelLojas(m, weeks, carga) {
+  const lojas = Object.entries(m.unidades).filter(([u]) => m.pessoas.some((p) => p.unidade === u));
+  if (!lojas.length) return '';
+  if (!lojaHs || !m.unidades[lojaHs]) lojaHs = lojas[0][0];
+  const u = lojaHs, un = m.unidades[u];
+  const sem = weeks.filter((w) => w.some((d) => d.slice(0, 7) === mk));
+  const cols = ORD7.filter((w) => sem.some((wk) => wk.some((d) => d.slice(0, 7) === mk && C.weekday(d) === w && C.abreEm(un, d))));
+  const cel = (d) => {
+    if (d.slice(0, 7) !== mk) return '<td class="muted">·</td>';
+    if (!C.abreEm(un, d)) return '<td class="hs-fech">Fechada</td>';
+    const pres = m.pessoas.filter((p) => !m.unavailable(p.id, d) && !(m.folgas[p.id] || []).includes(d) && ((m.cobre[p.id] || {})[d] || p.unidade) === u);
+    const g = {}; for (const p of pres) { const t = carga[p.id]?.dias[d]; if (!t) continue; const k = `${t.ini}|${t.fim}`; g[k] = (g[k] || 0) + 1; }
+    const it = Object.entries(g).sort(([a], [b]) => a.localeCompare(b));
+    if (!it.length) return '<td class="muted">—</td>';
+    return `<td><div class="hl-dia">${it.map(([k, n]) => { const [a, b] = k.split('|'); return `<span class="hl-it"><b>${esc(curtoH(a))}–${esc(curtoH(b))}</b> <small>×${n}</small></span>`; }).join('')}</div></td>`;
+  };
+  return `<section class="hs-card hl-card"><div class="hs-top"><h3>Entradas por loja</h3><span>quantas pessoas entram em cada horário</span><span class="spacer"></span>
+    <div class="seg sm">${lojas.map(([id, x]) => `<button class="${id === u ? 'on' : ''}" data-act="hsloja" data-u="${esc(id)}">${esc(x.nome)}</button>`).join('')}</div></div>
+    <div class="table-wrap"><table class="hs hl"><thead><tr><th></th>${cols.map((w) => `<th>${C.DIAS_SEM[w]}</th>`).join('')}</tr></thead><tbody>
+    ${sem.map((wk) => `<tr><th class="hs-nome">Semana<small>${esc(C.fmtDM(wk[0]))}</small></th>${cols.map((w) => cel(wk[(w + 6) % 7])).join('')}</tr>`).join('')}
+    </tbody></table></div></section>`;
 }
 
 /** ✏️ Meu horário: o Marcelo escreve os turnos de cada dia (até 3); a escala e as horas da semana passam a usar esses. */
@@ -405,15 +439,26 @@ function painelSemana(m, weeks, ext, u, cab) {
   const fds = [6, 0].filter(ok), uteis = [1, 2, 3, 4, 5].filter(ok);
   const fechados = ORD.filter((d) => !abre.has(d)).length;
   const minIni = minDe(m.inicioMin || '07:00');
-  /** mesmo horario nos dias de semana para fechar a meta: retorna {d: {ini, fim, horas}} */
-  const util = (n, horasFds) => {
-    const need = (meta - horasFds) / n; const o = {};
-    for (const d of uteis) {
-      const fim = hor[d][1]; let ini = minDe(hor[d][0]);
-      while (H(hDe(ini), fim) < need - 1e-6 && ini - 5 >= minIni) ini -= 5;
-      while (ini + 5 < minDe(fim) - 60 && H(hDe(ini + 5), fim) >= need - 1e-6) ini += 5;
-      o[d] = { ini: hDe(ini), fim, horas: H(hDe(ini), fim) };
+  /**
+   * Horario dos dias de semana para fechar a meta SEM PASSAR (v1.25): conta em minutos; antecipa a entrada de 5 em
+   * 5 min sempre no dia com menos horas e para quando o proximo passo passaria da meta. Os dias ficam iguais ou com
+   * 5 min de diferenca (ex.: 3 dias 9h25 e 1 dia 9h30). Retorna {d: {ini, fim, horas}}.
+   */
+  const util = (trabalha, horasFds) => {
+    const alvo = Math.round(meta * 60 - horasFds * 60); const o = {};
+    const dias = trabalha.map((d) => ({ d, fim: hor[d][1], ini: minDe(hor[d][0]) }));
+    const mins = (x) => Math.round(H(hDe(x.ini), x.fim) * 60);
+    const tot = () => dias.reduce((a, x) => a + mins(x), 0);
+    for (let g = 0; g < 2000 && tot() < alvo; g++) {
+      const c = dias.filter((x) => x.ini - 5 >= minIni && mins({ ...x, ini: x.ini - 5 }) <= 9.5 * 60 && tot() - mins(x) + mins({ ...x, ini: x.ini - 5 }) <= alvo)
+        .sort((x, y) => mins(x) - mins(y) || y.ini - x.ini)[0];
+      if (!c) break; c.ini -= 5;
     }
+    for (let g = 0; g < 2000 && tot() > alvo; g++) { // horario da loja ja passa da meta: entra mais tarde
+      const c = dias.filter((x) => x.ini + 5 < minDe(x.fim) - 60).sort((x, y) => mins(y) - mins(x))[0];
+      if (!c) break; c.ini += 5;
+    }
+    for (const d of uteis) { const x = dias.find((y) => y.d === d) || { d, fim: hor[d][1], ini: minDe(hor[d][0]) }; o[d] = { ini: hDe(x.ini), fim: x.fim, horas: mins(x) / 60 }; }
     return o;
   };
   const tipos = [];
@@ -421,12 +466,12 @@ function painelSemana(m, weeks, ext, u, cab) {
   const nA = uteis.length - folgasUteisA;
   if (nA > 0) {
     const hF = fds.reduce((a, d) => a + H(hor[d][0], hor[d][1]), 0);
-    tipos.push({ nome: fds.includes(0) ? 'Semana que trabalha domingo' : 'Semana', nota: '', u: util(nA, hF), fdsFolga: [], folgaUtil: uteis.slice(0, folgasUteisA), n: nA, hF });
+    tipos.push({ nome: fds.includes(0) ? 'Semana que trabalha domingo' : 'Semana', nota: '', u: util(uteis.slice(folgasUteisA), hF), fdsFolga: [], folgaUtil: uteis.slice(0, folgasUteisA), n: nA, hF });
   }
   if (fds.includes(0) && m.domingo3 !== false) {
     const nB = uteis.length - Math.max(0, folgasUteisA - 1);
     const hF = fds.filter((d) => d !== 0).reduce((a, d) => a + H(hor[d][0], hor[d][1]), 0);
-    tipos.push({ nome: 'Semana de folga no domingo', nota: 'a cada 3 semanas', u: util(nB, hF), fdsFolga: [0], folgaUtil: uteis.slice(0, Math.max(0, folgasUteisA - 1)), n: nB, hF });
+    tipos.push({ nome: 'Semana de folga no domingo', nota: 'a cada 3 semanas', u: util(uteis.slice(Math.max(0, folgasUteisA - 1)), hF), fdsFolga: [0], folgaUtil: uteis.slice(0, Math.max(0, folgasUteisA - 1)), n: nB, hF });
   }
   const cel = (t, d) => {
     if (!abre.has(d)) return '<td class="hs-folga">Folga<small>loja fechada</small></td>';
@@ -456,17 +501,23 @@ function resumoFaltas(faltas, m, avisos = []) {
 
 const curtoH = (t) => String(t).replace(/^0(\d)/, '$1').replace(/:00$/, '');
 /** Semana que nao fecha a jornada (sem afastamento). */
-const fora = (x) => !x.afastado && x.dias > 0 && Math.abs(x.normais - x.meta) > 0.26;
+/** v1.25: a jornada e TETO — qualquer minuto acima ja e "passa"; abaixo, a partir de 5 min. */
+const PASSA = (dif) => dif > 0.5 / 60;
+const FALTA = (dif) => dif < -4.5 / 60;
+const fora = (x) => !x.afastado && x.dias > 0 && (PASSA(x.normais - x.meta) || FALTA(x.normais - x.meta));
+const passou = (x) => !x.afastado && x.dias > 0 && PASSA(x.normais - x.meta);
 /** Uma linha por loja quando alguem nao consegue fechar a jornada (horario da loja nao permite) ou passa de 10h. */
 function resumoCarga(carga, m) {
   const linhas = [];
   for (const [u, un] of Object.entries(m.unidades)) {
     const gente = m.pessoas.filter((p) => p.unidade === u && carga[p.id]);
-    const ruins = gente.filter((p) => carga[p.id].semanas.some(fora));
+    const acima = gente.filter((p) => carga[p.id].semanas.some(passou));
+    const ruins = gente.filter((p) => !acima.includes(p) && carga[p.id].semanas.some(fora));
     const dia10 = gente.filter((p) => Object.values(carga[p.id].dias).some((t) => t.horas > C.MAX_DIARIO));
-    if (!ruins.length && !dia10.length) continue;
+    if (!acima.length && !ruins.length && !dia10.length) continue;
     const partes = [];
-    if (ruins.length) partes.push(`<span title="${esc(ruins.map((p) => p.nome).join('\n'))}">${ruins.length} pessoa${ruins.length > 1 ? 's' : ''} sem fechar a jornada da semana (horário próprio ou limite de entrada)</span>`);
+    if (acima.length) partes.push(`<span title="${esc(acima.map((p) => p.nome).join('\n'))}">${acima.length} pessoa${acima.length > 1 ? 's' : ''} com semana <b>acima da jornada</b> (horário próprio ou Meu horário)</span>`);
+    if (ruins.length) partes.push(`<span title="${esc(ruins.map((p) => p.nome).join('\n'))}">${ruins.length} pessoa${ruins.length > 1 ? 's' : ''} abaixo da jornada da semana (horário próprio ou limite de entrada)</span>`);
     if (dia10.length) partes.push(`<span title="${esc(dia10.map((p) => p.nome).join('\n'))}">${dia10.length} com dia de mais de 10h</span>`);
     linhas.push(`<div><b>${esc(un.nome)}</b> · carga horária: ${partes.join(', ')}</div>`);
   }
@@ -596,6 +647,7 @@ function wire() {
       else if (act === 'cobmodo') await trocarCobModo(b.dataset.v);
       else if (act === 'tmodo') { if (b.dataset.v === 'manual') abrirMeuHorario(); else { await setTcfg({ turnosModo: 'auto' }); draw(); } }
       else if (act === 'meuhorario') abrirMeuHorario();
+      else if (act === 'hsloja') { lojaHs = b.dataset.u; draw(); }
       else if (act === 'refazer') { if (await confirmBox('Voltar para a confirmação da equipe? A escala deste mês será refeita.', { okLabel: 'Alterar equipe' })) { await D.clear5x2Mes(mk); st.mes = null; draw(); } }
       else if (act === 'ajustes') (modo === 'outro' ? abrirCadastro() : abrirAjustes());
       else if (act === 'extra') abrirExtra();
@@ -711,11 +763,11 @@ const lerDias = (m, name) => m.$$(`input[name="${name}"]:checked`).map((i) => +i
 const lerMin = (m, prefix, funcoes) => { const o = {}; for (const f of Object.keys(funcoes)) o[f] = [0, 0, 0, 0, 0, 0, 0]; m.$$(`input[data-min^="${prefix}|"]`).forEach((i) => { const [, f, d] = i.dataset.min.split('|'); if (o[f]) o[f][+d] = Math.max(0, Math.floor(+i.value || 0)); }); return o; };
 const ligaAbre = (m) => m.el.addEventListener('change', (ev) => { const i = ev.target; if (!i.name?.startsWith('abre-')) return; const pre = i.name.slice(5); m.$$(`input[data-min^="${pre}|"]`).forEach((x) => { if (x.dataset.min.endsWith('|' + i.value)) x.disabled = !i.checked; }); m.$$(`input[data-hor^="${pre}|${i.value}|"]`).forEach((x) => { x.disabled = !i.checked; }); });
 const campoIntervalo = (c) => { const k = cargaCfg(c || {}); return `<div class="x5-carga-cfg"><label class="inline">Almoço <input class="in" type="number" id="intervalo" min="0" max="180" step="15" value="${k.almoco}" style="width:70px"> min</label>
-  <label class="inline">Lanche <input class="in" type="number" id="lanche" min="0" max="60" step="5" value="${k.lanche}" style="width:70px"> min</label>
+  <span class="muted small">Lanche de 15 min dentro da jornada</span>
   <label class="inline">Jornada semanal <input class="in" type="number" id="jornada" min="20" max="44" step="1" value="${k.jornada || ''}" placeholder="${C.metaSemanal(C.monthStart(mk))}" style="width:70px"> h</label>
   <label class="inline">Entrar no máximo a partir de <input class="in" type="time" step="900" id="inicioMin" value="${esc(k.inicioMin)}"></label></div>
   <p class="muted small">Jornada vazia = ${C.metaSemanal('2027-01-01')}h na transição e ${C.metaSemanal('2028-01-01')}h a partir de 16/12/2027. A escala sugere entrar mais cedo quando o horário da loja não fecha a jornada.</p>`; };
-const lerCarga = (m) => ({ almocoOk: true, almoco: Math.max(0, +m.$('#intervalo').value || 0), intervalo: Math.max(0, +m.$('#intervalo').value || 0), lanche: Math.max(0, +m.$('#lanche').value || 0), jornada: Math.max(0, +m.$('#jornada').value || 0), inicioMin: m.$('#inicioMin').value || '07:00' });
+const lerCarga = (m) => ({ almocoOk: true, almoco: Math.max(0, +m.$('#intervalo').value || 0), intervalo: Math.max(0, +m.$('#intervalo').value || 0), lanche: 0, jornada: Math.max(0, +m.$('#jornada').value || 0), inicioMin: m.$('#inicioMin').value || '07:00' });
 
 function abrirAjustes() {
   const c = st.cfg;

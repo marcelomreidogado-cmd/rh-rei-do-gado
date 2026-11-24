@@ -181,3 +181,13 @@ body{font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
 }
 /* Configurações: campos lado a lado alinhados pelo topo (o DDD ficava mais baixo e esticado) */
 .card label{align-content:start}
+
+/* v1.25: Entradas por loja */
+table.hs.hl{min-width:640px}
+table.hs.hl thead th:first-child{width:92px}
+table.hs.hl td{padding:6px 3px;vertical-align:top}
+.hl-dia{display:flex;flex-direction:column;gap:3px}
+.hl-it{display:block;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13px}
+table.hs.hl td .hl-it b{display:inline;font-size:13px}
+table.hs.hl td .hl-it small{display:inline;font-size:11px;margin:0}
+@media (max-width:600px){table.hs.hl th.hs-nome{position:sticky;left:0;z-index:1;background:#fff}}

@@ -15,7 +15,12 @@ export function awayReason(empId, iso) {
   }
   const emp = D.emp(empId);
   if (C.emFerias(emp, iso)) return 'férias';
-  if (emp && (emp.ativo === false || (emp.entrada || emp.admissao) > iso)) return 'fora do quadro';
+  if (emp) {
+    if ((emp.entrada || emp.admissao) > iso) return 'fora do quadro';
+    // v1.25: desligado so a partir do dia seguinte ao desligamento (antes valia para o mes inteiro)
+    if (emp.demissao && emp.demissao < iso) return 'desligado';
+    if (emp.ativo === false && !emp.demissao) return 'fora do quadro';
+  }
   return '';
 }
 

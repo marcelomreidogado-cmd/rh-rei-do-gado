@@ -57,8 +57,9 @@ function openForm(e) {
       if (cpf && cpf.length !== 11) { toast('CPF deve ter 11 dígitos.', 'err'); return false; }
       const tel = m.$('#f_tel').value.trim();
       if (tel && !C.normalizePhone(tel, S.config.dddPadrao).ok) { toast('Telefone inválido. Use DDD + número.', 'err'); return false; }
-      await D.saveEmployee({ ...(e || {}), id: e?.id, nome, loja: m.$('#f_loja').value, lojaTrabalho: m.$('#f_lt').value, funcao: m.$('#f_funcao').value.trim(), categoria: m.$('#f_cat').value, salarioBase: C.num(m.$('#f_sal').value), entrada: m.$('#f_ent').value || null, admissao: m.$('#f_adm').value || null, nascimento: m.$('#f_nasc').value || null, cpf, telefone: tel, ativo: m.$('#f_ativo').value === '1', demissao: m.$('#f_dem').value || null, motoboy: m.$('#f_moto').checked, periculosidadePct: Math.max(0, Math.min(100, C.num(m.$('#f_peric').value) || 30)) });
-      render(root); toast('Funcionário salvo.');
+      const salvo = await D.saveEmployee({ ...(e || {}), id: e?.id, nome, loja: m.$('#f_loja').value, lojaTrabalho: m.$('#f_lt').value, funcao: m.$('#f_funcao').value.trim(), categoria: m.$('#f_cat').value, salarioBase: C.num(m.$('#f_sal').value), entrada: m.$('#f_ent').value || null, admissao: m.$('#f_adm').value || null, nascimento: m.$('#f_nasc').value || null, cpf, telefone: tel, ativo: m.$('#f_ativo').value === '1', demissao: m.$('#f_dem').value || null, motoboy: m.$('#f_moto').checked, periculosidadePct: Math.max(0, Math.min(100, C.num(m.$('#f_peric').value) || 30)) });
+      const tirou = await D.tiraDesligadoDaFolha(salvo);
+      render(root); toast(tirou ? `Funcionário salvo. Saiu da folha de ${tirou} mês(es) depois do desligamento.` : 'Funcionário salvo.');
     } }],
     onMount: (m) => {
       const chk = () => {
