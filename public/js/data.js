@@ -376,17 +376,26 @@ export function default5x2Cfg() {
   }
   return { lojas, semFolga: [6], domingo3: true };
 }
+/**
+ * O Firestore nao aceita lista dentro de lista. "Meu horario" (turnosDias = {dow: [[ini, fim], ...]}) e gravado como
+ * {dow: ["ini|fim", ...]} e volta ao formato normal ao ler (v1.25.1; antes dava "Nested arrays are not supported").
+ */
+const turnosParaBanco = (t) => (t ? Object.fromEntries(Object.entries(t).map(([d, l]) => [d, (l || []).map((x) => (Array.isArray(x) ? `${x[0]}|${x[1]}` : x))])) : t);
+const turnosDoBanco = (t) => (t ? Object.fromEntries(Object.entries(t).map(([d, l]) => [d, (l || []).map((x) => (typeof x === 'string' ? x.split('|') : x))])) : t);
+const docParaBanco = (o) => (o && o.turnosDias ? { ...o, turnosDias: turnosParaBanco(o.turnosDias) } : o);
+const docDoBanco = (o) => (o && o.turnosDias ? { ...o, turnosDias: turnosDoBanco(o.turnosDias) } : o);
 export async function load5x2(mk) {
-  const [doc, cfg] = await Promise.all([S.store.get(COL.sundays, `5x2-${mk}`), S.store.get(COL.sundays, '5x2-cfg')]);
+  const [doc, cfg0] = await Promise.all([S.store.get(COL.sundays, `5x2-${mk}`), S.store.get(COL.sundays, '5x2-cfg')]);
+  const cfg = docDoBanco(cfg0);
   const base = default5x2Cfg();
   const c = cfg ? { ...base, ...cfg, lojas: { ...base.lojas, ...(cfg.lojas || {}) } } : base;
   return { cfg: c, mes: doc && doc.confirmado ? doc : null };
 }
 export async function save5x2Mes(mk, data) { await S.store.set(COL.sundays, `5x2-${mk}`, { ...data, updatedAt: nowIso(), updatedBy: S.user?.id || '' }); }
 export async function clear5x2Mes(mk) { await S.store.del(COL.sundays, `5x2-${mk}`); }
-export async function save5x2Cfg(cfg) { await S.store.set(COL.sundays, '5x2-cfg', { ...cfg, updatedAt: nowIso(), updatedBy: S.user?.id || '' }); await log('escala_5x2_ajustes', ''); }
-export async function load5x2Outro() { return (await S.store.get(COL.sundays, '5x2-outro')) || { unidades: [], funcoes: [], pessoas: [], semFolga: [6], domingo3: true, meses: {} }; }
-export async function save5x2Outro(doc) { const d = { ...doc }; delete d.id; await S.store.set(COL.sundays, '5x2-outro', { ...d, updatedAt: nowIso(), updatedBy: S.user?.id || '' }); }
+export async function save5x2Cfg(cfg) { await S.store.set(COL.sundays, '5x2-cfg', { ...docParaBanco(cfg), updatedAt: nowIso(), updatedBy: S.user?.id || '' }); await log('escala_5x2_ajustes', ''); }
+export async function load5x2Outro() { return docDoBanco(await S.store.get(COL.sundays, '5x2-outro')) || { unidades: [], funcoes: [], pessoas: [], semFolga: [6], domingo3: true, meses: {} }; }
+export async function save5x2Outro(doc) { const d = { ...doc }; delete d.id; await S.store.set(COL.sundays, '5x2-outro', { ...docParaBanco(d), updatedAt: nowIso(), updatedBy: S.user?.id || '' }); }
 
 export async function loadSundays(mk) {
   const d = await S.store.get(COL.sundays, mk);

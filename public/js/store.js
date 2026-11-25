@@ -40,13 +40,18 @@ export function memoryStore(seed = {}) {
   const c = (n) => { if (!cols.has(n)) cols.set(n, new Map()); return cols.get(n); };
   for (const [n, docs] of Object.entries(seed)) for (const [id, d] of Object.entries(docs)) c(n).set(id, clean(d));
   const out = (id, d) => ({ id, ...clean(d) });
+  // igual ao Firestore: lista dentro de lista e recusada (o modo demo/testes pega o erro antes de publicar)
+  const semListaEmLista = (v, onde, dentroDeLista = false) => {
+    if (Array.isArray(v)) { if (dentroDeLista) throw new Error(`Function DocumentReference.set() called with invalid data. Nested arrays are not supported (found in document ${onde})`); v.forEach((x) => semListaEmLista(x, onde, true)); }
+    else if (v && typeof v === 'object') Object.values(v).forEach((x) => semListaEmLista(x, onde, false));
+  };
   const api = {
     kind: 'memory',
     _cols: cols,
     async list(col) { return [...c(col)].map(([id, d]) => out(id, d)); },
     async listWhere(col, field, val) { return [...c(col)].filter(([, d]) => d[field] === val).map(([id, d]) => out(id, d)); },
     async get(col, id) { return c(col).has(id) ? out(id, c(col).get(id)) : null; },
-    async set(col, id, data, merge = false) { c(col).set(id, merge ? { ...(c(col).get(id) || {}), ...clean(data) } : clean(data)); },
+    async set(col, id, data, merge = false) { semListaEmLista(data, `${col}/${id}`); c(col).set(id, merge ? { ...(c(col).get(id) || {}), ...clean(data) } : clean(data)); },
     async del(col, id) { c(col).delete(id); },
     async batch(ops) { for (const o of ops) { if (o.op === 'del') c(o.col).delete(o.id); else await api.set(o.col, o.id, o.data, !!o.merge); } },
   };

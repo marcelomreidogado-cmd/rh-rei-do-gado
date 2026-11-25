@@ -291,3 +291,17 @@ test('v1.25: jornada e TETO — a semana nunca passa de 42h (conta em minutos), 
   }
   assert.ok(semanas > 100);
 });
+
+test('v1.25.1: Meu horario (turnos por dia) grava sem lista dentro de lista e volta igual', async () => {
+  const { memoryStore } = await import('../public/js/store.js');
+  const D = await import('../public/js/data.js');
+  D.init(memoryStore({}));
+  const turnosDias = { 2: [['09:30', '19:00']], 6: [['09:00', '13:00'], ['13:00', '19:30']] };
+  await D.save5x2Cfg({ lojas: {}, turnosModo: 'manual', turnosDias });
+  const { cfg } = await D.load5x2('2026-12');
+  assert.deepEqual(cfg.turnosDias, turnosDias);
+  await D.save5x2Outro({ unidades: [], funcoes: [], pessoas: [], turnosDias });
+  assert.deepEqual((await D.load5x2Outro()).turnosDias, turnosDias);
+  // o banco de teste recusa lista dentro de lista, como o Firestore
+  await assert.rejects(() => D.S.store.set('x', 'y', { a: [[1, 2]] }), /Nested arrays/);
+});
