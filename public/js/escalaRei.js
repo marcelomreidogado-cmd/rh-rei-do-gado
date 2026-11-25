@@ -19,7 +19,9 @@ const candidatos = (un, semFolga) => UTEIS.filter((d) => (un.abre || []).include
  * pessoas: [{id, nome, unidade, funcao, funcoes, podeCobrir, folgaFixa?}] · unidades: {id: {abre, minimos, horario, extras}}
  * Retorna { folgas: {id: [datas]}, cobre: {id: {data: loja}}, abaixo: [{date, unidade, funcao, falta}], plano: {id: {grupoDomingo, fixa, volante}} }
  */
-export function gerarRei({ weeks, pessoas, unidades, semFolga = [6], unavailable = () => '' }) {
+export function gerarRei({ weeks, pessoas, unidades, semFolga = [6], unavailable = () => '', todasFixas = false }) {
+  // todasFixas (sugestao "Fixa"): todo mundo folga sempre no mesmo dia; quem cobre outras lojas continua cobrindo
+  const fixoFolga = (p) => todasFixas || !ehVolante(p);
   const dias = weeks.flat();
   const fora0 = new Set(pessoas.filter((p) => dias.filter((d) => unavailable(p.id, d)).length * 2 >= dias.length).map((p) => p.id));
   const ativos = pessoas.filter((p) => !fora0.has(p.id) && unidades[p.unidade]);
@@ -40,13 +42,13 @@ export function gerarRei({ weeks, pessoas, unidades, semFolga = [6], unavailable
       g = [0, 1, 2].sort((a, b) => nota(a) - nota(b))[0];
       grupos[g].add(p.id);
     }
-    plano[p.id] = { grupoDomingo: g, volante: ehVolante(p), fixa: null };
+    plano[p.id] = { grupoDomingo: g, volante: !fixoFolga(p), fixa: null };
   }
 
   // 2) folga FIXA de quem e fixo da loja: a escolhida na Equipe; senao o sistema sugere o dia em que a rede fica
   // mais coberta (com as coberturas), espalhando a mesma loja/funcao por dias diferentes
   const fixaDia = {}; for (const d of UTEIS) fixaDia[d] = new Set(fora0);
-  for (const p of ordem.filter((x) => !ehVolante(x))) {
+  for (const p of ordem.filter(fixoFolga)) {
     const cands = candidatos(unidades[p.unidade], semFolga);
     if (!cands.length) continue;
     let d = cands.includes(Number(p.folgaFixa)) ? Number(p.folgaFixa) : null;
@@ -69,10 +71,10 @@ export function gerarRei({ weeks, pessoas, unidades, semFolga = [6], unavailable
     for (const p of ativos) {
       dele[p.id] = [];
       if (domOff(p)) { dele[p.id].push(0); foraSem[0].add(p.id); continue; }
-      if (!ehVolante(p) && plano[p.id].fixa != null) { dele[p.id].push(plano[p.id].fixa); foraSem[plano[p.id].fixa].add(p.id); }
+      if (fixoFolga(p) && plano[p.id].fixa != null) { dele[p.id].push(plano[p.id].fixa); foraSem[plano[p.id].fixa].add(p.id); }
     }
     // volantes: quem tem menos opcao escolhe primeiro; a ordem gira a cada semana
-    const vol = ativos.filter((p) => ehVolante(p) && !domOff(p)).map((p, k) => ({ p, k }))
+    const vol = ativos.filter((p) => !fixoFolga(p) && !domOff(p)).map((p, k) => ({ p, k }))
       .sort((x, y) => candidatos(unidades[x.p.unidade], semFolga).length - candidatos(unidades[y.p.unidade], semFolga).length || ((x.k + w) % 97) - ((y.k + w) % 97)).map((x) => x.p);
     for (const p of vol) {
       const cands = candidatos(unidades[p.unidade], semFolga);
@@ -119,7 +121,7 @@ export function cobrirRei({ weeks, pessoas, unidades, folgas, cobre: inicial = {
  * ou com mais horas (sobra: entra mais tarde). Nunca passa da meta do mes. Feriado/abertura extra: fixo e fora da
  * conta. Mesmo formato de C.turnos5x2 + mes: {min, alvo}.
  */
-export function horasCompensatoria({ weeks, mk, pessoas, unidades, folgas, cobre = {}, unavailable = () => '', almoco = 60, jornada = 0, inicioMin = '07:00', maxDia = 10 }) {
+export function horasCompensatoria({ weeks, mk, pessoas, unidades, folgas, cobre = {}, unavailable = () => '', almoco = 60, jornada = 0, inicioMin = '07:00', maxDia = 10, turnoDe = null }) {
   const out = {};
   const hm = (t) => { const m = /^(\d{1,2}):?(\d{2})?$/.exec(String(t || '').trim()); return m ? +m[1] * 60 + +(m[2] || 0) : null; };
   const hhmm = (x) => `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`;
@@ -135,7 +137,8 @@ export function horasCompensatoria({ weeks, mk, pessoas, unidades, folgas, cobre
       const u = (cobre[p.id] || {})[d] || p.unidade;
       const un = C.unidadesNoDia(unidades, d)[u];
       if (!un || !(un.abre || []).includes(C.weekday(d))) continue;
-      const h = (un.horario || {})[C.weekday(d)] || [];
+      const tt = turnoDe && !(unidades[u]?.extras || {})[d] ? turnoDe(p.id, d, u) : null; // Meu horário como ponto de partida
+      const h = tt ? [tt.ini, tt.fim] : (un.horario || {})[C.weekday(d)] || [];
       const a = hm(h[0]), b = hm(h[1]); if (a === null || b === null) continue;
       const especial = !!(unidades[u]?.extras || {})[d];
       lista.push({ d, a, b, abre: a, especial, ajusta: !especial && noMes(d) && UTEIS.includes(C.weekday(d)) });
@@ -165,4 +168,68 @@ export function horasCompensatoria({ weeks, mk, pessoas, unidades, folgas, cobre
     out[p.id] = { dias, semanas, mes: { min: soma(), alvo } };
   }
   return out;
+}
+
+/**
+ * Sugestoes para cada dia ABAIXO DO MINIMO (v1.27): o que fazer, em ordem — 1) TROCAR A FOLGA de quem esta de folga
+ * no dia (para outro dia da mesma semana em que nada fica abaixo); 2) alguem de OUTRA LOJA vir cobrir, mostrando como
+ * a loja dele fica; 3) chamar EXTRA. Cada opcao traz `aplica` ({folgas, cobre} novos) e `novos` (dias que passam a
+ * ficar abaixo). Retorna [{date, unidade, funcao, falta, opcoes: [...]}].
+ */
+export function sugestoesAbaixo({ weeks, pessoas, unidades, folgas, cobre = {}, unavailable = () => '', abaixo, semFolga = [6] }) {
+  const out = [];
+  const chave = (x) => `${x.date}|${x.unidade}|${x.funcao}`;
+  const base = new Set(abaixo.map(chave));
+  const conta = (f, c, dias) => C.faltas5x2({ weeks: [dias], pessoas, unidades, folgas: f, cobre: c, unavailable }).filter((x) => dias.includes(x.date));
+  const nomeLoja = (u) => unidades[u]?.nome || u;
+  for (const ab of abaixo) {
+    const d = ab.date, dow = C.weekday(d);
+    const week = weeks.find((w) => w.includes(d)) || [d];
+    const antes = conta(folgas, cobre, week);
+    const pior = (f, c) => { const depois = conta(f, c, week); const ainda = depois.some((x) => chave(x) === chave(ab)); return { ainda, novos: depois.filter((x) => !base.has(chave(x))).length, total: depois.reduce((a, x) => a + x.falta, 0) }; };
+    const opcoes = [];
+    const fazFuncao = (p) => C.funcoesP(p).includes(ab.funcao);
+    // 1) trocar a folga: quem faz a funcao e esta de folga no dia (da propria loja, ou de outra loja que pode cobrir)
+    for (const p of pessoas.filter((x) => fazFuncao(x) && (folgas[x.id] || []).includes(d) && !unavailable(x.id, d))) {
+      const daLoja = p.unidade === ab.unidade;
+      if (!daLoja && !ehVolante(p)) continue;
+      for (const d2 of week) {
+        const w2 = C.weekday(d2);
+        if (d2 === d || !UTEIS.includes(w2) || semFolga.includes(w2) || (folgas[p.id] || []).includes(d2) || unavailable(p.id, d2) || !(unidades[p.unidade].abre || []).includes(w2)) continue;
+        const f = { ...folgas, [p.id]: [...(folgas[p.id] || []).filter((x) => x !== d), d2].sort() };
+        const c = daLoja ? cobre : { ...cobre, [p.id]: { ...(cobre[p.id] || {}), [d]: ab.unidade } };
+        const r = pior(f, c);
+        if (r.ainda && ab.falta === 1) continue;
+        opcoes.push({ tipo: 'folga', pid: p.id, de: d, para: d2, domingo: dow === 0, novos: r.novos, total: r.total,
+          texto: `${p.nome}: folga de ${C.DIAS_SEM[dow].toLowerCase()} ${d.slice(8)} passa para ${C.DIAS_SEM[w2].toLowerCase()} ${d2.slice(8)}${daLoja ? '' : ` e vem para ${nomeLoja(ab.unidade)}`}${dow === 0 ? ' (perde o domingo de folga deste ciclo)' : ''}`,
+          aplica: { folgas: f, cobre: c } });
+      }
+    }
+    // 2) vem de outra loja (trabalhando no dia), mesmo que a loja dele fique abaixo — mostra o efeito
+    for (const p of pessoas.filter((x) => fazFuncao(x) && x.unidade !== ab.unidade && !(folgas[x.id] || []).includes(d) && !unavailable(x.id, d) && !(cobre[x.id] || {})[d] && (unidades[x.unidade].abre || []).includes(dow))) {
+      const c = { ...cobre, [p.id]: { ...(cobre[p.id] || {}), [d]: ab.unidade } };
+      const r = pior(folgas, c);
+      const fica = conta(folgas, c, [d]).filter((x) => x.unidade === p.unidade);
+      opcoes.push({ tipo: 'cobrir', pid: p.id, de: p.unidade, novos: r.novos, total: r.total,
+        texto: `${p.nome} vem de ${nomeLoja(p.unidade)}${fica.length ? ` (${nomeLoja(p.unidade)} fica abaixo em ${fica.map((x) => x.funcao === 'manipulacao' ? 'manipulação' : 'atendimento').join(' e ')})` : ''}${ehVolante(p) ? '' : ' — marcado que não cobre outras lojas'}`,
+        aplica: { folgas, cobre: c } });
+    }
+    // uma opcao de troca de folga por pessoa (o melhor dia)
+    const vistos = new Set();
+    opcoes.sort((a, b) => a.novos - b.novos || a.total - b.total || (a.tipo === 'folga' ? 0 : 1) - (b.tipo === 'folga' ? 0 : 1) || (a.domingo ? 1 : 0) - (b.domingo ? 1 : 0) || a.texto.localeCompare(b.texto));
+    const unicas = opcoes.filter((o) => { const k = o.tipo + '|' + o.pid; if (vistos.has(k)) return false; vistos.add(k); return true; });
+    const extra = { tipo: 'extra', texto: 'Chamar um extra nesse dia', novos: 0 };
+    // se toda troca deixa outro dia/loja abaixo, a melhor saida e o extra
+    const lista = unicas.some((o) => o.novos === 0) ? [...unicas, extra] : [extra, ...unicas];
+    out.push({ ...ab, antes: antes.length, opcoes: lista });
+  }
+  return out;
+}
+
+/** Resumo de quantas pessoas o dia precisa x quantas trabalham na rede (ex.: domingo 7 x 6). */
+export function balancoDia({ pessoas, unidades, folgas, unavailable = () => '', d }) {
+  const dow = C.weekday(d); const und = C.unidadesNoDia(unidades, d);
+  const precisa = Object.values(und).filter((u) => (u.abre || []).includes(dow)).reduce((a, u) => a + somaMin(u, dow), 0);
+  const trabalham = pessoas.filter((p) => und[p.unidade] && (und[p.unidade].abre || []).includes(dow) && !(folgas[p.id] || []).includes(d) && !unavailable(p.id, d)).length;
+  return { precisa, trabalham };
 }

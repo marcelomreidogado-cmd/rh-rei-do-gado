@@ -905,7 +905,7 @@ export function turnos5x2({ weeks, pessoas, unidades, folgas, cobre = {}, unavai
         const tt = !proprio && turnoDe ? turnoDe(p.id, d, u) : null;
         if (tt) {
           const a = hm(tt.ini), b = hm(tt.fim); if (a === null || b === null) continue;
-          trab.push({ d, a, b, abre: a, proprio: false, especial: extra, fixo: !!tt.fixo || extra, curto: false, lado: tt.lado || 'ini', min: hm(hl[0]) ?? a, max: hm(hl[1]) ?? b, turno: tt.idx, nTurnos: tt.k });
+          trab.push({ d, a, b, abre: a, proprio: false, especial: extra, fixo: !!tt.fixo || extra, curto: false, lado: tt.lado || 'ini', min: tt.livre ? ini0 : hm(hl[0]) ?? a, max: hm(hl[1]) ?? b, turno: tt.idx, nTurnos: tt.k });
           continue;
         }
         const h = proprio && proprio[0] && proprio[1] ? proprio : hl;

@@ -84,3 +84,33 @@ test('v1.26: horas — compensatória fecha o mês na média de 42h/semana; a ou
   // horário da loja sem ajuste: semana que trabalha domingo 39h45, de folga no domingo 43h30 (o lanche é dentro da jornada)
   assert.equal(C.minutosTurno(9.5, 19, 60), 510); assert.equal(C.minutosTurno(9, 19.5, 60), 570); assert.equal(C.minutosTurno(9, 14, 60), 285);
 });
+
+test('v1.27: Meu horário é ponto de partida — a entrada se ajusta e a semana não passa de 42h', () => {
+  const ps = equipe();
+  const r = E.gerarRei({ weeks, pessoas: ps, unidades, unavailable: ferias });
+  // Meu horário 8:00–19:00 (10h de trabalho por dia) em todos os dias de semana: passaria muito de 42h
+  const turnoDe = (pid, d) => (UTEIS_T.includes(C.weekday(d)) ? { ini: '08:00', fim: '19:00', idx: 0, k: 1, livre: true, fixo: false } : null);
+  const B = C.turnos5x2({ weeks, pessoas: ps, unidades, folgas: r.folgas, cobre: r.cobre, unavailable: ferias, almoco: 60, turnoDe });
+  for (const p of ps) for (const s of B[p.id].semanas) assert.ok(s.normais <= 42 + 1e-9, `${p.id} ${s.inicio}: ${C.fmtH(s.normais)} (entrada ajustada)`);
+  assert.ok(Object.values(B.ana.dias).some((v) => v.ini > '08:00'), 'entrou mais tarde que o Meu horário para não passar');
+});
+const UTEIS_T = [2, 3, 4, 5];
+
+test('v1.27: sugestão nos dias abaixo do mínimo e escala toda fixa', () => {
+  const ps = equipe();
+  const r = E.gerarRei({ weeks, pessoas: ps, unidades, unavailable: ferias });
+  const sg = E.sugestoesAbaixo({ weeks, pessoas: ps, unidades, folgas: r.folgas, cobre: r.cobre, unavailable: ferias, abaixo: r.abaixo });
+  assert.equal(sg.length, r.abaixo.length);
+  for (const x of sg) {
+    assert.ok(x.opcoes.length >= 1 && x.opcoes.some((o) => o.tipo === 'extra'), 'sempre tem a opção de extra');
+    for (const o of x.opcoes.filter((y) => y.aplica)) {
+      const depois = C.faltas5x2({ weeks, pessoas: ps, unidades, folgas: o.aplica.folgas, cobre: o.aplica.cobre, unavailable: ferias });
+      assert.ok(!depois.some((y) => y.date === x.date && y.unidade === x.unidade && y.funcao === x.funcao && y.falta >= x.falta), `${o.texto}: resolve o dia`);
+    }
+  }
+  // domingo: a rede precisa de 7 e trabalham 6 (cada um folga 1 domingo a cada 3 semanas)
+  const dom = sg.find((x) => C.weekday(x.date) === 0);
+  if (dom) assert.deepEqual(E.balancoDia({ pessoas: ps, unidades, folgas: r.folgas, unavailable: ferias, d: dom.date }), { precisa: 7, trabalham: 6 });
+  const f = E.gerarRei({ weeks, pessoas: ps, unidades, unavailable: ferias, todasFixas: true });
+  for (const p of ps) { const dd = new Set(f.folgas[p.id].filter((d) => C.weekday(d) !== 0 && !ferias(p.id, d)).map((d) => C.weekday(d))); assert.ok(dd.size <= 1, `${p.id}: fixa num só dia (${[...dd]})`); }
+});

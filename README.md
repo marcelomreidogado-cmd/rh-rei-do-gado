@@ -92,6 +92,11 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   pessoa, quem vem cobrir; clicar num dia alterna trabalha → folga → cobre
   outra loja. Dados em rh_sundays
   (5x2-cfg, 5x2-AAAA-MM, 5x2-outro), sem mudar regras.
+- **Escala 5x2 Rei do Gado (v1.27)**: botões **Folgas: Rotativa | Fixa** (as duas sugestões, com quantos dias ficam
+  azuis em cada uma; na Fixa todo mundo folga sempre no mesmo dia). Cada dia **abaixo do mínimo** traz a **sugestão** do
+  que fazer — trocar a folga de alguém, alguém vir de outra loja (mostrando como a loja dele fica) ou chamar extra —
+  com **Aplicar** e as outras opções; mostra quando a rede precisa de mais gente do que trabalha no dia (ex.: domingo
+  7 × 6). O **Meu horário** passou a ser ponto de partida: a entrada se ajusta para a semana não passar de 42h.
 - **Escala 5x2 Rei do Gado (v1.26) — refeita com as regras de 24/11** (`claude/ESCALA-5x2-REGRAS.md` no Projeto;
   motor em `public/js/escalaRei.js`): quem é **fixo da loja** (sem "Cobre outras lojas") folga sempre no mesmo dia
   (o sistema sugere, ajuste na coluna **Folga fixa** da Equipe); quem **cobre outras lojas** tem folga que gira para
