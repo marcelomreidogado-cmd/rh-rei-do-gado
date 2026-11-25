@@ -544,7 +544,7 @@ const somaFalta = (falta) => Object.values(falta).reduce((a, n) => a + n, 0);
  * nao ficar com falta a mais; prefere quem cobriu menos vezes, depois quem nao e hibrido e quem esta sobrando mais).
  * Retorna { cobre:{id:unidade}, falta:{unidade:{funcao:n}}, total }.
  */
-export function simulaDia({ pessoas, unidades, dow, fora, cobre: fixo = {}, completar = true, vezes = {} }) {
+export function simulaDia({ pessoas, unidades, dow, fora, cobre: fixo = {}, completar = true, vezes = {}, pref = null }) {
   const cobre = { ...fixo };
   const ondeEsta = (p) => cobre[p.id] || p.unidade;
   const presentes = pessoas.filter((p) => !fora.has(p.id) && unidades[ondeEsta(p)] && abreNo(unidades[ondeEsta(p)], dow));
@@ -560,7 +560,7 @@ export function simulaDia({ pessoas, unidades, dow, fora, cobre: fixo = {}, comp
         const doadores = presentes.filter((p) => !cobre[p.id] && p.unidade !== u && p.podeCobrir !== false && funcoesP(p).includes(f))
           .filter((p) => { const o = ondeEsta(p); antes[o] = antes[o] ?? somaFalta(conta(o)); return somaFalta(conta(o, p.id)) <= antes[o]; })
           .filter((p) => (conta(u, null, p)[f] || 0) < n)
-          .sort((a, b) => (vezes[a.id] || 0) - (vezes[b.id] || 0) || funcoesP(a).length - funcoesP(b).length || a.nome.localeCompare(b.nome));
+          .sort((a, b) => (pref ? pref(b, u) - pref(a, u) : 0) || (vezes[a.id] || 0) - (vezes[b.id] || 0) || funcoesP(a).length - funcoesP(b).length || a.nome.localeCompare(b.nome));
         if (!doadores.length) continue;
         cobre[doadores[0].id] = u; mudou = true; break;
       }
@@ -672,7 +672,7 @@ export function gerar5x2({ weeks, pessoas, unidades, semFolga = [6], domingo3 = 
  * fica de folga como num dia fechado. Quem trabalhou ganha uma folga de compensacao na mesma semana, num dia em que a
  * rede continua coberta (se nao houver, a semana fica com 1 folga e a grade mostra o ⚠).
  */
-function aplicaExtras({ weeks, pessoas, unidades, folgas, semFolga, unavailable }) {
+export function aplicaExtras({ weeks, pessoas, unidades, folgas, semFolga, unavailable }) {
   const vezes = {};
   for (const week of weeks) for (const d of week) {
     for (const [uid, u] of Object.entries(unidades)) {

@@ -92,6 +92,13 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   pessoa, quem vem cobrir; clicar num dia alterna trabalha → folga → cobre
   outra loja. Dados em rh_sundays
   (5x2-cfg, 5x2-AAAA-MM, 5x2-outro), sem mudar regras.
+- **Escala 5x2 Rei do Gado (v1.26) — refeita com as regras de 24/11** (`claude/ESCALA-5x2-REGRAS.md` no Projeto;
+  motor em `public/js/escalaRei.js`): quem é **fixo da loja** (sem "Cobre outras lojas") folga sempre no mesmo dia
+  (o sistema sugere, ajuste na coluna **Folga fixa** da Equipe); quem **cobre outras lojas** tem folga que gira para
+  encaixar as coberturas; a **mesma pessoa** cobre a mesma loja sempre que der. Dia abaixo do mínimo dos Ajustes
+  fica em **azul** ("avaliar extra ou ajuste"), não é falta de pessoal. Horas com duas sugestões: **Até 42h por
+  semana** ou **Compensatória no mês** (horário da loja; o mês fecha 42h × dias ÷ 7, coluna **Mês**). Aviso azul
+  quando a loja fica sem ninguém na abertura/fechamento. v1.25.1: Meu horário e Equipe voltaram a salvar.
 - **Escala 5x2 (v1.25)**: a jornada semanal é **teto** — a semana nunca passa de 42h (40h a partir
   de 16/12/2027). A conta é feita em minutos inteiros (antes o arredondamento dava 42h05 e o quadro
   sugerido chegava a 42h15, mostrado como “ok”). Qualquer minuto acima aparece em vermelho e no

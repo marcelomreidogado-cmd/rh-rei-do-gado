@@ -191,3 +191,11 @@ table.hs.hl td{padding:6px 3px;vertical-align:top}
 table.hs.hl td .hl-it b{display:inline;font-size:13px}
 table.hs.hl td .hl-it small{display:inline;font-size:11px;margin:0}
 @media (max-width:600px){table.hs.hl th.hs-nome{position:sticky;left:0;z-index:1;background:#fff}}
+
+/* v1.26: escala 5x2 Rei do Gado — abaixo do mínimo em AZUL (avaliar extra), não é falta de pessoal */
+.x5-abaixo{background:#eff6ff;color:#1e40af;border-radius:8px;padding:8px 12px;margin:8px 0;display:grid;gap:3px}.x5-abaixo small{color:#3b82f6}
+.x5grid tr.cont td.abaixo{color:#fff;background:#2563eb;font-weight:700}.lg.abaixo{background:#2563eb;color:#fff}
+.x5grid td.ws-mes{font-variant-numeric:tabular-nums;color:var(--ink,#0f172a);font-weight:600}
+.x5-hsep{margin-left:14px}
+@media print{body.print-5x2 .x5-abaixo{display:none!important}}
+@media (max-width:600px){.x5-hsep{margin-left:0;flex-basis:100%}}
