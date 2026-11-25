@@ -551,16 +551,22 @@ export function simulaDia({ pessoas, unidades, dow, fora, cobre: fixo = {}, comp
   const conta = (u, sem = null, com = null) => alocar(minimosDia(unidades[u], dow),
     [...presentes.filter((p) => ondeEsta(p) === u && p.id !== sem), ...(com ? [com] : [])].map((p) => ({ id: p.id, funcoes: funcoesP(p) }))).falta;
   const ids = Object.keys(unidades).filter((u) => abreNo(unidades[u], dow));
+  // folga da funcao na rede no dia (quem faz - minimo somado): prefere mandar quem e da funcao com mais gente sobrando
+  const sobraFuncao = (p) => Math.min(...funcoesP(p).map((f) => presentes.filter((o) => funcoesP(o).includes(f)).length - ids.reduce((a, u) => a + (minimosDia(unidades[u], dow)[f] || 0), 0)));
   if (completar) {
     for (let guarda = 0; guarda < 60; guarda++) {
       let mudou = false;
       for (const u of ids) for (const [f, n] of Object.entries(conta(u))) {
         if (!n) continue;
         const antes = {};
-        const doadores = presentes.filter((p) => !cobre[p.id] && p.unidade !== u && p.podeCobrir !== false && funcoesP(p).includes(f))
+        // v1.28: tambem vale quem faz OUTRA funcao quando a loja tem hibrido: o hibrido passa para a funcao que falta
+        // e quem chega faz a dele (ex.: Correas sem manipulador -> o hibrido manipula e vem um atendente)
+        const faltaU = somaFalta(conta(u));
+        const hibAqui = presentes.some((p) => ondeEsta(p) === u && funcoesP(p).length > 1); // o hibrido da loja muda de funcao
+        const doadores = presentes.filter((p) => !cobre[p.id] && p.unidade !== u && p.podeCobrir !== false)
+          .filter((p) => (conta(u, null, p)[f] || 0) < n && somaFalta(conta(u, null, p)) < faltaU)
           .filter((p) => { const o = ondeEsta(p); antes[o] = antes[o] ?? somaFalta(conta(o)); return somaFalta(conta(o, p.id)) <= antes[o]; })
-          .filter((p) => (conta(u, null, p)[f] || 0) < n)
-          .sort((a, b) => (pref ? pref(b, u) - pref(a, u) : 0) || (vezes[a.id] || 0) - (vezes[b.id] || 0) || funcoesP(a).length - funcoesP(b).length || a.nome.localeCompare(b.nome));
+          .sort((a, b) => (pref ? pref(b, u) - pref(a, u) : 0) || (hibAqui && funcoesP(a).includes(f)) - (hibAqui && funcoesP(b).includes(f)) || sobraFuncao(b) - sobraFuncao(a) || (vezes[a.id] || 0) - (vezes[b.id] || 0) || funcoesP(a).length - funcoesP(b).length || a.nome.localeCompare(b.nome));
         if (!doadores.length) continue;
         cobre[doadores[0].id] = u; mudou = true; break;
       }

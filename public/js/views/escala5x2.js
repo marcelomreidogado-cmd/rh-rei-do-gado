@@ -57,7 +57,7 @@ function modelo() {
   const hor = horarioRei(cfg);
   const unidades = Object.fromEntries(C.STORES.map((s) => [s.id, { nome: s.nome, ...cfg.lojas[s.id], horario: hor, extras: extrasDe(s.id) }]));
   const lista = equipeLista().filter((p) => equipe.has(p.id) && unidades[p.unidade] && !foraDoMes(p));
-  const pessoas = lista.map((p) => ({ id: p.id, nome: p.nome, unidade: p.unidade, funcao: p.funcao === C.HIBRIDO ? 'atendimento' : p.funcao, funcoes: p.funcao === C.HIBRIDO ? ['atendimento', 'manipulacao'] : [p.funcao], podeCobrir: p.podeCobrir !== false, folgaFixa: p.folgaFixa ?? null, empId: p.empId || null, extra: !!p.extra }));
+  const pessoas = lista.map((p) => ({ id: p.id, nome: p.nome, unidade: p.unidade, funcao: p.funcao === C.HIBRIDO ? 'atendimento' : p.funcao, funcoes: p.funcao === C.HIBRIDO ? ['atendimento', 'manipulacao'] : [p.funcao], podeCobrir: p.podeCobrir !== false, folgaFixa: p.folgaFixa ?? null, prefereLoja: p.prefereLoja || null, empId: p.empId || null, extra: !!p.extra }));
   const porId = Object.fromEntries(pessoas.map((p) => [p.id, p]));
   // afastamento (atestado, ferias...) so para quem veio do cadastro de funcionarios
   const unavailable = (id, d) => (porId[id]?.empId ? awayReason(porId[id].empId, d) : '');
@@ -127,19 +127,21 @@ function editorEquipe(box, lista, marcados) {
       <td><select class="in eq-fun">${Object.entries(FUN_EQ).map(([k, v]) => `<option value="${k}" ${p.funcao === k ? 'selected' : ''}>${v}</option>`).join('')}</select></td>
       <td class="c"><input type="checkbox" class="eq-cobre" ${p.podeCobrir !== false ? 'checked' : ''}></td>
       <td><select class="in eq-fixa" ${p.podeCobrir !== false && st.cfg?.folgasModo !== 'fixa' ? 'disabled' : ''} title="Quem é fixo da loja folga sempre no mesmo dia (quem cobre outras lojas tem folga que gira)">${(() => { const sug = st.mes?.plano?.[p.id]?.fixa; return `<option value="">${p.podeCobrir !== false && st.cfg?.folgasModo !== 'fixa' ? 'gira' : `Sugerir${sug != null && p.folgaFixa == null ? ` (${C.DIAS_SEM[sug].toLowerCase()})` : ''}`}</option>${[2, 3, 4, 5].map((d) => `<option value="${d}" ${Number(p.folgaFixa) === d && p.folgaFixa != null ? 'selected' : ''}>${C.DIAS_SEM[d]}</option>`).join('')}`; })()}</select></td>
+      <td><select class="in eq-pref" ${p.podeCobrir !== false ? '' : 'disabled'} title="Loja que essa pessoa vai cobrir primeiro">${`<option value="">${p.podeCobrir !== false ? 'Qualquer' : '—'}</option>`}${C.STORES.filter((x) => x.id !== p.unidade).map((x) => `<option value="${x.id}" ${p.prefereLoja === x.id ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</select></td>
       <td><button type="button" class="icon-btn" data-eq-del="${esc(p.id)}" title="Tirar da lista">✕</button></td></tr>`; }).join('');
-  const desenha = () => { box.innerHTML = `<div class="table-wrap"><table class="grid x5-eq"><thead><tr><th title="Entra no mês">Mês</th><th>Nome</th><th>Loja</th><th>Função</th><th title="Pode ir a outra loja cobrir folga">Cobre outras lojas</th><th title="Folga da semana de quem é fixo da loja">Folga fixa</th><th></th></tr></thead><tbody>${linhas()}</tbody></table></div>
+  const desenha = () => { box.innerHTML = `<div class="table-wrap"><table class="grid x5-eq"><thead><tr><th title="Entra no mês">Mês</th><th>Nome</th><th>Loja</th><th>Função</th><th title="Pode ir a outra loja cobrir folga">Cobre outras lojas</th><th title="Folga da semana de quem é fixo da loja">Folga fixa</th><th title="Loja que essa pessoa cobre primeiro">Prefere cobrir</th><th></th></tr></thead><tbody>${linhas()}</tbody></table></div>
     <button type="button" class="btn sm" data-eq-add="1">＋ Incluir extra</button>`; };
   const ler = () => {
     for (const tr of box.querySelectorAll('tr[data-eq]')) {
       const p = lista.find((x) => x.id === tr.dataset.eq); if (!p) continue;
       p.nome = tr.querySelector('.eq-nome').value.trim(); p.unidade = tr.querySelector('.eq-loja').value; p.funcao = tr.querySelector('.eq-fun').value;
       p.podeCobrir = tr.querySelector('.eq-cobre').checked;
+      const pf = tr.querySelector('.eq-pref').value; p.prefereLoja = p.podeCobrir && pf && pf !== p.unidade ? pf : null;
       const fx = tr.querySelector('.eq-fixa').value; p.folgaFixa = (p.podeCobrir && st.cfg?.folgasModo !== 'fixa') || fx === '' ? null : Number(fx);
       if (tr.querySelector('.eq-mes').checked) marcados.add(p.id); else marcados.delete(p.id);
     }
   };
-  box.onchange = (ev) => { const c = ev.target.closest('.eq-cobre'); if (!c || st.cfg?.folgasModo === 'fixa') return; const sel = c.closest('tr').querySelector('.eq-fixa'); sel.disabled = c.checked; sel.options[0].textContent = c.checked ? 'gira' : 'Sugerir'; };
+  box.onchange = (ev) => { const c = ev.target.closest('.eq-cobre'); if (!c) return; const pr = c.closest('tr').querySelector('.eq-pref'); pr.disabled = !c.checked; pr.options[0].textContent = c.checked ? 'Qualquer' : '—'; if (st.cfg?.folgasModo === 'fixa') return; const sel = c.closest('tr').querySelector('.eq-fixa'); sel.disabled = c.checked; sel.options[0].textContent = c.checked ? 'gira' : 'Sugerir'; };
   box.onclick = (ev) => {
     const add = ev.target.closest('[data-eq-add]'), del = ev.target.closest('[data-eq-del]');
     if (!add && !del) return;
@@ -230,7 +232,7 @@ function telaEscala() {
         const cg = carga?.[p.id];
         return `<tr><td class="nm" data-hp="${esc(p.id)}" title="${esc(p.nome)}${carga ? ' — clique para um horário próprio' : ''}">${esc(nomeCurto(p.nome))} <small>${esc(rotulo(p, m))}</small>${(m.horariosPessoa[p.id] && Object.keys(m.horariosPessoa[p.id]).length) ? ' <small class="x5-hp" title="Tem horário próprio">⏱</small>' : ''}${avisos.length ? ` <span class="x5-av" title="${esc(avisos.join('\n'))}">⚠</span>` : ''}</td>${diasCols.map((d) => { if (d[0] === 'S') return semCol('p', d.slice(1), p); const w = C.weekday(d); const sem = w === 1 ? 'sem' : ''; const dom = w === 0 ? 'dom' : '';
         if (!aD(d)) return `<td class="fech ff ${sem}" title="Folga — loja fechada">F</td>`;
-        const af = m.unavailable(p.id, d); if (af) return `<td class="af ${sem} ${dom}" title="${esc(af)}">A</td>`;
+        const af = m.unavailable(p.id, d); if (af) return `<td class="af ${sem} ${dom}" title="${esc(af)}">Af</td>`;
         const f = (m.folgas[p.id] || []).includes(d);
         const vai = (m.cobre[p.id] || {})[d];
         const tn = cg?.dias[d];
@@ -242,7 +244,7 @@ function telaEscala() {
         const kT = !f ? tz.k(u, d) : 0; const iT = kT > 1 ? (tz.atrib[p.id] || {})[d] ?? 0 : -1;
         if (iT >= 0) return `<td class="c tn t${iT === 0 ? 'a' : iT === kT - 1 ? 'f' : 'm'} ${hx ? 'hx' : ''} ${sem} ${dom}" data-p="${esc(p.id)}" data-d="${d}" title="${esc(C.NOMES_TURNO(kT)[iT])}${tn ? ` ${tn.ini}–${tn.fim} · ${C.fmtH(hd)} de trabalho` : ''}${pTxt ? ` · faz ${esc(pTxt.toLowerCase())}` : ''} — clique para mudar">${esc(C.SIGLA_TURNO(kT)[iT])}</td>`;
         const tTxt = tn && !f ? `${tn.ini}–${tn.fim} · ${C.fmtH(hd)} (almoço ${m.almoco} min; lanche de 15 min dentro da jornada)${tn.cedo ? ' · entra mais cedo para fechar a jornada' : ''} · ` : '';
-        return `<td class="c ${f ? 'f' : ''} ${hx ? 'hx' : ''} ${sem} ${dom}" data-p="${esc(p.id)}" data-d="${d}" title="${f ? 'Folga — clique para cobrir outra loja ou trabalhar' : esc(tTxt) + (pTxt ? `Faz ${esc(pTxt.toLowerCase())} — ` : '') + 'Clique para dar folga'}">${f ? 'F' : pTxt ? `<span class="x5-pap">${esc(pTxt[0].toLowerCase())}</span>` : ''}</td>`; }).join('')}<td class="tt">${fs.length + dias.filter((d) => !aD(d) && !m.unavailable(p.id, d)).length}</td><td class="tt">${fs.filter((d) => C.weekday(d) === 0).length}</td>${comp ? `<td class="tt ws-mes" title="${cg?.mes ? `${esc(C.fmtH(cg.mes.min / 60))} de ${esc(C.fmtH(cg.mes.alvo / 60))} no mês` : ''}">${cg?.mes ? esc(C.fmtH(cg.mes.min / 60)) : ''}</td>` : ''}</tr>`; }).join('')}
+        return `<td class="c ${f ? 'f' : ''} ${hx ? 'hx' : ''} ${sem} ${dom}" data-p="${esc(p.id)}" data-d="${d}" title="${f ? 'Folga — clique para cobrir outra loja ou trabalhar' : esc(tTxt) + (pTxt ? `Faz ${esc(pTxt.toLowerCase())} — ` : '') + 'Clique para dar folga'}">${f ? 'F' : pTxt ? `<span class="x5-pap">${papel === 'manipulacao' ? 'M' : 'A'}</span>` : ''}</td>`; }).join('')}<td class="tt">${fs.length + dias.filter((d) => !aD(d) && !m.unavailable(p.id, d)).length}</td><td class="tt">${fs.filter((d) => C.weekday(d) === 0).length}</td>${comp ? `<td class="tt ws-mes" title="${cg?.mes ? `${esc(C.fmtH(cg.mes.min / 60))} de ${esc(C.fmtH(cg.mes.alvo / 60))} no mês` : ''}">${cg?.mes ? esc(C.fmtH(cg.mes.min / 60)) : ''}</td>` : ''}</tr>`; }).join('')}
       ${Object.keys(m.funcoes).filter((f) => gente.some((p) => C.funcoesP(p).includes(f))).map((f) => `<tr class="cont"><td class="nm">${esc(m.funcoes[f])} na loja</td>${diasCols.map((d) => { if (d[0] === 'S') return semCol('v'); const w = C.weekday(d); if (!aD(d)) return `<td class="fech ${w === 1 ? 'sem' : ''}"></td>`;
         const tem = C.naUnidade5x2({ pessoas: m.pessoas, unidade: u, unidades: m.unidades, funcao: f, d, folgas: m.folgas, cobre: m.cobre, unavailable: m.unavailable }); const min = ((nd(d).minimos || {})[f] || [])[w] || 0;
         const vazio = tz.vazio(u, d, m);
@@ -255,9 +257,10 @@ function telaEscala() {
           if (!aD(d)) return `<td class="fech ${sem}"></td>`;
           if ((m.cobre[p.id] || {})[d] !== u) return `<td class="${sem} ${dom}"></td>`;
           const tn = carga?.[p.id]?.dias[d];
-          return `<td class="vem-c ${sem} ${dom}" title="${esc(p.nome)} vem de ${esc(m.unidades[p.unidade].nome)}${tn ? ` · ${tn.ini}–${tn.fim}` : ''}">✓</td>`; }).join('')}<td></td><td></td>${comp ? '<td></td>' : ''}</tr>`).join(''); })()}
+          const pv = C.contagem5x2({ pessoas: m.pessoas, unidade: u, unidades: m.unidades, d, folgas: m.folgas, cobre: m.cobre, unavailable: m.unavailable }).papel[p.id];
+          return `<td class="vem-c ${sem} ${dom}" title="${esc(p.nome)} vem de ${esc(m.unidades[p.unidade].nome)}${pv ? ` · faz ${pv === 'manipulacao' ? 'manipulação' : 'atendimento'}` : ''}${tn ? ` · ${tn.ini}–${tn.fim}` : ''}">${pv === 'manipulacao' ? 'M' : pv ? 'A' : '✓'}</td>`; }).join('')}<td></td><td></td>${comp ? '<td></td>' : ''}</tr>`).join(''); })()}
       </tbody></table></div></section>`; }).join('')}
-    <p class="x5-leg">Clique no dia da pessoa para escolher <b>trabalha, folga ou cobrir outra loja</b> · clique no número da loja para escolher <b>quem vem cobrir</b>. <span class="lg f">F</span> folga <span class="lg ff">F</span> folga (loja fechada)${tz.temMulti ? ' <span class="lg tna">Abre</span> abertura <span class="lg tnm">Meio</span> intermediário <span class="lg tnf">Fecha</span> fechamento (horários no quadro acima)' : ''} <span class="lg cob">${esc(sigla(Object.values(m.unidades)[0]?.nome || 'Loja'))}</span> cobrindo outra loja <span class="lg af">A</span> afastado  <span class="lg ${modo === 'rei' ? 'abaixo' : 'baixo'}">2</span> abaixo do mínimo${modo === 'rei' ? ' (avaliar extra)' : ''} ${carga ? `coluna <b>h</b> depois de cada domingo = horas da semana (meta ${C.metaSemanal(weeks[0][0], m.jornada)}h): <span class="lg wsf">−2h</span> falta <span class="lg wsp">+1h</span> passa <span class="lg fer">&nbsp;</span> feriado` : '· <a href="#" data-act="ajustes">cadastre o horário de funcionamento</a> para ver a carga horária'} ${modo === 'rei' ? '· <a href="#" data-act="refazer">alterar equipe</a>' : ''} · <a href="#" data-act="gerar">gerar de novo</a></p>`;
+    <p class="x5-leg">Clique no dia da pessoa para escolher <b>trabalha, folga ou cobrir outra loja</b> · clique no número da loja para escolher <b>quem vem cobrir</b>. <span class="lg f">F</span> folga <span class="lg ff">F</span> folga (loja fechada)${tz.temMulti ? ' <span class="lg tna">Abre</span> abertura <span class="lg tnm">Meio</span> intermediário <span class="lg tnf">Fecha</span> fechamento (horários no quadro acima)' : ''} <span class="lg cob">${esc(sigla(Object.values(m.unidades)[0]?.nome || 'Loja'))}</span> cobrindo outra loja <span class="lg af">Af</span> afastado <span class="lg pap">A</span> atendimento <span class="lg pap">M</span> manipulação (quem faz as duas)  <span class="lg ${modo === 'rei' ? 'abaixo' : 'baixo'}">2</span> abaixo do mínimo${modo === 'rei' ? ' (avaliar extra)' : ''} ${carga ? `coluna <b>h</b> depois de cada domingo = horas da semana (meta ${C.metaSemanal(weeks[0][0], m.jornada)}h): <span class="lg wsf">−2h</span> falta <span class="lg wsp">+1h</span> passa <span class="lg fer">&nbsp;</span> feriado` : '· <a href="#" data-act="ajustes">cadastre o horário de funcionamento</a> para ver a carga horária'} ${modo === 'rei' ? '· <a href="#" data-act="refazer">alterar equipe</a>' : ''} · <a href="#" data-act="gerar">gerar de novo</a></p>`;
 }
 
 const minDe = (t) => { const [h, mi] = String(t).split(':').map(Number); return h * 60 + (mi || 0); };
@@ -388,13 +391,16 @@ function painelLojas(m, weeks, carga) {
   const sem = weeks.filter((w) => w.some((d) => d.slice(0, 7) === mk));
   const cols = ORD7.filter((w) => sem.some((wk) => wk.some((d) => d.slice(0, 7) === mk && C.weekday(d) === w && C.abreEm(un, d))));
   const cel = (d) => {
-    if (d.slice(0, 7) !== mk) return '<td class="muted">·</td>';
-    if (!C.abreEm(un, d)) return '<td class="hs-fech">Fechada</td>';
+    const dt = `<span class="hl-dt">${esc(C.fmtDM(d))}</span>`;
+    if (d.slice(0, 7) !== mk) return `<td class="hl-fora">${dt}<span class="muted">outro mês</span></td>`;
+    if (!C.abreEm(un, d)) return `<td class="hs-fech">${dt}Fechada</td>`;
     const pres = m.pessoas.filter((p) => !m.unavailable(p.id, d) && !(m.folgas[p.id] || []).includes(d) && ((m.cobre[p.id] || {})[d] || p.unidade) === u);
     const g = {}; for (const p of pres) { const t = carga[p.id]?.dias[d]; if (!t) continue; const k = `${t.ini}|${t.fim}`; g[k] = (g[k] || 0) + 1; }
     const it = Object.entries(g).sort(([a], [b]) => a.localeCompare(b));
-    if (!it.length) return '<td class="muted">—</td>';
-    return `<td><div class="hl-dia">${it.map(([k, n]) => { const [a, b] = k.split('|'); return `<span class="hl-it"><b>${esc(curtoH(a))}–${esc(curtoH(b))}</b> <small>×${n}</small></span>`; }).join('')}</div></td>`;
+    if (!it.length) return `<td class="muted">${dt}—</td>`;
+    const und = C.unidadesNoDia(m.unidades, d)[u]; const minT = Object.values(und.minimos || {}).reduce((a, arr) => a + ((arr || [])[C.weekday(d)] || 0), 0);
+    const mais = pres.length - minT; // gente a mais que o minimo (reforco)
+    return `<td>${dt}<div class="hl-dia">${it.map(([k, n]) => { const [a, b] = k.split('|'); return `<span class="hl-it"><b>${esc(curtoH(a))}–${esc(curtoH(b))}</b> <small>×${n}</small></span>`; }).join('')}</div>${mais > 0 ? `<span class="hl-mais" title="${mais} a mais que o mínimo (${minT}) — fica de reforço (cada um já tem as 2 folgas da semana)">+${mais} reforço</span>` : ''}</td>`;
   };
   return `<section class="hs-card hl-card"><div class="hs-top"><h3>Entradas por loja</h3><span>quantas pessoas entram em cada horário</span><span class="spacer"></span>
     <div class="seg sm">${lojas.map(([id, x]) => `<button class="${id === u ? 'on' : ''}" data-act="hsloja" data-u="${esc(id)}">${esc(x.nome)}</button>`).join('')}</div></div>

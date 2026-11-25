@@ -132,3 +132,41 @@ test('v1.27: a loja nunca abre descoberta — alguém abre e a diferença sai em
   assert.equal(descobertos, 0, 'toda loja tem alguém na abertura');
   for (const p of ps) for (const s of carga[p.id].semanas) assert.ok(s.normais <= 42 + 1e-9, `${p.id} ${s.inicio}: ${C.fmtH(s.normais)}`);
 });
+
+// v1.28 — equipe no formato da de dez/2026 do Marcelo (2 em Bingen, 2 em Correas com híbrido, 5 na Coronel). Fictícia.
+const equipe2 = () => [P('bruno', 'bingen', 'atendimento', false), P('igor', 'bingen', 'manipulacao', false),
+  P('thais', 'correas', 'manipulacao', false), P('vando', 'correas', 'h', false),
+  P('gus', 'coronel', 'atendimento', true), P('jai', 'coronel', 'atendimento', true), P('carlos', 'coronel', 'manipulacao', true), P('paulo', 'coronel', 'manipulacao', false), P('jef', 'coronel', 'h', false)];
+
+test('v1.28: domingo — no máximo 2 que manipulam folgando juntos e a loja não folga inteira', () => {
+  const ps = equipe2();
+  const r = E.gerarRei({ weeks, pessoas: ps, unidades });
+  for (const w of weeks) {
+    const dom = w[6]; const off = ps.filter((p) => r.folgas[p.id].includes(dom));
+    assert.ok(off.filter((p) => C.funcoesP(p).includes('manipulacao')).length <= 2, `${dom}: ${off.map((p) => p.id)}`);
+    for (const u of Object.keys(unidades)) { const da = ps.filter((p) => p.unidade === u); assert.ok(off.filter((p) => p.unidade === u).length < da.length, `${dom}: ${u} inteira de folga`); }
+  }
+});
+
+test('v1.28: híbrido passa para a manipulação e vem um atendente cobrir (Correas)', () => {
+  const ps = equipe2();
+  const r = E.gerarRei({ weeks, pessoas: ps, unidades });
+  const vemCorreas = Object.entries(r.cobre).filter(([, m]) => Object.values(m).includes('correas')).map(([id]) => id);
+  assert.ok(vemCorreas.includes('gus') || vemCorreas.includes('jai'), `atendente cobre Correas (${vemCorreas})`);
+  assert.ok(!vemCorreas.includes('carlos'), 'o manipulador da Coronel não precisa ir para Correas');
+  assert.ok(!r.abaixo.some((x) => C.weekday(x.date) !== 0), `dias de semana no mínimo (${r.abaixo.map((x) => x.date)})`);
+});
+
+test('v1.28: "Prefere cobrir" — a pessoa vai primeiro para a loja escolhida', () => {
+  const ps = equipe2(); ps.find((p) => p.id === 'jai').prefereLoja = 'correas';
+  const r = E.gerarRei({ weeks, pessoas: ps, unidades });
+  const lojas = Object.values(r.cobre.jai || {});
+  assert.ok(lojas.length && lojas.filter((u) => u === 'correas').length >= lojas.length / 2, `jai cobre ${lojas}`);
+});
+
+test('v1.28: sugestão nunca tira o domingo de folga do ciclo de 3 semanas', () => {
+  const ps = equipe2();
+  const r = E.gerarRei({ weeks, pessoas: ps, unidades });
+  const s = E.sugestoesAbaixo({ weeks, pessoas: ps, unidades, folgas: r.folgas, cobre: r.cobre, abaixo: r.abaixo });
+  for (const x of s.filter((y) => C.weekday(y.date) === 0)) assert.ok(!x.opcoes.some((o) => o.tipo === 'folga'), `${x.date}: ${x.opcoes.map((o) => o.texto)}`);
+});

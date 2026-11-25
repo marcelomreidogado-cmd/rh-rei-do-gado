@@ -38,11 +38,35 @@ export function gerarRei({ weeks, pessoas, unidades, semFolga = [6], unavailable
     if ((un.abre || []).includes(0) && !semFolga.includes(0)) {
       const k = p.unidade + '|' + (C.funcoesP(p).length > 1 ? '*' : p.funcao); const i = vistos[k] = (vistos[k] ?? -1) + 1;
       const mesmo = (gi) => [...grupos[gi]].filter((id) => { const o = pessoas.find((x) => x.id === id); return o && o.unidade === p.unidade && o.funcao === p.funcao; }).length;
-      const nota = (gi) => rede(0, new Set([...grupos[gi], p.id])) * 1000 + mesmo(gi) * 10 + grupos[gi].size + ((gi - i + 30) % 3) * 0.01;
+      // v1.28: espalha as FUNCOES pela rede (nao deixa 3 manipuladores folgando no mesmo domingo): conta quem, no
+      // grupo, faz alguma funcao que a pessoa faz (hibrido conta nas duas), relativo a quantos fazem aquela funcao
+      const capaz = (gi) => C.funcoesP(p).reduce((s, f) => { const tot = ativos.filter((o) => C.funcoesP(o).includes(f)).length || 1;
+        return s + [...grupos[gi]].filter((id) => { const o = pessoas.find((x) => x.id === id); return o && !fora0.has(id) && C.funcoesP(o).includes(f); }).length / tot; }, 0);
+      const nota = (gi) => rede(0, new Set([...grupos[gi], p.id])) * 1000 + capaz(gi) * 3000 + mesmo(gi) * 10 + grupos[gi].size + ((gi - i + 30) % 3) * 0.01;
       g = [0, 1, 2].sort((a, b) => nota(a) - nota(b))[0];
       grupos[g].add(p.id);
     }
     plano[p.id] = { grupoDomingo: g, volante: !fixoFolga(p), fixa: null };
+  }
+  // v1.28: melhora os grupos trocando pessoas entre eles — rede coberta primeiro, depois as funcoes bem espalhadas
+  // (quantos de cada funcao folgam juntos o mais perto possivel de 1/3 de quem faz aquela funcao)
+  const funcs = [...new Set(ativos.flatMap((p) => C.funcoesP(p)))];
+  const custoG = (set) => { const ids = [...set].filter((id) => !fora0.has(id));
+    let bal = 0; for (const f of funcs) { const tot = ativos.filter((o) => C.funcoesP(o).includes(f)).length; const n = ids.filter((id) => C.funcoesP(pessoas.find((x) => x.id === id)).includes(f)).length; bal += (n - tot / 3) ** 2; }
+    const porLoja = {}; for (const id of ids) { const u = pessoas.find((x) => x.id === id).unidade; porLoja[u] = (porLoja[u] || 0) + 1; }
+    const mesmaLoja = Object.values(porLoja).reduce((a, n) => a + n * n, 0); // a loja nao fica toda de folga junta
+    return rede(0, set) * 1000 + bal * 100 + mesmaLoja * 30 + (ids.length - ativos.length / 3) ** 2; };
+  const comDom = ativos.filter((p) => plano[p.id]?.grupoDomingo != null);
+  for (let volta = 0, mudou = true; mudou && volta < 20; volta++) {
+    mudou = false;
+    for (const a of comDom) for (const b of comDom) {
+      const ga = plano[a.id].grupoDomingo, gb = plano[b.id].grupoDomingo;
+      if (ga === gb || a.id >= b.id) continue;
+      const antes = custoG(grupos[ga]) + custoG(grupos[gb]);
+      grupos[ga].delete(a.id); grupos[gb].delete(b.id); grupos[ga].add(b.id); grupos[gb].add(a.id);
+      if (custoG(grupos[ga]) + custoG(grupos[gb]) < antes - 1e-9) { plano[a.id].grupoDomingo = gb; plano[b.id].grupoDomingo = ga; mudou = true; }
+      else { grupos[ga].delete(b.id); grupos[gb].delete(a.id); grupos[ga].add(a.id); grupos[gb].add(b.id); }
+    }
   }
 
   // 2) folga FIXA de quem e fixo da loja: a escolhida na Equipe; senao o sistema sugere o dia em que a rede fica
@@ -104,7 +128,8 @@ export function cobrirRei({ weeks, pessoas, unidades, folgas, cobre: inicial = {
   const vezes = {}, afin = {};
   const conta = (id, u) => { vezes[id] = (vezes[id] || 0) + 1; (afin[id] = afin[id] || {})[u] = (afin[id][u] || 0) + 1; };
   for (const [id, m] of Object.entries(cobre)) for (const u of Object.values(m)) conta(id, u);
-  const pref = (p, u) => (afin[p.id] || {})[u] || 0;
+  // v1.28: a loja que o Marcelo marcou na Equipe ("Prefere cobrir") vem antes; depois quem ja cobriu aquela loja
+  const pref = (p, u) => (p.prefereLoja === u ? 1000 : 0) + ((afin[p.id] || {})[u] || 0);
   for (const week of weeks) for (const d of week) {
     const fora = new Set(pessoas.filter((p) => unavailable(p.id, d) || (folgas[p.id] || []).includes(d)).map((p) => p.id));
     const fixo = {}; for (const [id, m] of Object.entries(cobre)) if (m && m[d]) fixo[id] = m[d];
@@ -190,7 +215,8 @@ export function sugestoesAbaixo({ weeks, pessoas, unidades, folgas, cobre = {}, 
     const opcoes = [];
     const fazFuncao = (p) => C.funcoesP(p).includes(ab.funcao);
     // 1) trocar a folga: quem faz a funcao e esta de folga no dia (da propria loja, ou de outra loja que pode cobrir)
-    for (const p of pessoas.filter((x) => fazFuncao(x) && (folgas[x.id] || []).includes(d) && !unavailable(x.id, d))) {
+    // o domingo de folga NAO se troca: e o domingo do ciclo de 3 semanas (Lei 10.101/2000, art. 6o, par. unico)
+    for (const p of pessoas.filter((x) => dow !== 0 && fazFuncao(x) && (folgas[x.id] || []).includes(d) && !unavailable(x.id, d))) {
       const daLoja = p.unidade === ab.unidade;
       if (!daLoja && !ehVolante(p)) continue;
       for (const d2 of week) {
@@ -201,22 +227,24 @@ export function sugestoesAbaixo({ weeks, pessoas, unidades, folgas, cobre = {}, 
         const r = pior(f, c);
         if (r.ainda && ab.falta === 1) continue;
         opcoes.push({ tipo: 'folga', pid: p.id, de: d, para: d2, domingo: dow === 0, novos: r.novos, total: r.total,
-          texto: `${p.nome}: folga de ${C.DIAS_SEM[dow].toLowerCase()} ${d.slice(8)} passa para ${C.DIAS_SEM[w2].toLowerCase()} ${d2.slice(8)}${daLoja ? '' : ` e vem para ${nomeLoja(ab.unidade)}`}${dow === 0 ? ' (perde o domingo de folga deste ciclo)' : ''}`,
+          texto: `${p.nome}: folga de ${C.DIAS_SEM[dow].toLowerCase()} ${d.slice(8)} passa para ${C.DIAS_SEM[w2].toLowerCase()} ${d2.slice(8)}${daLoja ? '' : ` e vem para ${nomeLoja(ab.unidade)}`}`,
           aplica: { folgas: f, cobre: c } });
       }
     }
     // 2) vem de outra loja (trabalhando no dia), mesmo que a loja dele fique abaixo — mostra o efeito
-    for (const p of pessoas.filter((x) => fazFuncao(x) && x.unidade !== ab.unidade && !(folgas[x.id] || []).includes(d) && !unavailable(x.id, d) && !(cobre[x.id] || {})[d] && (unidades[x.unidade].abre || []).includes(dow))) {
+    // (v1.28: tambem quem faz a outra funcao, quando a loja tem hibrido que passa para a funcao que falta)
+    for (const p of pessoas.filter((x) => x.unidade !== ab.unidade && !(folgas[x.id] || []).includes(d) && !unavailable(x.id, d) && !(cobre[x.id] || {})[d] && (unidades[x.unidade].abre || []).includes(dow))) {
       const c = { ...cobre, [p.id]: { ...(cobre[p.id] || {}), [d]: ab.unidade } };
       const r = pior(folgas, c);
+      if (r.ainda && !fazFuncao(p)) continue;
       const fica = conta(folgas, c, [d]).filter((x) => x.unidade === p.unidade);
       opcoes.push({ tipo: 'cobrir', pid: p.id, de: p.unidade, novos: r.novos, total: r.total,
-        texto: `${p.nome} vem de ${nomeLoja(p.unidade)}${fica.length ? ` (${nomeLoja(p.unidade)} fica abaixo em ${fica.map((x) => x.funcao === 'manipulacao' ? 'manipulação' : 'atendimento').join(' e ')})` : ''}${ehVolante(p) ? '' : ' — marcado que não cobre outras lojas'}`,
+        texto: `${p.nome} vem de ${nomeLoja(p.unidade)}${fazFuncao(p) ? '' : ` (o híbrido da loja passa para ${ab.funcao === 'manipulacao' ? 'a manipulação' : 'o atendimento'})`}${fica.length ? ` (${nomeLoja(p.unidade)} fica abaixo em ${fica.map((x) => x.funcao === 'manipulacao' ? 'manipulação' : 'atendimento').join(' e ')})` : ''}${ehVolante(p) ? '' : ' — marcado que não cobre outras lojas'}`,
         aplica: { folgas, cobre: c } });
     }
     // uma opcao de troca de folga por pessoa (o melhor dia)
     const vistos = new Set();
-    opcoes.sort((a, b) => a.novos - b.novos || a.total - b.total || (a.tipo === 'folga' ? 0 : 1) - (b.tipo === 'folga' ? 0 : 1) || (a.domingo ? 1 : 0) - (b.domingo ? 1 : 0) || a.texto.localeCompare(b.texto));
+    opcoes.sort((a, b) => a.novos - b.novos || a.total - b.total || (a.tipo === 'folga' ? 0 : 1) - (b.tipo === 'folga' ? 0 : 1) || a.texto.localeCompare(b.texto));
     const unicas = opcoes.filter((o) => { const k = o.tipo + '|' + o.pid; if (vistos.has(k)) return false; vistos.add(k); return true; });
     const extra = { tipo: 'extra', texto: 'Chamar um extra nesse dia', novos: 0 };
     // se toda troca deixa outro dia/loja abaixo, a melhor saida e o extra

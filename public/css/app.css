@@ -204,3 +204,10 @@ table.hs.hl td .hl-it small{display:inline;font-size:11px;margin:0}
 .x5-sug-o{color:#1e3a8a}.x5-sug-b{display:flex;gap:6px;justify-content:flex-end}
 @media (max-width:600px){.x5-sug{grid-template-columns:1fr}.x5-sug-b{justify-content:flex-start}}
 .seg button small{opacity:.75;font-size:11px;margin-left:3px}
+/* v1.28: A/M de quem faz as duas funcoes e de quem vem cobrir; datas no quadro de entradas por loja */
+.x5grid td.c .x5-pap{color:#475569;font-size:11px;font-weight:700}
+.lg.pap{background:#f1f5f9;color:#475569}
+.hl .hl-dt{display:block;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;margin-bottom:2px}
+.hl td.hl-fora{opacity:.55}
+.hl td.hl-fora .muted{font-size:11px}
+.hl .hl-mais{display:inline-block;margin-top:3px;font-size:11px;color:#15803d;background:#dcfce7;border-radius:6px;padding:0 5px}

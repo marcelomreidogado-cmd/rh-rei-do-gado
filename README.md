@@ -92,6 +92,7 @@ Hosting, com dados no Firestore do projeto `motoboy-ddefa`.
   pessoa, quem vem cobrir; clicar num dia alterna trabalha → folga → cobre
   outra loja. Dados em rh_sundays
   (5x2-cfg, 5x2-AAAA-MM, 5x2-outro), sem mudar regras.
+- **Escala 5x2 Rei do Gado (v1.28)**: domingos de folga com as funções espalhadas (nunca 3 que manipulam folgando juntos, a loja nunca folga inteira); quem faz as duas funções passa para a manipulação e vem um atendente cobrir; coluna **Prefere cobrir** na Equipe; a sugestão nunca tira o domingo de folga do ciclo de 3 semanas (Lei 10.101/2000, art. 6º); grade mostra **A**/**M** (atendimento/manipulação) de quem faz as duas funções e de quem vem cobrir (afastado virou **Af**); "Entradas por loja" com a data em cada dia e o "+N reforço".
 - **Escala 5x2 Rei do Gado (v1.27)**: botões **Folgas: Rotativa | Fixa** (as duas sugestões, com quantos dias ficam
   azuis em cada uma; na Fixa todo mundo folga sempre no mesmo dia). Cada dia **abaixo do mínimo** traz a **sugestão** do
   que fazer — trocar a folga de alguém, alguém vir de outra loja (mostrando como a loja dele fica) ou chamar extra —
