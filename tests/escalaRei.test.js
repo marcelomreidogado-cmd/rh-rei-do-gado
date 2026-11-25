@@ -114,3 +114,21 @@ test('v1.27: sugestão nos dias abaixo do mínimo e escala toda fixa', () => {
   const f = E.gerarRei({ weeks, pessoas: ps, unidades, unavailable: ferias, todasFixas: true });
   for (const p of ps) { const dd = new Set(f.folgas[p.id].filter((d) => C.weekday(d) !== 0 && !ferias(p.id, d)).map((d) => C.weekday(d))); assert.ok(dd.size <= 1, `${p.id}: fixa num só dia (${[...dd]})`); }
 });
+
+test('v1.27: a loja nunca abre descoberta — alguém abre e a diferença sai em outro dia, sem passar de 42h', () => {
+  const ps = equipe();
+  // todos da Correas na mesma semana de folga no domingo (entram mais tarde em todos os dias de semana)
+  const r = E.gerarRei({ weeks, pessoas: ps, unidades, unavailable: ferias });
+  const carga = C.turnos5x2({ weeks, pessoas: ps, unidades, folgas: r.folgas, cobre: r.cobre, unavailable: ferias, almoco: 60 });
+  for (const p of ps.filter((x) => x.unidade === 'correas')) for (const [d, v] of Object.entries(carga[p.id].dias)) if ([2, 3, 4, 5].includes(C.weekday(d))) { v.ini = '09:55'; v.horas = (19 * 60 - 595 - 60) / 60; }
+  E.garanteAbertura({ weeks, pessoas: ps, unidades, folgas: r.folgas, cobre: r.cobre, unavailable: ferias, carga });
+  const onde = (p, d) => ((r.folgas[p.id] || []).includes(d) || ferias(p.id, d) ? null : (r.cobre[p.id] || {})[d] || p.unidade);
+  let descobertos = 0;
+  for (const d of weeks.flat()) for (const u of Object.keys(unidades)) {
+    if (!(unidades[u].abre || []).includes(C.weekday(d))) continue;
+    const ts = ps.filter((p) => onde(p, d) === u).map((p) => carga[p.id].dias[d]).filter(Boolean);
+    if (ts.length && !ts.some((t) => t.ini <= unidades[u].horario[C.weekday(d)][0])) descobertos++;
+  }
+  assert.equal(descobertos, 0, 'toda loja tem alguém na abertura');
+  for (const p of ps) for (const s of carga[p.id].semanas) assert.ok(s.normais <= 42 + 1e-9, `${p.id} ${s.inicio}: ${C.fmtH(s.normais)}`);
+});

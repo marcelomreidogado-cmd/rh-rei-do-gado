@@ -193,6 +193,7 @@ function telaEscala() {
   // turnos do dia: loja longa (ex.: shopping 10h-22h) = abertura + fechamento; ou o "Meu horário" do Marcelo
   const tz = turnosCtx(m, weeks);
   const carga = !temHorario ? null : comp ? E.horasCompensatoria({ weeks, mk, pessoas: m.pessoas, unidades: m.unidades, folgas: m.folgas, cobre: m.cobre, unavailable: m.unavailable, almoco: m.almoco, jornada: m.jornada, inicioMin: m.inicioMin, turnoDe: tz.turnoDe }) : C.turnos5x2({ weeks, pessoas: m.pessoas, unidades: m.unidades, folgas: m.folgas, cobre: m.cobre, unavailable: m.unavailable, almoco: m.almoco, lanche: m.lanche, jornada: m.jornada, horariosPessoa: m.horariosPessoa, inicioMin: m.inicioMin, turnoDe: tz.turnoDe });
+  if (carga && modo === 'rei') E.garanteAbertura({ weeks, pessoas: m.pessoas, unidades: m.unidades, folgas: m.folgas, cobre: m.cobre, unavailable: m.unavailable, carga, almoco: m.almoco });
   const resumo = resumoFaltas(faltas, m, avisos) + (carga ? resumoCarga(carga, m) : '') + (carga && modo === 'rei' ? resumoAbertura(carga, m, dias) : '');
   montaSiglas(m.unidades);
   // depois de cada domingo (e no fim do mes) uma coluna com as horas da semana: quanto fez, quanto falta ou passa

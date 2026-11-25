@@ -233,3 +233,42 @@ export function balancoDia({ pessoas, unidades, folgas, unavailable = () => '', 
   const trabalham = pessoas.filter((p) => und[p.unidade] && (und[p.unidade].abre || []).includes(dow) && !(folgas[p.id] || []).includes(d) && !unavailable(p.id, d)).length;
   return { precisa, trabalham };
 }
+
+/**
+ * v1.27: a loja NUNCA abre descoberta. Depois do calculo das horas (qualquer sugestao), em cada loja/dia em que
+ * ninguem entra na abertura, a pessoa que entra mais perto passa a abrir; a diferenca sai em outro dia de semana
+ * dela na mesma semana (entra mais tarde), so onde aquela loja continua com alguem na abertura. Se nao houver como
+ * compensar, nao mexe (a semana nao pode passar da jornada) e a tela continua avisando. Altera `carga` no lugar.
+ */
+export function garanteAbertura({ weeks, pessoas, unidades, folgas, cobre = {}, unavailable = () => '', carga, almoco = 60 }) {
+  const hm = (t) => { const m = /^(\d{1,2}):?(\d{2})?$/.exec(String(t || '').trim()); return m ? +m[1] * 60 + +(m[2] || 0) : null; };
+  const hhmm = (x) => `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`;
+  const trab = (a, b) => { let dur = b - a; if (dur > 360) dur -= almoco; else if (dur > 240) dur -= 15; return dur; };
+  const onde = (p, d) => (unavailable(p.id, d) || (folgas[p.id] || []).includes(d) ? null : (cobre[p.id] || {})[d] || p.unidade);
+  const abertura = (u, d) => { const un = C.unidadesNoDia(unidades, d)[u]; const h = un && (un.horario || {})[C.weekday(d)]; return h && h[0] ? hm(h[0]) : null; };
+  const presentes = (u, d) => pessoas.filter((p) => onde(p, d) === u && carga[p.id]?.dias[d]);
+  const coberta = (u, d, sem = null, novo = null) => presentes(u, d).some((p) => (p.id === sem ? novo : hm(carga[p.id].dias[d].ini)) <= abertura(u, d));
+  const set = (p, d, a) => { const t = carga[p.id].dias[d]; const b = hm(t.fim); const antes = trab(hm(t.ini), b); t.ini = hhmm(a); t.horas = trab(a, b) / 60; return trab(a, b) - antes; };
+  let mexeu = 0;
+  for (let passo = 0; passo < 4; passo++) for (const week of weeks) for (const d of week) for (const u of Object.keys(unidades)) {
+    const h0 = abertura(u, d); if (h0 == null) continue;
+    const ps = presentes(u, d); if (!ps.length || coberta(u, d)) continue;
+    const cand = ps.map((p) => ({ p, a: hm(carga[p.id].dias[d].ini) })).sort((x, y) => x.a - y.a);
+    for (const { p, a } of cand) {
+      const delta = a - h0; // minutos a mais se abrir
+      // outro dia de semana da mesma semana em que essa pessoa pode entrar delta minutos mais tarde sem descobrir a loja
+      const d2 = week.find((x) => x !== d && UTEIS.includes(C.weekday(x)) && carga[p.id].dias[x] && !carga[p.id].dias[x].fixo && (() => {
+        const u2 = onde(p, x); if (!u2) return false; const t = carga[p.id].dias[x]; const novo = hm(t.ini) + delta;
+        if (novo + 240 >= hm(t.fim)) return false;
+        // compensa onde a loja continua coberta, ou num dia ainda descoberto em que outra pessoa pode abrir (revezamento)
+        return coberta(u2, x, p.id, novo) || (!coberta(u2, x) && presentes(u2, x).some((q) => q.id !== p.id));
+      })());
+      if (!d2) continue;
+      set(p, d, h0); set(p, d2, hm(carga[p.id].dias[d2].ini) + delta);
+      mexeu++; break;
+    }
+  }
+  // recalcula as semanas (normais) pela soma dos dias
+  if (mexeu) for (const p of pessoas) { const c = carga[p.id]; if (!c) continue; for (const s of c.semanas) { const ds = weeks.find((w) => w[0] === s.inicio) || []; const esp = s.especiais || 0; const tot = ds.reduce((a, x) => a + (c.dias[x] ? c.dias[x].horas : 0), 0); s.normais = Math.round((tot - esp) * 10000) / 10000; s.horas = Math.round(tot * 10000) / 10000; } }
+  return mexeu;
+}
